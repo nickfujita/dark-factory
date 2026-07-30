@@ -1,0 +1,23 @@
+# platform	source_path	target_name
+# platform: claude | codex
+claude	skills/agent-browser	agent-browser
+claude	skills/drk-01-prd-interview	drk-01-prd-interview
+claude	skills/drk-02-prd-challenge	drk-02-prd-challenge
+claude	skills/drk-03-qa-runbook-gen	drk-03-qa-runbook-gen
+claude	skills/drk-04-qa-runbook-validation	drk-04-qa-runbook-validation
+claude	skills/drk-05-dev-verify	drk-05-dev-verify
+claude	skills/drk-06-code-review	drk-06-code-review
+claude	skills/drk-07-qa-acceptance	drk-07-qa-acceptance
+codex	codex-skills/dark-factory-codex	dark-factory-codex
+codex	codex-skills/agent-browser	agent-browser
+codex	codex-skills/drk-01-prd-interview	drk-01-prd-interview
+codex	codex-skills/drk-02-prd-challenge	drk-02-prd-challenge
+codex	codex-skills/drk-03-qa-runbook-gen	drk-03-qa-runbook-gen
+codex	codex-skills/drk-04-qa-runbook-validation	drk-04-qa-runbook-validation
+codex	codex-skills/drk-05-dev-verify	drk-05-dev-verify
+codex	codex-skills/drk-06-code-review	drk-06-code-review
+codex	codex-skills/drk-07-qa-acceptance	drk-07-qa-acceptance
+claude	skills/go-mobile	go-mobile
+codex	skills/go-mobile	go-mobile
+claude	skills/stop-mobile	stop-mobile
+codex	skills/stop-mobile	stop-mobile

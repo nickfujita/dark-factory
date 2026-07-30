@@ -1,0 +1,45 @@
+# Python/cache noise
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local machine profiles and environment files
+.env
+.env.*
+!.env.example
+profiles/*.env
+!profiles/default.env.example
+
+# Agent/browser/session artifacts
+.claude/
+.codex/
+.agents/
+.dark-factory/
+docs/reviews/
+docs/archive/
+qa-results/
+screenshots/
+videos/
+recordings/
+*.har
+
+# Logs and temporary output
+*.log
+tmp/
+temp/
+
+# defensive patterns (publish hardening)
+docs/retro/
+*.pem
+*.key
+id_rsa*
+*.p12
+node_modules/
