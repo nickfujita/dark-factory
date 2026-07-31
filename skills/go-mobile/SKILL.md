@@ -1,6 +1,6 @@
 ---
 name: go-mobile
-description: "Use when the user moves to a phone or audio-only device and will hear replies read aloud via text-to-speech — e.g. they say 'go mobile', 'I'm on my phone now', 'switching to mobile', or run /go-mobile. Switches all later responses to a spoken, TTS-safe style until stop-mobile. Optional 'repeat' argument re-delivers the previous reply in spoken form."
+description: "Use when the user is mobile, or hints at it — 'go mobile', 'going mobile', 'heading out', 'on my phone', voice-dictation artifacts or garbled typos, or a message arriving via the phone bridge — or runs /go-mobile. Switches every later reply to a spoken, TTS-safe style until stop-mobile. Optional 'repeat' argument re-delivers the previous reply in spoken form."
 ---
 
 # Go Mobile
