@@ -273,6 +273,16 @@ just check
 `just check` validates shell scripts, the skills manifest, skill reference
 directories, agent definitions, and bundled Python helper scripts.
 
+```bash
+just test-runners
+```
+
+`just test-runners` drives the `drk-02-prd-challenge` review runners against
+fake `codex`, `tmux` and `claude` binaries — every terminal state, the
+discovery and verification acceptance grammars, usage-limit detection and its
+false-positive channel, the no-clobber guards and the window timeout. It makes
+no network calls and takes about a minute, so it is kept out of `just check`.
+
 ### Multi-Machine Workflow
 
 If you develop across multiple machines or VMs:
