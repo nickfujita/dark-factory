@@ -16,6 +16,7 @@ set -euo pipefail
 # a substring match over a review body or a stderr log:
 #
 #   STATE=running|complete|partial|failed|limit|timeout
+#   MODE=discovery|verification           (the mode this round actually ran in)
 #   PERSONAS_OK=<n>/3
 #   REASON=<short machine token>          (only when STATE != complete)
 #
@@ -32,6 +33,8 @@ set -euo pipefail
 #   CODEX_POLL_SECONDS=20          poll interval inside a slice
 #   CODEX_MIN_BODY_BYTES=400       minimum accepted body when findings are claimed
 #   CODEX_REASONING_EFFORT=xhigh   codex model_reasoning_effort
+#   CODEX_REVIEW_MODE=discovery|verification
+#   CODEX_REVIEW_DELTA_FILE=<path> remediation delta, required for verification
 #   CODEX_REVIEW_FORCE=1           allow reusing a non-empty existing out-dir
 
 WINDOW_SECONDS="${CODEX_WINDOW_SECONDS:-3600}"
@@ -39,6 +42,8 @@ WAIT_SLICE_SECONDS="${CODEX_WAIT_SLICE_SECONDS:-480}"
 POLL_SECONDS="${CODEX_POLL_SECONDS:-20}"
 MIN_BODY_BYTES="${CODEX_MIN_BODY_BYTES:-400}"
 REASONING_EFFORT="${CODEX_REASONING_EFFORT:-xhigh}"
+REVIEW_MODE="${CODEX_REVIEW_MODE:-discovery}"
+DELTA_FILE="${CODEX_REVIEW_DELTA_FILE:-}"
 
 PERSONA_SLUGS=(user-advocate technical-feasibility scope-complexity)
 PERSONA_NAMES=("Skeptical User Advocate" "Technical Feasibility Reviewer" "Scope & Complexity Challenger")
@@ -105,23 +110,42 @@ state_exit_code() {
 is_usage_limit() {
   local log="$1"
   [[ -f "$log" ]] || return 1
+  # The envelope anchor requires the colon immediately after the token: a prose
+  # line such as "Error handling: the server replies 429 Too Many Requests" is
+  # repo content, not an error envelope, and must not declare a limit.
   tail -n 40 "$log" \
-    | grep -E '^[[:space:]]*(ERROR|Error|error|FATAL|fatal)[: ]|^[[:space:]]*stream error|^[[:space:]]*\{"error"|^[[:space:]]*HTTP/[0-9.]+ [0-9]{3}' \
+    | grep -E '^[[:space:]]*(ERROR|Error|error|FATAL|fatal):|^[[:space:]]*stream error|^[[:space:]]*\{"error"|^[[:space:]]*HTTP/[0-9.]+ [0-9]{3}' \
     | grep -Eqi 'usage limit|rate.?limit|quota|\b429\b|too many requests|reached your (usage )?limit'
 }
 
-# A round is accepted only if the body actually contains a review. An empty
-# review that reports success is worse than a crash.
+# A round is accepted only if the body actually contains a review — see
+# references/rationale.md § "Harness correctness" for why this is checked at all.
+# The grammar is mode-aware: a verification body is a set of verdict blocks and
+# may legitimately carry no findings header when nothing regressed.
 validate_body() {
   # echoes "<findings> <bytes> <verdict> <reason>"
   local body="$1"
-  local bytes=0 findings=0
+  local bytes=0 findings=0 verdicts=0
   if [[ -f "$body" ]]; then bytes="$(wc -c <"$body" | tr -d ' ')"; fi
   if [[ "$bytes" -eq 0 ]]; then echo "0 0 invalid empty_body"; return 0; fi
+  # Tolerate case drift and the literal bracket form of the prompt's own
+  # "### [SEVERITY]:" template.
+  findings="$(grep -ciE '^###[[:space:]]+(\*\*)?\[?(critical|high|medium|low)\b' "$body" || true)"
+  verdicts="$(grep -ciE '^[[:space:]]*(\*\*)?verdict(\*\*)?[[:space:]]*:' "$body" || true)"
+
+  if [[ "$REVIEW_MODE" == "verification" ]]; then
+    if [[ "$verdicts" -gt 0 ]]; then
+      echo "$findings $bytes valid ok"; return 0
+    fi
+    if grep -qE '^[[:space:]]*(\*\*)?NO FINDINGS' "$body"; then
+      echo "0 $bytes valid explicit_no_findings"; return 0
+    fi
+    echo "0 $bytes invalid no_verdict_blocks"; return 0
+  fi
+
   if ! grep -q '^## Findings' "$body"; then
     echo "0 $bytes invalid missing_findings_header"; return 0
   fi
-  findings="$(grep -cE '^###[[:space:]]+(\*\*)?(Critical|High|Medium|Low)' "$body" || true)"
   if [[ "$findings" -eq 0 ]]; then
     if grep -qE '^[[:space:]]*(\*\*)?NO FINDINGS' "$body"; then
       echo "0 $bytes valid explicit_no_findings"; return 0
@@ -136,11 +160,42 @@ validate_body() {
 
 persona_prompt() {
   local section="$1" prd_rel="$2" persona_text="$3"
+  local mode_block=""
+  if [[ "$REVIEW_MODE" == "verification" && -n "$DELTA_FILE" && -f "$DELTA_FILE" ]]; then
+    mode_block="$(cat <<DELTA
+This is a VERIFICATION round, not a discovery round. You are scoped to the
+remediation delta below. For EACH listed finding emit exactly one verdict block:
+
+#### <finding id>: <finding title>
+**Verdict:** CONFIRMED | NOT CONFIRMED
+**Evidence:** [quote or cite the exact PRD location that settles it]
+**Reason (only if NOT CONFIRMED):** [what is still wrong or now wrong]
+
+'Partially addressed' is NOT CONFIRMED. Do not leave a listed finding without a
+verdict. CONFIRMED requires evidence you can quote from the current document.
+
+You did not raise these findings, and the remediator may have applied a
+different fix from the one suggested, or declined the finding with a recorded
+reason. Judge each item against the CONCERN as stated in the delta, not against
+whether the suggested edit was applied verbatim.
+
+Then emit a regression sweep under your persona's findings header for anything
+the remediation broke or newly introduced — including in prose the remediation
+itself added.
+
+--- REMEDIATION DELTA ---
+$(cat "$DELTA_FILE")
+--- END REMEDIATION DELTA ---
+DELTA
+)"
+  fi
   cat <<PROMPT
 Read the PRD at $prd_rel.
 Use only the section named "$section" from these persona instructions:
 
 $persona_text
+
+$mode_block
 
 Explore the codebase for context, then review the PRD using that persona.
 Return findings in the exact output format specified for that persona, including
@@ -171,7 +226,7 @@ run_one_persona() {
   local status_path="$out_dir/$slug.status"
   local pgid_file="$out_dir/$slug.pgid"
 
-  write_kv "$status_path" "STATE=running" "PERSONA=$name"
+  write_kv "$status_path" "STATE=running" "MODE=$REVIEW_MODE" "PERSONA=$name"
 
   local prompt
   prompt="$(persona_prompt "$section" "$prd_rel" "$persona_text")"
@@ -256,8 +311,41 @@ run_one_persona() {
   mv -f "$tmp" "$out_path"
 
   write_kv "$status_path" \
-    "STATE=$state" "PERSONA=$name" "EXIT=$codex_exit" \
+    "STATE=$state" "MODE=$REVIEW_MODE" "PERSONA=$name" "EXIT=$codex_exit" \
     "BODY_BYTES=$bytes" "FINDINGS=$findings" "REASON=$reason"
+}
+
+# Roll the three per-persona status files up into the run-level state. Used both
+# when the workers finish and when the window is reaped, so a reap can never
+# report 0/3 over reviews that are sitting completed on disk.
+aggregate_personas() {
+  # sets: agg_state agg_ok agg_limit agg_reason
+  local ok=0 limit=0 timeout=0 failed=0 i
+  for i in 0 1 2; do
+    case "$(read_field "$out_dir/${PERSONA_SLUGS[$i]}.status" STATE)" in
+      complete) ok=$((ok + 1)) ;;
+      limit) limit=$((limit + 1)) ;;
+      timeout) timeout=$((timeout + 1)) ;;
+      *) failed=$((failed + 1)) ;;
+    esac
+  done
+
+  if [[ "$ok" -eq 3 ]]; then
+    agg_state="complete"; agg_reason="ok"
+  elif [[ "$limit" -gt 0 && "$ok" -eq 0 ]]; then
+    agg_state="limit"; agg_reason="usage_limit"
+  elif [[ "$ok" -gt 0 ]]; then
+    agg_state="partial"; agg_reason="only_${ok}_of_3_reviewers_produced_a_review"
+  elif [[ "$timeout" -gt 0 ]]; then
+    agg_state="timeout"; agg_reason="window_elapsed"
+  else
+    agg_state="failed"; agg_reason="no_reviewer_produced_a_review"
+  fi
+  if [[ "$limit" -gt 0 && "$agg_state" == "partial" ]]; then
+    agg_reason="${agg_reason}_and_a_usage_limit_was_hit"
+  fi
+  agg_ok="$ok"
+  agg_limit="$limit"
 }
 
 worker() {
@@ -284,33 +372,11 @@ worker() {
     wait "$i" || true
   done
 
-  local ok=0 limit=0 timeout=0 failed=0
-  for i in 0 1 2; do
-    case "$(read_field "$out_dir/${PERSONA_SLUGS[$i]}.status" STATE)" in
-      complete) ok=$((ok + 1)) ;;
-      limit) limit=$((limit + 1)) ;;
-      timeout) timeout=$((timeout + 1)) ;;
-      *) failed=$((failed + 1)) ;;
-    esac
-  done
+  local agg_state agg_ok agg_limit agg_reason
+  aggregate_personas
 
-  local state reason
-  if [[ "$ok" -eq 3 ]]; then
-    state="complete"; reason="ok"
-  elif [[ "$limit" -gt 0 && "$ok" -eq 0 ]]; then
-    state="limit"; reason="usage_limit"
-  elif [[ "$ok" -gt 0 ]]; then
-    state="partial"; reason="only_${ok}_of_3_reviewers_produced_a_review"
-  elif [[ "$timeout" -gt 0 ]]; then
-    state="timeout"; reason="window_elapsed"
-  else
-    state="failed"; reason="no_reviewer_produced_a_review"
-  fi
-  if [[ "$limit" -gt 0 && "$state" == "partial" ]]; then
-    reason="${reason}_and_a_usage_limit_was_hit"
-  fi
-
-  write_kv "$run_status" "STATE=$state" "PERSONAS_OK=$ok/3" "LIMIT_HITS=$limit" "REASON=$reason"
+  write_kv "$run_status" "STATE=$agg_state" "MODE=$REVIEW_MODE" \
+    "PERSONAS_OK=$agg_ok/3" "LIMIT_HITS=$agg_limit" "REASON=$agg_reason"
   rm -f "$run_pid"
 }
 
@@ -343,8 +409,18 @@ cmd_start() {
     exit 1
   fi
 
+  if [[ "$REVIEW_MODE" == "verification" && ( -z "$DELTA_FILE" || ! -f "$DELTA_FILE" ) ]]; then
+    echo "Error: CODEX_REVIEW_MODE=verification requires CODEX_REVIEW_DELTA_FILE to point at an existing file." >&2
+    exit 1
+  fi
+
   # Never reuse another round's output directory: a shared scratch path has
   # already destroyed a completed review.
+  if [[ "$(read_field "$run_status" STATE)" == "running" && "${CODEX_REVIEW_FORCE:-0}" != "1" ]]; then
+    echo "Error: a round is already running in this directory: $out_dir" >&2
+    echo "Use a unique per-round directory, or set CODEX_REVIEW_FORCE=1 to take it over." >&2
+    exit 1
+  fi
   if [[ -s "$run_status" && "${CODEX_REVIEW_FORCE:-0}" != "1" ]]; then
     echo "Error: output directory already holds a run: $out_dir" >&2
     echo "Use a unique per-round directory, or set CODEX_REVIEW_FORCE=1." >&2
@@ -360,11 +436,11 @@ cmd_start() {
     rm -f "$out_dir/$slug.body.md" "$out_dir/$slug.stderr.log" "$out_dir/$slug.status"
   done
   write_kv "$run_meta" \
-    "PRD=$prd_path" "REL=$prd_rel" "REPO_ROOT=$repo_root" \
+    "PRD=$prd_path" "REL=$prd_rel" "REPO_ROOT=$repo_root" "MODE=$REVIEW_MODE" \
     "WINDOW_SECONDS=$WINDOW_SECONDS" "STARTED_EPOCH=$(date -u +%s)"
   # Status is written BEFORE the worker launches so a poller can never observe
   # a missing status file.
-  write_kv "$run_status" "STATE=running" "PERSONAS_OK=0/3"
+  write_kv "$run_status" "STATE=running" "MODE=$REVIEW_MODE" "PERSONAS_OK=0/3"
 
   local -a launcher=(nohup)
   if command -v setsid >/dev/null 2>&1; then launcher=(setsid nohup); fi
@@ -386,6 +462,14 @@ reap_if_over_window() {
   [[ -n "$started" && -n "$window" ]] || return 0
   now="$(date -u +%s)"
   if (( now - started > window + 120 )); then
+    # Each codex was setsid-ed into its own session, so killing the worker's
+    # process group does not reach them; reap the recorded groups too.
+    local slug pgid
+    for slug in "${PERSONA_SLUGS[@]}"; do
+      [[ -f "$out_dir/$slug.pgid" ]] || continue
+      pgid="$(cat "$out_dir/$slug.pgid" 2>/dev/null || true)"
+      [[ -n "$pgid" ]] && kill -TERM "-$pgid" 2>/dev/null || true
+    done
     if [[ -f "$run_pid" ]]; then
       local wpid
       wpid="$(cat "$run_pid")"
@@ -394,7 +478,27 @@ reap_if_over_window() {
       kill -KILL "-$wpid" 2>/dev/null || kill -KILL "$wpid" 2>/dev/null || true
       rm -f "$run_pid"
     fi
-    write_kv "$run_status" "STATE=timeout" "PERSONAS_OK=0/3" "REASON=window_elapsed"
+    for slug in "${PERSONA_SLUGS[@]}"; do
+      [[ -f "$out_dir/$slug.pgid" ]] || continue
+      pgid="$(cat "$out_dir/$slug.pgid" 2>/dev/null || true)"
+      [[ -n "$pgid" ]] && kill -KILL "-$pgid" 2>/dev/null || true
+      rm -f "$out_dir/$slug.pgid"
+    done
+
+    # Report what is actually on disk. A reviewer that finished before the
+    # window elapsed produced a paid-for review; stamping 0/3 over it both
+    # discards signal and misreports the round.
+    local meta_mode agg_state agg_ok agg_limit agg_reason
+    meta_mode="$(read_field "$run_meta" MODE)"
+    [[ -n "$meta_mode" ]] && REVIEW_MODE="$meta_mode"
+    aggregate_personas
+    if [[ "$agg_ok" -eq 0 ]]; then
+      agg_state="timeout"; agg_reason="window_elapsed"
+    else
+      agg_state="partial"; agg_reason="window_elapsed_after_${agg_ok}_of_3_completed"
+    fi
+    write_kv "$run_status" "STATE=$agg_state" "MODE=$REVIEW_MODE" \
+      "PERSONAS_OK=$agg_ok/3" "LIMIT_HITS=$agg_limit" "REASON=$agg_reason"
   fi
 }
 

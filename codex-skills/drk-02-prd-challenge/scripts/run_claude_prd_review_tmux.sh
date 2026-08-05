@@ -9,18 +9,20 @@ set -euo pipefail
 # (<output-path> with .md replaced by .status):
 #
 #   STATE=complete|failed|timeout
+#   MODE=discovery|verification    (the mode this round actually ran in)
 #   FINDINGS=<n>
 #   REASON=<short machine token>   (only when STATE != complete)
 #
 # A sentinel over an empty or structurally invalid report is a FAILURE, not a
-# clean round: an empty review that reports success is worse than a crash,
-# because the natural next step on a "clean" result is to approve.
+# clean round — see references/rationale.md § "Harness correctness".
 #
 # Exit codes: 0 complete, 3 failed, 4 timeout, 1 usage / precondition error.
 #
 # Environment overrides:
 #   CLAUDE_REVIEW_TIMEOUT_SECONDS=1800   window for the review
 #   CLAUDE_REVIEW_MIN_BODY_BYTES=400     minimum report size when findings are claimed
+#   CLAUDE_REVIEW_MODE=discovery|verification
+#   CLAUDE_REVIEW_DELTA_FILE=<path>      remediation delta, required for verification
 
 if [[ $# -lt 2 ]]; then
   echo "Usage: run_claude_prd_review_tmux.sh <prd-path> <output-path>" >&2
@@ -52,13 +54,22 @@ mkdir -p "$(dirname "$out_path")"
 done_path="${out_path%.md}.done"
 status_path="${out_path%.md}.status"
 min_body_bytes="${CLAUDE_REVIEW_MIN_BODY_BYTES:-400}"
+review_mode="${CLAUDE_REVIEW_MODE:-discovery}"
+delta_file="${CLAUDE_REVIEW_DELTA_FILE:-}"
+if [[ -n "$delta_file" && "$delta_file" != /* ]]; then delta_file="$repo_root/$delta_file"; fi
 rm -f "$done_path" "$status_path"
+
+if [[ "$review_mode" == "verification" && ( -z "$delta_file" || ! -f "$delta_file" ) ]]; then
+  echo "Error: CLAUDE_REVIEW_MODE=verification requires CLAUDE_REVIEW_DELTA_FILE to point at an existing file." >&2
+  exit 1
+fi
 
 write_status() {
   # write_status <state> <findings> [reason]
   local tmp="${status_path}.tmp.$$"
   {
     echo "STATE=$1"
+    echo "MODE=$review_mode"
     echo "FINDINGS=$2"
     if [[ -n "${3:-}" ]]; then echo "REASON=$3"; fi
     echo "UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -66,17 +77,31 @@ write_status() {
   mv -f "$tmp" "$status_path"
 }
 
-# A round is accepted only if the report actually contains a review.
+# A round is accepted only if the report actually contains a review. The grammar
+# is mode-aware: a verification report is a set of verdict blocks and may
+# legitimately carry no findings header when nothing regressed.
 validate_report() {
   # echoes "<findings> <verdict> <reason>"
   local report="$1"
-  local bytes=0 findings=0
+  local bytes=0 findings=0 verdicts=0
   if [[ -f "$report" ]]; then bytes="$(wc -c <"$report" | tr -d ' ')"; fi
   if [[ "$bytes" -eq 0 ]]; then echo "0 invalid empty_report"; return 0; fi
+  # Tolerate case drift and the literal bracket form of the prompt's own
+  # "### [SEVERITY]:" template.
+  findings="$(grep -ciE '^###[[:space:]]+(\*\*)?\[?(critical|high|medium|low)\b' "$report" || true)"
+  verdicts="$(grep -ciE '^[[:space:]]*(\*\*)?verdict(\*\*)?[[:space:]]*:' "$report" || true)"
+
+  if [[ "$review_mode" == "verification" ]]; then
+    if [[ "$verdicts" -gt 0 ]]; then echo "$findings valid ok"; return 0; fi
+    if grep -qE '^[[:space:]]*(\*\*)?NO FINDINGS' "$report"; then
+      echo "0 valid explicit_no_findings"; return 0
+    fi
+    echo "0 invalid no_verdict_blocks"; return 0
+  fi
+
   if ! grep -q '^## Findings' "$report"; then
     echo "0 invalid missing_findings_header"; return 0
   fi
-  findings="$(grep -cE '^###[[:space:]]+(\*\*)?(Critical|High|Medium|Low)' "$report" || true)"
   if [[ "$findings" -eq 0 ]]; then
     if grep -qE '^[[:space:]]*(\*\*)?NO FINDINGS' "$report"; then
       echo "0 valid explicit_no_findings"; return 0
@@ -98,8 +123,42 @@ timeout_seconds="${CLAUDE_REVIEW_TIMEOUT_SECONDS:-1800}"
 claude_command="${CLAUDE_REVIEW_COMMAND:-claude}"
 
 prompt_file="$(mktemp "${TMPDIR:-/tmp}/dark-factory-claude-prd-prompt.XXXXXX")"
+trap 'rm -f "$prompt_file"' EXIT
+
+mode_block=""
+if [[ "$review_mode" == "verification" ]]; then
+  mode_block="$(cat <<DELTA
+
+This is a VERIFICATION round, not a discovery round. You are scoped to the
+remediation delta below. For EACH listed finding emit exactly one verdict block:
+
+#### <finding id>: <finding title>
+**Verdict:** CONFIRMED | NOT CONFIRMED
+**Evidence:** [quote or cite the exact PRD location that settles it]
+**Reason (only if NOT CONFIRMED):** [what is still wrong or now wrong]
+
+'Partially addressed' is NOT CONFIRMED. Do not leave a listed finding without a
+verdict. CONFIRMED requires evidence you can quote from the current document.
+
+You did not raise these findings, and the remediator may have applied a
+different fix from the one suggested, or declined the finding with a recorded
+reason. Judge each item against the CONCERN as stated in the delta, not against
+whether the suggested edit was applied verbatim.
+
+Then emit a regression sweep, in the findings format below, for anything the
+remediation broke or newly introduced — including in prose the remediation
+itself added.
+
+The remediation delta — the findings that were remediated and the edits that
+were made — is the file: $delta_file
+Read that file first; it is the scope of this round.
+DELTA
+)"
+fi
+
 cat >"$prompt_file" <<PROMPT
 You are the secondary Claude Code reviewer for a Codex-driven Dark Factory PRD challenge round.
+$mode_block
 
 Important execution rules:
 - You are already running inside an interactive Claude Code session. Do not use claude -p, --print, SDK mode, or any non-interactive Claude invocation.

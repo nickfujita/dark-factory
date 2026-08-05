@@ -16,6 +16,7 @@ set -euo pipefail
 # a substring match over the review body or the stderr log:
 #
 #   STATE=running|complete|failed|limit|timeout
+#   MODE=discovery|verification            (the mode this round actually ran in)
 #   EXIT=<codex exit code>
 #   BODY_BYTES=<n>
 #   FINDINGS=<n>
@@ -79,6 +80,7 @@ write_status() {
   local tmp="${status_file}.tmp.$$"
   {
     echo "STATE=$1"
+    echo "MODE=$REVIEW_MODE"
     echo "EXIT=$2"
     echo "BODY_BYTES=$3"
     echo "FINDINGS=$4"
@@ -113,18 +115,25 @@ state_exit_code() {
 is_usage_limit() {
   local log="$1"
   [[ -f "$log" ]] || return 1
+  # The envelope anchor requires the colon immediately after the token: a prose
+  # line such as "Error handling: the server replies 429 Too Many Requests" is
+  # repo content, not an error envelope, and must not declare a limit.
   tail -n 40 "$log" \
-    | grep -E '^[[:space:]]*(ERROR|Error|error|FATAL|fatal)[: ]|^[[:space:]]*stream error|^[[:space:]]*\{"error"|^[[:space:]]*HTTP/[0-9.]+ [0-9]{3}' \
+    | grep -E '^[[:space:]]*(ERROR|Error|error|FATAL|fatal):|^[[:space:]]*stream error|^[[:space:]]*\{"error"|^[[:space:]]*HTTP/[0-9.]+ [0-9]{3}' \
     | grep -Eqi 'usage limit|rate.?limit|quota|\b429\b|too many requests|reached your (usage )?limit'
 }
 
-# A round is accepted only if the body actually contains a review. An empty
-# review that reports success is worse than a crash: the natural next step on a
-# "clean" result is to approve, which manufactures false confidence.
+# A round is accepted only if the body actually contains a review — see
+# references/rationale.md § "Harness correctness" for why this is checked at all.
+#
+# The grammar is mode-aware. A discovery round is a findings document; a
+# verification round is a set of verdict blocks and may legitimately carry no
+# findings header at all when nothing regressed. Judging a verification body by
+# the discovery grammar fails the healthiest round the loop can produce.
 validate_body() {
   # echoes "<findings_count> <bytes> <verdict> [reason]"
   local body="$1"
-  local bytes=0 findings=0
+  local bytes=0 findings=0 verdicts=0
   if [[ -f "$body" ]]; then
     bytes="$(wc -c <"$body" | tr -d ' ')"
   fi
@@ -132,11 +141,31 @@ validate_body() {
     echo "0 0 invalid empty_body"
     return 0
   fi
+  # Tolerate case drift and the literal bracket form of the prompt's own
+  # "### [SEVERITY]:" template. Fail-closed is right; failing a well-formed
+  # round over punctuation is not.
+  findings="$(grep -ciE '^###[[:space:]]+(\*\*)?\[?(critical|high|medium|low)\b' "$body" || true)"
+  verdicts="$(grep -ciE '^[[:space:]]*(\*\*)?verdict(\*\*)?[[:space:]]*:' "$body" || true)"
+
+  if [[ "$REVIEW_MODE" == "verification" ]]; then
+    if [[ "$verdicts" -gt 0 ]]; then
+      # A verdict block cannot be empty, so it is its own evidence that a review
+      # happened; the byte floor is a discovery-mode proxy and does not apply.
+      echo "$findings $bytes valid ok"
+      return 0
+    fi
+    if grep -qE '^[[:space:]]*(\*\*)?NO FINDINGS' "$body"; then
+      echo "0 $bytes valid explicit_no_findings"
+      return 0
+    fi
+    echo "0 $bytes invalid no_verdict_blocks"
+    return 0
+  fi
+
   if ! grep -q '^## Findings' "$body"; then
     echo "0 $bytes invalid missing_findings_header"
     return 0
   fi
-  findings="$(grep -cE '^###[[:space:]]+(\*\*)?(Critical|High|Medium|Low)' "$body" || true)"
   if [[ "$findings" -eq 0 ]]; then
     if grep -qE '^[[:space:]]*(\*\*)?NO FINDINGS' "$body"; then
       echo "0 $bytes valid explicit_no_findings"
@@ -323,9 +352,17 @@ remediation delta below. For EACH listed finding emit exactly one verdict block:
 **Reason (only if NOT CONFIRMED):** [what is still wrong or now wrong]
 
 'Partially addressed' is NOT CONFIRMED. Do not leave a listed finding without a
-verdict. Then emit a regression sweep, in the findings format below, for
-anything the remediation broke or newly introduced — including in prose the
-remediation itself added.
+verdict. CONFIRMED requires evidence you can quote from the current document; if
+you cannot quote the text that settles it, the verdict is NOT CONFIRMED.
+
+You did not raise these findings, and the remediator may have applied a
+different fix from the one suggested, or declined the finding with a recorded
+reason. Judge each item against the CONCERN as stated in the delta, not against
+whether the suggested edit was applied verbatim.
+
+Then emit a regression sweep, in the findings format below, for anything the
+remediation broke or newly introduced — including in prose the remediation
+itself added.
 
 --- REMEDIATION DELTA ---
 $(cat "$DELTA_FILE")
@@ -375,7 +412,13 @@ cmd_start() {
 
   # Never clobber another run's output. Each run gets a unique out-path; a
   # collision means two runs are sharing a scratch path, which has already
-  # destroyed a completed review once.
+  # destroyed a completed review once. The out-file only appears at a terminal
+  # state, so a still-RUNNING round at this path is caught by the status file.
+  if [[ "$(read_state)" == "running" && "${CODEX_REVIEW_FORCE:-0}" != "1" ]]; then
+    echo "Error: a round is already running at this path: $out_path" >&2
+    echo "Use a unique per-round path, or set CODEX_REVIEW_FORCE=1 to take it over." >&2
+    exit 1
+  fi
   if [[ -s "$out_path" && "${CODEX_REVIEW_FORCE:-0}" != "1" ]]; then
     echo "Error: output path already exists and is non-empty: $out_path" >&2
     echo "Use a unique per-round path, or set CODEX_REVIEW_FORCE=1 to overwrite." >&2
@@ -426,6 +469,14 @@ reap_if_over_window() {
   [[ -n "$started" && -n "$window" ]] || return 0
   now="$(date -u +%s)"
   if (( now - started > window + 60 )); then
+    # codex was setsid-ed into its OWN session, so killing the worker's process
+    # group does not reach it. Reap the recorded codex process group too, or a
+    # declared timeout leaves an orphan burning tokens.
+    local pgid_file="${out_path%.md}.pgid" pgid=""
+    [[ -f "$pgid_file" ]] && pgid="$(cat "$pgid_file" 2>/dev/null || true)"
+    if [[ -n "$pgid" ]]; then
+      kill -TERM "-$pgid" 2>/dev/null || true
+    fi
     if [[ -f "$pid_file" ]]; then
       local wpid
       wpid="$(cat "$pid_file")"
@@ -434,6 +485,14 @@ reap_if_over_window() {
       kill -KILL "-$wpid" 2>/dev/null || kill -KILL "$wpid" 2>/dev/null || true
       rm -f "$pid_file"
     fi
+    if [[ -n "$pgid" ]]; then
+      kill -KILL "-$pgid" 2>/dev/null || true
+      rm -f "$pgid_file"
+    fi
+    # Report the mode the round was STARTED in, not the poller's environment.
+    local meta_mode
+    meta_mode="$(sed -n 's/^MODE=//p' "$meta_file" | tail -1)"
+    [[ -n "$meta_mode" ]] && REVIEW_MODE="$meta_mode"
     write_status "timeout" "" "0" "0" "window_elapsed"
   fi
 }
