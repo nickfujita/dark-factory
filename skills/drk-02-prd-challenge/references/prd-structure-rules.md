@@ -1,12 +1,46 @@
 # PRD structure rules for remediation
 
-Every edit the remediation step makes to a PRD obeys these rules. They are
-authoring rules, not review criteria — but a reviewer may raise a violation as
-a `CONSISTENCY` finding.
+Section 1 governs **whether and how** the remediation step acts on a finding.
+Sections 2–6 govern **how the resulting edit is written**; they are authoring
+rules, not review criteria — but a reviewer may raise a violation as a
+`CONSISTENCY` finding. Section 7 holds the templates.
 
 ---
 
-## 1. One normative home per rule; satellites cross-reference, never restate
+## 1. The remediator's judgment mandate
+
+A reviewer's finding is **evidence**. Its suggested fix is a **proposal**.
+Neither is an instruction. Before you act on any finding:
+
+1. **Consult the Decision Register first.** If the finding matches an entry, it
+   is dismissed by citing that entry — do not re-litigate it, and do not
+   silently re-apply a decision that was already made. It reopens only if the
+   severity has risen or the reviewer brings new evidence, and reopening gets
+   its own register row.
+2. **Satisfy yourself the finding is real.** Verify the claim against the source
+   material — the PRD text it cites, the code it describes, the external fact it
+   asserts. Do not take the reviewer's characterisation on trust: a reviewer
+   that misread the document produces a finding that is false, and applying it
+   damages the PRD. If the claim does not hold, the finding is **declined**, and
+   the register row says what you checked and what you found.
+3. **Form your own view of the fix.** You may accept the reviewer's proposal,
+   modify it, or **reject the proposed fix while accepting the finding** and
+   resolving it another way. Weigh what the proposed fix costs against what it
+   buys; a recommendation can be locally correct and globally wrong. If you
+   reject a proposal, the finding is still yours to resolve.
+4. **Record the disposition of every finding**, with one line of reasoning:
+   `applied as proposed` / `applied, modified` / `declined — not real` /
+   `declined — accepted but not worth the cost` / `deferred`. Declined and
+   deferred findings go in the Decision Register (§ 7); the full disposition
+   list goes in the round record and the report.
+
+This is a requirement of the remediation step, not a disposition you may adopt
+when you happen to have time. Evidence in `rationale.md` § "Remediation
+discipline".
+
+---
+
+## 2. One normative home per rule; satellites cross-reference, never restate
 
 Each load-bearing rule has exactly **one** normative home — the place that
 states it. Everywhere else refers to that home.
@@ -52,7 +86,7 @@ When you find a satellite restating a rule:
 
 ---
 
-## 2. Separate rationale from specification
+## 3. Separate rationale from specification
 
 Prose written to stop a reviewer re-raising a finding is **audit trail addressed
 to reviewers**, sitting inside a specification written for an implementer with
@@ -74,7 +108,7 @@ Rules:
 
 ---
 
-## 3. Treat document growth as a risk signal
+## 4. Treat document growth as a risk signal
 
 Remediation instinctively **appends rather than edits**. Every appended
 qualifier is new surface for the next round to find defects in. One measured run
@@ -94,16 +128,16 @@ Rules:
 
 ---
 
-## 4. Restructuring is a change that must be verified
+## 5. Restructuring is a change that must be verified
 
-Any consolidation, section move, renumbering, or consistency-only pass is
-followed by a verification round scoped to that pass. See
-`consistency-pass.md` § "Every consistency-only pass is verified". Never approve
-directly off a restructure.
+Any consolidation, section move, renumbering, or consistency-only pass is a
+change like any other: it is followed by a delta verification scoped to what it
+changed. See `consistency-pass.md` § "Every consistency-only pass is verified".
+Never approve directly off a restructure.
 
 ---
 
-## 5. Assertion-checked replacements
+## 6. Assertion-checked replacements
 
 The default edit discipline for remediation.
 
@@ -112,7 +146,7 @@ The default edit discipline for remediation.
 - On 0 matches: your assumption about the text is wrong. Re-read the document
   and re-locate. Do not loosen the match until it hits.
 - On >1 matches: the rule is stated in more than one place — which is itself a
-  rule-1 violation. Fix the duplication, do not blind-replace both.
+  § 2 violation. Fix the duplication, do not blind-replace both.
 - `replace_all` is permitted only for a mechanical rename where you have already
   asserted the expected count with a search.
 
@@ -121,7 +155,7 @@ time instead of letting them land silently and surface as next round's findings.
 
 ---
 
-## 6. Templates
+## 7. Templates
 
 ### "Known open items — read first"
 
@@ -161,10 +195,14 @@ severity has risen or new evidence is offered.
 
 | # | Round | Finding | Severity | Decision | Reason |
 |---|---|---|---|---|---|
-| 1 | A3 | <one-line summary> | Medium | Declined | <why — e.g. "operator-ratified requirement; descoping it was proposed twice and rejected both times"> |
-| 2 | B1 | <one-line summary> | Low | Deferred to v2 | <why> |
+| 1 | A3 | <one-line summary> | Medium | Declined — not real | <what you checked and what you found> |
+| 2 | A5 | <one-line summary> | High | Declined — cost | <why — e.g. "operator-ratified requirement; descoping it was proposed twice and rejected both times"> |
+| 3 | B1 | <one-line summary> | Low | Deferred to v2 | <why> |
 ```
 
-Every declined or deferred finding from the remediation step gets a row. Rows
-are never removed — a decision that is reversed gets a new row recording the
-reversal.
+**This is the normative rule for what the register records** (other files refer
+here rather than restating it): every finding whose disposition under § 1 was
+**declined or deferred** gets a row, whatever its severity. Rows are never
+removed — a decision that is reversed gets a new row recording the reversal.
+A finding that was *applied* — as proposed or modified — does not get a row; its
+disposition lives in the round record and the report.

@@ -35,10 +35,14 @@ the two cases — they are not the same:
    inferred classes are never used to justify approving over residue.
 
 4. **Prioritize by severity**:
-   - **Critical** and **High**: listed first; all are remediated this round.
-   - **Medium** / **Low**: a curated selection is remediated this round (the
-     ones that genuinely strengthen the PRD); the rest are recorded as
-     deferred, and every *declined* one gets a Decision Register row.
+   - **Critical** and **High**: listed first; all are addressed this round.
+   - **Medium** / **Low**: a curated selection is addressed this round (the ones
+     that genuinely strengthen the PRD); the rest are deferred.
+
+   "Addressed" is not "applied": every finding goes through the remediator's
+   judgment mandate (`prd-structure-rules.md` § 1), and what the Decision
+   Register records is defined once, in `prd-structure-rules.md`
+   § "Decision Register".
 
 5. **Tag source**: Each finding shows which reviewer(s) raised it:
    - `[User Advocate]`, `[Tech Feasibility]`, `[Scope Challenger]`, `[Codex]`
@@ -79,14 +83,23 @@ PRD growth: <baseline> → <final> words (<+n%>)
 
 ## Rounds
 
-| Round | Phase | Type | Reviewer tiers | C | H | M | L | SUBST / CONSIST | origin: remediation | PRD words (Δ) | Consistency gate |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| A1 | A | discovery | UA discovery, TF discovery, SC discovery | 3 | 7 | 12 | 4 | 8 / 6 | n/a | 10,412 (—) | 41 ids, 6 stale, 6 fixed |
-| A2 | A | discovery | UA discovery, TF recheck, SC discovery | 3 | 15 | 9 | 2 | 6 / 12 | 61% | 13,980 (+34%) | 88 ids, 19 stale, 19 fixed |
-| A3 | A | consistency-only | — | 0 | 0 | 38 | 0 | 0 / 38 | — | 13,655 (−2%) | 38 ids, 38 stale, 38 fixed |
-| A4 | A | verification | UA recheck, TF recheck, SC discovery | 0 | 0 | 3 | 1 | 1 / 3 | — | 13,701 (0%) | 12 ids, 0 stale |
+| Round | Phase | Type | Reviewer tiers | C | H | M | L | SUBST / CONSIST | origin: remediation | PRD words (Δ) | Consistency gate | Delta verification |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A1 | A | discovery | UA discovery, TF discovery, SC discovery | 3 | 7 | 12 | 4 | 8 / 6 | n/a | 10,412 (—) | 41 ids, 6 stale, 6 fixed | 10 CONFIRMED, 0 NOT CONFIRMED |
+| A2 | A | discovery | UA discovery, TF recheck, SC discovery | 3 | 15 | 9 | 2 | 6 / 12 | 61% | 13,980 (+34%) | 88 ids, 19 stale, 19 fixed | 16 CONFIRMED, 2 NOT CONFIRMED → re-verified clean |
+| A3 | A | consistency-only | — | 0 | 0 | 38 | 0 | 0 / 38 | — | 13,655 (−2%) | 38 ids, 38 stale, 38 fixed | 38 CONFIRMED, 0 NOT CONFIRMED |
+| A4 | A | discovery | UA recheck, TF recheck, SC discovery | 0 | 0 | 3 | 1 | 1 / 3 | — | 13,701 (0%) | 12 ids, 0 stale | 4 CONFIRMED, 0 NOT CONFIRMED |
 
-Verification round verdicts: A4 — 22 CONFIRMED, 0 NOT CONFIRMED.
+A4 is a discovery round returning zero Critical/High, so it is the round that
+exits the phase.
+
+## Dispositions
+
+Every finding's disposition and its reasoning, per round — `applied as
+proposed` / `applied, modified` / `declined — not real` / `declined — cost` /
+`deferred` (`prd-structure-rules.md` § 1). Declines and deferrals also appear in
+the PRD's Decision Register; this section is where a reader sees the whole set
+in one place, including the fixes that were modified or rejected on their way in.
 
 ## Findings
 
@@ -97,8 +110,10 @@ Verification round verdicts: A4 — 22 CONFIRMED, 0 NOT CONFIRMED.
 **Round:** A1
 **Requirement:** REQ-xxx
 **Issue:** [Merged description from both reviewers]
-**Recommendation:** [What should change in the PRD and why — the risk being mitigated]
-**Remediation applied:** [What you actually changed in the PRD to resolve this — or, if deferred, the reason]
+**Recommendation:** [What the reviewer proposed]
+**Disposition:** [applied as proposed | applied, modified | declined — not real | declined — cost | deferred] — [one line of reasoning]
+**Remediation applied:** [What you actually changed in the PRD, and where]
+**Verified:** [CONFIRMED by <reviewer> in the delta verification of round <n> | NOT CONFIRMED → re-remediated, confirmed in <n+1> | unverified — why]
 
 ---
 
@@ -122,7 +137,9 @@ Verification round verdicts: A4 — 22 CONFIRMED, 0 NOT CONFIRMED.
 
 ## Notes
 
-<tooling blockers, adopted reviews, tier substitutions, convergence-extension rounds used>
+<tooling blockers, adopted reviews, tier substitutions, reviewer threads that
+could not be resumed for their delta verification, retried rounds,
+convergence-extension rounds used>
 ```
 
 Rules for the report:
@@ -133,4 +150,7 @@ Rules for the report:
 - The severity trend and the growth column are decision-grade, not decoration.
   A reader must be able to see convergence (or its absence) from the table
   alone.
+- **Every remediation shows its delta verification**, including any that could
+  not be verified. An unverified delta is a stated fact in the report, never an
+  omission.
 - If a phase was tooling-blocked, say so in **Outcome**, not only in Notes.

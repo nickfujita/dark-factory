@@ -127,18 +127,25 @@ using the shared output contract you were given (severity, Class, Requirement,
 Issue, Recommendation).
 ```
 
-## Mode: verification round
+## Mode: delta verification
 
-A verification round is scoped to the **remediation delta**, not to the whole
-document. Append this block to the persona prompt when the calling skill runs a
-verification round. It replaces the persona's discovery scope; the persona's
-focus areas still define what it is qualified to judge.
+A delta verification is scoped to the **remediation just applied**, not to the
+whole document. It is sent **back to the reviewer that raised the findings, in
+its existing thread** — that reviewer already knows what it meant, and does not
+need the finding re-explained. Send this block as the follow-up message; it
+replaces the persona's discovery scope, and the persona's focus areas still
+define what it is qualified to judge.
+
+If that thread cannot be continued — including on the CLI fallback path, where
+every round is a fresh process — send the same block with the original findings
+quoted verbatim, plus the remediation delta, and record the substitution.
 
 ```
-This is a VERIFICATION round, not a discovery round.
+This is a DELTA VERIFICATION, not a discovery round.
 
-You are given: the current PRD, and the list of findings that were remediated
-since your last pass (with the edits that were made).
+You are given the current PRD and the remediation delta: the findings from your
+last pass that were acted on, the disposition chosen for each, and the edits
+that were made.
 
 For EACH listed finding, emit exactly one verdict block:
 
@@ -153,6 +160,23 @@ For EACH listed finding, emit exactly one verdict block:
   incomplete, present in one location but contradicted elsewhere, or correct
   but no longer testable.
 - Do not leave a listed finding without a verdict. "Partially" is NOT CONFIRMED.
+
+You raised these findings, so guard against accepting a fix because it was made
+for you:
+
+- CONFIRMED requires evidence you can QUOTE from the current document. If you
+  cannot quote the text that settles it, the verdict is NOT CONFIRMED.
+- The remediator may have applied a different fix from the one you suggested, or
+  declined your suggested fix while accepting the finding, or declined the
+  finding outright citing the Decision Register. Judge the OUTCOME against your
+  CONCERN, not compliance with your suggestion. A different fix that resolves
+  the concern is CONFIRMED; your exact wording applied in a way that does not
+  resolve the concern is NOT CONFIRMED.
+- If a disposition declines the finding, say whether the stated reason actually
+  answers your concern. "Declined" is not a verdict you have to accept, and it
+  is not a verdict you get to ignore either — respond to the reasoning.
+- Confirming a fix that does not resolve your finding is worse than re-raising
+  it: a confirmed finding is retired permanently.
 
 Then emit a regression sweep under your normal findings header, using the
 shared output contract, for anything the remediation BROKE or newly introduced

@@ -52,7 +52,8 @@ every hit:
 
 Fix every mismatch found, using assertion-checked replacements
 (`prd-structure-rules.md` § "Assertion-checked replacements"). A fix in this
-step adds its own identifiers to the list — re-run step 2 over them.
+step adds its own identifiers to the list — re-run step 2 over them, and it
+joins the remediation delta that the round's verification will check.
 
 ### 4. Report the counters
 
@@ -123,23 +124,23 @@ locations that restate a rule instead of referencing it.
 NOTE (substantive, deferred to next round): <description> — found by consistency-only pass, not remediated per charter.
 ```
 
-The next discovery or verification round picks it up under the normal
-remediation rules.
+The next round picks it up under the normal remediation rules.
 
 ### Every consistency-only pass is verified
 
 A consistency-only pass is a change to the document like any other, and it can
 overstep its own charter without noticing — a real pass silently changed a
-threshold and rewrote requirement text in four places, and only the next
-verification round caught it. Therefore:
+threshold and rewrote requirement text in four places, and only the verification
+that followed caught it. It therefore gets a **delta verification** like every
+other change (the skill's § "The delta verification" is the normative rule):
 
 1. Diff the PRD before and after the pass.
-2. Run a **verification round** scoped to that diff, with the persona
-   verification-mode prompt, listing each change the pass made as an item to
-   verdict.
-3. Any change the verification round marks `NOT CONFIRMED`, or that it
-   identifies as outside the charter above, is reverted or re-done under the
-   normal remediation rules.
+2. Send that diff to the reviewers as a delta verification, with the block in
+   `personas.md` § "Mode: delta verification", listing each change the pass made
+   as an item to verdict.
+3. Any change marked `NOT CONFIRMED`, or identified as outside the charter
+   above, is reverted or re-done under the normal remediation rules — and the
+   new delta is verified in turn.
 
 **Never approve a PRD directly off a consistency-only pass or any other
 restructure.** Restructuring fixes drift and introduces regressions in the same

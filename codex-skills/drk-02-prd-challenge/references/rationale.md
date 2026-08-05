@@ -3,7 +3,7 @@
 Instructions live in `SKILL.md` and the other reference files. This file holds
 the evidence and reasoning behind them, so the instructions can stay
 imperative — the same separation the skill requires of the PRDs it reviews
-(`prd-structure-rules.md` § 2).
+(`prd-structure-rules.md` § 3).
 
 The measurements below come from three concurrent PRD challenge runs of an
 earlier version of this skill: roughly forty review rounds and four hundred
@@ -87,12 +87,35 @@ the normative force of an earlier fix that protected user configuration from
 being erased. Hence: charter is explicit, and no approval ever comes directly
 off a restructure.
 
-**Verification rounds terminate loops that discovery rounds cannot.** Once the
+**Verification terminates loops that discovery rounds cannot.** Once the
 original document is exhausted, another discovery pass mostly re-reads prose the
-loop itself wrote. A round scoped to the remediation delta, emitting a
+loop itself wrote. A pass scoped to the remediation delta, emitting a
 per-finding `CONFIRMED` / `NOT CONFIRMED` verdict, was what actually ended all
 three runs. The explicit verdict matters: "partially addressed" is the phrasing
 that lets an unfinished fix pass as done.
+
+**Verification belongs to the remediation, not to the end of the phase.** The
+first version of this skill made a verification the closing round of a phase,
+run after a discovery round came back clean. That leaves every earlier
+remediation unchecked until the end — which is precisely how a self-feeding loop
+starts, since the defects the runs measured lived in the prose the previous
+remediation had just added. Verifying each delta as it is made catches that
+prose while the reviewer still has the finding in mind, and it makes the closing
+round redundant: a discovery round that comes back clean has already read the
+whole document including the last remediation, and that remediation was already
+verified. So the phase ends on a clean **discovery** round, and there is no
+separate closing verification to forget, to run in the wrong mode, or to skip at
+a cap.
+
+**The reviewer that raised a finding is the right one to verify its fix — with a
+guard.** It knows what it meant, so it can tell a fix that resolves the concern
+from a fix that merely responds to the words. The cost is self-acceptance bias:
+a reviewer handed a fix made for it is inclined to accept. Hence the explicit
+counter-instruction in the verification prompt — quote the evidence or return
+NOT CONFIRMED, judge the outcome against the concern rather than compliance with
+the suggestion. In the cross-model phase the verifier is inherently a fresh
+process, which removes the bias and costs the context; there the delta file has
+to carry what the thread would have carried.
 
 **The class is what makes termination rules usable.** Classifying each finding
 `SUBSTANTIVE` or `CONSISTENCY` at the source is what allows the termination rule
@@ -146,6 +169,28 @@ single-location. Prose paragraphs are where redundancy breeds.
 applied fixes through replacements that had to match their target exactly once;
 that discipline caught two of its own mistakes at application time rather than
 letting them land silently and reappear as the next round's findings.
+
+---
+
+## Remediation discipline
+
+**A remediator that applies whatever a reviewer suggests is a liability.** In
+the measured runs the good behaviour showed up anyway — one remediator declined
+a recommended fix that would have permanently raised infrastructure cost by
+about 25% to recover a gigabyte of disk, kept the finding, and recorded the
+reasoning; another checked a confident-sounding claim against the code and found
+the reviewer had misread it. Both outcomes came from an individual agent
+happening to be careful. Nothing in the skill required it, and a less careful
+agent on the same findings would have shipped the expensive change and the fix
+for a defect that did not exist. Hence the judgment mandate: consult the
+register, verify the claim, form your own view of the fix, record the
+disposition.
+
+**A recorded decline is worth more than a silent one.** The register is what
+makes a re-raised finding cheap to dismiss, and what stops a review loop
+quietly eroding scope the operator ratified — two runs saw reviewers propose
+descoping requirements that had already been decided. A decline that is not
+written down gets re-litigated every round.
 
 ---
 
