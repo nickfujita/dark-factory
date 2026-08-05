@@ -12,7 +12,7 @@ semantic findings are packaged for user review.
 
 ## Prerequisites
 
-- A PRD file with Status: Approved
+- A PRD file with Status: Approved (or Approved with open items)
 - A QA runbook file generated from that PRD
 - Codex CLI installed and authenticated (`codex --version` succeeds)
 
@@ -24,14 +24,17 @@ semantic findings are packaged for user review.
 passed from the previous step.
 
 **If invoked standalone:** Ask the user for both paths. If not provided:
-1. Scan `docs/` for files matching `prd-*.md` with Status: Approved
+1. Scan `docs/` for files matching `prd-*.md` with Status: Approved (or
+   Approved with open items)
 2. Scan `docs/qa/` for files matching `qa-*.md`
 3. If exactly one PRD and one QA runbook are found, confirm with the user
 4. If multiple matches, list them and ask which pair to validate
 
 **Validate:**
 - Both files exist
-- PRD status is "Approved"
+- PRD status is "Approved" or "Approved with open items" — the latter carries a
+  "Known open items — read first" section whose items are known-unresolved, not
+  validation findings
 - QA runbook's `prd` frontmatter field points to the correct PRD
 
 Read both documents fully into context.

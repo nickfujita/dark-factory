@@ -12,7 +12,7 @@ No user interaction is needed — this skill runs autonomously.
 
 ## Prerequisites
 
-- A PRD file with Status: Hardened or Approved
+- A PRD file with Status: Hardened, Approved, or Approved with open items
 - The PRD must have passed its quality gate (acceptance criteria are testable)
 
 ## Workflow
@@ -23,15 +23,21 @@ No user interaction is needed — this skill runs autonomously.
 1. If the user or previous pipeline step provided an explicit path, use it.
 2. If the conversation context mentions a specific PRD file, use that path.
 3. Scan `docs/` for files matching `prd-*.md`. If exactly one is found with
-   Status: Hardened or Approved, use it. If multiple match, list them and
-   ask the user which one to use (this is the only acceptable user
-   interaction).
+   Status: Hardened, Approved, or Approved with open items, use it. If
+   multiple match, list them and ask the user which one to use (this is the
+   only acceptable user interaction).
 4. If no PRD is found, stop and report: "No PRD file found. Please provide
    the path to the PRD."
 
-**Read the PRD file.** Check the Status field. If it is not "Hardened"
-or "Approved", stop and report: "PRD status is `<status>`. QA runbook
-generation requires a Hardened or Approved PRD."
+**Read the PRD file.** Check the Status field. If it is not "Hardened",
+"Approved", or "Approved with open items", stop and report: "PRD status is
+`<status>`. QA runbook generation requires a Hardened or Approved PRD."
+
+**If the status is "Approved with open items"**, the PRD carries a
+"Known open items — read first" section: unresolved questions the challenge
+round deliberately left open. Read it before generating anything, do not invent
+answers for those items, and carry each one into the runbook's assumptions so
+the QA runner sees the same caveat the implementer does.
 
 **Extract:**
 - All requirements (REQ-xxx) with their acceptance criteria
