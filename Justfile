@@ -76,13 +76,23 @@ check-agents:
 		[[ "$target_name" == "$stem.md" ]] || { echo "FAIL: $source_path target_name '$target_name' != '$stem.md'"; fail=1; }; \
 		effort="$(sed -n '2,/^---$/p' "$source_path" | sed -n 's/^effort:[[:space:]]*//p' | head -1)"; \
 		if [[ -n "$effort" ]]; then \
-			case "$effort" in low|medium|high|xhigh|max) ;; *) echo "FAIL: $source_path effort '$effort' not one of low|medium|high|xhigh|max"; fail=1 ;; esac; \
+			case "$platform" in \
+				claude) case "$effort" in low|medium|high|max) ;; *) echo "FAIL: $source_path effort '$effort' not one of low|medium|high|max (claude)"; fail=1 ;; esac ;; \
+				codex) case "$effort" in low|medium|high|xhigh) ;; *) echo "FAIL: $source_path effort '$effort' not one of low|medium|high|xhigh (codex)"; fail=1 ;; esac ;; \
+				*) echo "FAIL: $source_path unknown platform '$platform'"; fail=1 ;; \
+			esac; \
 		fi; \
 	done < manifests/agents.tsv; \
 	[[ $fail -eq 0 ]] && echo "Agents OK" || exit 1
 
 check-python:
 	python3 -m py_compile skills/skill-creator/scripts/*.py
+
+# Runner smoke tests: drives the drk-02 review runners against fake codex/tmux/
+# claude binaries. Takes ~1 minute (it exercises real timeouts), so it is not
+# part of `just check`.
+test-runners:
+	bash scripts/test_prd_review_runners.sh
 
 check:
 	just check-shell
