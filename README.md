@@ -41,7 +41,7 @@ to be hands-on at key checkpoints. Here's what's covered and what's not:
 #### Level 4 capabilities (implemented)
 
 - [x] **Formalized PRD interview** with hard quality gate checklist (`drk-01-prd-interview`)
-- [x] **PRD challenge round** — Claude flow uses 3 Claude personas + Codex; Codex flow uses Codex persona subagents + interactive Claude Code via tmux (`drk-02-prd-challenge`)
+- [x] **PRD challenge round** — Claude flow uses 3 Claude personas + Codex; Codex flow uses Codex persona subagents + interactive Claude Code via tmux. Discovery rounds, verification rounds and consistency-only passes, with a trend-aware gate and an explicit termination rule (`drk-02-prd-challenge`)
 - [x] **Machine-generated QA runbook** from hardened PRD, with bidirectional coverage checks (`drk-03-qa-runbook-gen`)
 - [x] **Document validation** — Claude flow uses Claude + Codex; Codex flow uses Codex inline + Codex CLI review (`drk-04-qa-runbook-validation`)
 - [x] **Autonomous implementation** via Superpowers subagent-driven development (once plan is approved)
@@ -182,8 +182,11 @@ dark-factory/
     drk-06-code-review/          # Codex subagents + Claude tmux code review
     drk-07-qa-acceptance/        # Browser-based QA execution
     agent-browser/               # Browser automation primitives
+  agents/                        # Claude agent definitions (one .md per agent)
+    drk-reviewer-recheck.md      # Downgraded-tier reviewer for scoped rechecks
   manifests/
     skills.tsv                   # Managed skill mapping (platform + source + target)
+    agents.tsv                   # Managed agent-definition mapping
   scripts/
     sync-to-global.sh            # Repo → global skill dirs (install/update)
     sync-from-global.sh          # Global skill dirs → repo (reverse sync)
@@ -206,6 +209,27 @@ Skills are copied with `rsync` (or `cp` fallback), not symlinked.
 - Codex skills target: `~/.codex/skills/` by default
   (`CODEX_SKILLS_HOME` can override this for environments that load
   `~/.agents/skills/`).
+- Claude agent definitions target: `~/.claude/agents/`
+
+### Agent definitions
+
+Some skills spawn sub-agents at a pinned model and reasoning effort. Reasoning
+effort cannot be set per-spawn on the Agent tool — only `model` can — so the
+effort has to live in an agent definition's frontmatter. Those definitions are
+single markdown files in `agents/`, mapped by `manifests/agents.tsv`, and
+installed to `~/.claude/agents/` by the same sync scripts.
+
+Conventions:
+
+- one file per agent, named `<agent-name>.md`
+- YAML frontmatter with `name` (must equal the filename stem), `description`,
+  and any pinned `model` / `effort` (`low|medium|high|xhigh|max`)
+- `just check-agents` validates all of the above
+
+A subagent spawned without an explicit `model` or `subagent_type` inherits the
+orchestrating session's model and effort. Skills use that deliberately: tiers
+the operator should control from above are left unpinned, and only tiers that
+need a guaranteed floor get an agent definition.
 
 The Claude and Codex flows intentionally live in parallel. The Claude flow in
 `skills/` remains the stable baseline. The Codex flow in `codex-skills/` uses
@@ -247,7 +271,17 @@ just check
 ```
 
 `just check` validates shell scripts, the skills manifest, skill reference
-directories, and bundled Python helper scripts.
+directories, agent definitions, and bundled Python helper scripts.
+
+```bash
+just test-runners
+```
+
+`just test-runners` drives the `drk-02-prd-challenge` review runners against
+fake `codex`, `tmux` and `claude` binaries — every terminal state, the
+discovery and verification acceptance grammars, usage-limit detection and its
+false-positive channel, the no-clobber guards and the window timeout. It makes
+no network calls and takes about a minute, so it is kept out of `just check`.
 
 ### Multi-Machine Workflow
 

@@ -1,0 +1,7 @@
+# platform	source_path	target_name
+# platform: claude  (target: $CLAUDE_HOME/agents/)
+#
+# Agent definitions are single markdown files with YAML frontmatter. They ship
+# separately from skills because they install to a different global directory
+# and are not skill-shaped (no SKILL.md, no references/).
+claude	agents/drk-reviewer-recheck.md	drk-reviewer-recheck.md
