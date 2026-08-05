@@ -428,6 +428,16 @@ a completion sentinel, **and the report passes structural validation** — a
 sentinel over an empty or findings-free report is a failure, not a clean round.
 It writes the same `STATE=`/`MODE=` status file contract next to the report.
 
+The reviewer session is hidden from the Matrix phone bridge. The helper spawns
+it with `CCMATRIX_SUPPRESS_SESSION=1`, so it gets no Matrix room, no push
+notification and no text-to-speech. Without that, one round of work would put
+two live rooms on the operator's phone — one for this orchestrator and one for
+the reviewer — and read the reviewer's replies aloud, even though its report is
+addressed to this flow and not to a human. The assignment travels inside the
+tmux command string on purpose: an exported variable does not reach a pane on
+an already-running tmux server. `just test-bridge-suppression` proves both
+halves.
+
 ### The Phase B delta verification
 
 The verification after each Phase B remediation is the same helper in

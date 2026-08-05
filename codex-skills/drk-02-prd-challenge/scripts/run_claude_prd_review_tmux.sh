@@ -122,6 +122,21 @@ startup_delay="${CLAUDE_REVIEW_STARTUP_DELAY:-3}"
 timeout_seconds="${CLAUDE_REVIEW_TIMEOUT_SECONDS:-1800}"
 claude_command="${CLAUDE_REVIEW_COMMAND:-claude}"
 
+# This reviewer is a machine-driven session: its report is addressed to this
+# flow, not to a human. The Matrix phone bridge, if installed, cannot tell that
+# apart from a session someone opened by hand, so it would give the reviewer its
+# own room and read its replies aloud — two live rooms and two spoken replies
+# for one round of work. The variable is the bridge's opt-out: no room, no push
+# notification, no TTS, no phone-bridge context injected into the reviewer.
+#
+# It must travel *inside* the command string. Exporting it here is not enough:
+# when a tmux server is already running — always, in this flow, since the
+# orchestrator is itself in tmux — `new-session` seeds the child from the
+# server's environment plus `update-environment`, not from this shell, so an
+# exported variable is silently dropped. tmux runs the command string through
+# `sh -c`, so the assignment survives on every tmux version.
+suppress_bridge="CCMATRIX_SUPPRESS_SESSION=1"
+
 prompt_file="$(mktemp "${TMPDIR:-/tmp}/dark-factory-claude-prd-prompt.XXXXXX")"
 trap 'rm -f "$prompt_file"' EXIT
 
@@ -206,7 +221,7 @@ After writing $out_rel, run exactly:
 mkdir -p "$(dirname "$done_rel")" && printf 'done\n' > "$done_rel"
 PROMPT
 
-tmux new-session -d -s "$session" -c "$repo_root" "$claude_command"
+tmux new-session -d -s "$session" -c "$repo_root" "$suppress_bridge exec $claude_command"
 sleep "$startup_delay"
 tmux load-buffer -b dark-factory-claude-prd "$prompt_file"
 tmux paste-buffer -b dark-factory-claude-prd -t "$session:0"

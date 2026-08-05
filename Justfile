@@ -94,6 +94,12 @@ check-python:
 test-runners:
 	bash scripts/test_prd_review_runners.sh
 
+# Checks that the machine-spawned Claude reviewers opt out of the Matrix phone
+# bridge, and that the opt-out survives tmux. Spawns two throwaway tmux
+# sessions, so like `test-runners` it is not part of `just check`.
+test-bridge-suppression:
+	bash scripts/test_bridge_suppression.sh
+
 check:
 	just check-shell
 	just check-manifest
