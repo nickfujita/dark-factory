@@ -5,16 +5,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 manifest="$REPO_ROOT/manifests/skills.tsv"
+agent_manifest="$REPO_ROOT/manifests/agents.tsv"
 profile_file=""
 dry_run="false"
 
 usage() {
   cat <<USAGE
-Usage: scripts/sync-to-global.sh [--dry-run] [--manifest <path>] [--profile <path>]
+Usage: scripts/sync-to-global.sh [--dry-run] [--manifest <path>]
+                                 [--agent-manifest <path>] [--profile <path>]
 
-Copy managed skills from this repo into global native skill directories.
-- Claude skills -> ~/.claude/skills/
-- Codex skills  -> ~/.codex/skills/
+Copy managed skills and agent definitions from this repo into global native
+directories.
+- Claude skills           -> ~/.claude/skills/
+- Codex skills            -> ~/.codex/skills/
+- Claude agent definitions -> ~/.claude/agents/
 USAGE
 }
 
@@ -26,6 +30,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --manifest)
       manifest="$2"
+      shift 2
+      ;;
+    --agent-manifest)
+      agent_manifest="$2"
       shift 2
       ;;
     --profile)
@@ -67,6 +75,19 @@ if command -v rsync >/dev/null 2>&1; then
 else
   has_rsync="false"
 fi
+
+copy_file() {
+  local src="$1"
+  local dest="$2"
+
+  if [[ "$dry_run" == "true" ]]; then
+    echo "DRY-RUN cp '$src' -> '$dest'"
+    return
+  fi
+
+  mkdir -p "$(dirname "$dest")"
+  cp -f "$src" "$dest"
+}
 
 copy_dir() {
   local src="$1"
@@ -142,5 +163,44 @@ while read -r platform source_path target_name _; do
   echo "Syncing $platform skill: $source_path -> $dest"
   copy_dir "$src" "$dest"
 done < "$manifest"
+
+# Agent definitions are single files, not skill directories, and install to a
+# different global root. The manifest is optional: a checkout without it still
+# syncs skills.
+if [[ -f "$agent_manifest" ]]; then
+  agent_line_no=0
+  while read -r platform source_path target_name _; do
+    agent_line_no=$((agent_line_no + 1))
+
+    if [[ -z "${platform:-}" || "$platform" == "#"* ]]; then
+      continue
+    fi
+
+    if [[ -z "${source_path:-}" || -z "${target_name:-}" ]]; then
+      echo "Skipping malformed agent manifest entry at line $agent_line_no" >&2
+      continue
+    fi
+
+    src="$REPO_ROOT/$source_path"
+    if [[ ! -f "$src" ]]; then
+      echo "Missing agent definition: $src" >&2
+      exit 1
+    fi
+
+    case "$platform" in
+      claude)
+        target_root="$CLAUDE_HOME/agents"
+        ;;
+      *)
+        echo "Unsupported agent platform '$platform' at line $agent_line_no" >&2
+        exit 1
+        ;;
+    esac
+
+    dest="$target_root/$target_name"
+    echo "Syncing $platform agent: $source_path -> $dest"
+    copy_file "$src" "$dest"
+  done < "$agent_manifest"
+fi
 
 echo "Sync complete."

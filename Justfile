@@ -62,6 +62,25 @@ check-references:
 	done < manifests/skills.tsv; \
 	[[ $fail -eq 0 ]] && echo "References OK" || exit 1
 
+check-agents:
+	@echo "Checking agent definitions..."
+	@fail=0; \
+	while IFS=$'\t' read -r platform source_path target_name _rest; do \
+		[[ -z "$platform" || "$platform" == \#* ]] && continue; \
+		[[ -z "$source_path" || -z "$target_name" ]] && { echo "FAIL: malformed line in agents.tsv"; fail=1; continue; }; \
+		[[ -f "$source_path" ]] || { echo "FAIL: missing agent definition $source_path"; fail=1; continue; }; \
+		[[ "$(head -1 "$source_path")" == "---" ]] || { echo "FAIL: $source_path has no YAML frontmatter"; fail=1; continue; }; \
+		fm_name="$(sed -n '2,/^---$/p' "$source_path" | sed -n 's/^name:[[:space:]]*//p' | head -1)"; \
+		stem="$(basename "$source_path" .md)"; \
+		[[ "$fm_name" == "$stem" ]] || { echo "FAIL: $source_path frontmatter name '$fm_name' != filename stem '$stem'"; fail=1; }; \
+		[[ "$target_name" == "$stem.md" ]] || { echo "FAIL: $source_path target_name '$target_name' != '$stem.md'"; fail=1; }; \
+		effort="$(sed -n '2,/^---$/p' "$source_path" | sed -n 's/^effort:[[:space:]]*//p' | head -1)"; \
+		if [[ -n "$effort" ]]; then \
+			case "$effort" in low|medium|high|xhigh|max) ;; *) echo "FAIL: $source_path effort '$effort' not one of low|medium|high|xhigh|max"; fail=1 ;; esac; \
+		fi; \
+	done < manifests/agents.tsv; \
+	[[ $fail -eq 0 ]] && echo "Agents OK" || exit 1
+
 check-python:
 	python3 -m py_compile skills/skill-creator/scripts/*.py
 
@@ -69,4 +88,5 @@ check:
 	just check-shell
 	just check-manifest
 	just check-references
+	just check-agents
 	just check-python

@@ -7,7 +7,9 @@ It is intentionally independent from any application repo.
 
 - Claude skill content in `skills/`
 - Codex-native skill content in `codex-skills/`
-- Managed mapping in `manifests/skills.tsv`
+- Claude agent definitions in `agents/` (one markdown file per agent, YAML
+  frontmatter, filename stem must equal the frontmatter `name`)
+- Managed mappings in `manifests/skills.tsv` and `manifests/agents.tsv`
 - Sync scripts in `scripts/`
 
 ## Installation Model
@@ -28,6 +30,7 @@ bash scripts/sync-from-global.sh
 
 - Claude global skills: `~/.claude/skills/`
 - Codex global skills: `~/.codex/skills/` (override with `CODEX_SKILLS_HOME`)
+- Claude global agents: `~/.claude/agents/`
 
 Use `--profile` with files based on `profiles/default.env.example` when paths differ on a VM.
 
