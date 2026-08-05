@@ -242,6 +242,15 @@ Do not use `claude -p`, `--print`, SDK mode, stdout piping, or any
 non-interactive Claude invocation. Phase B must use interactive Claude Code in
 tmux.
 
+Both reviewer sessions are hidden from the Matrix phone bridge. The helper
+spawns them with `CCMATRIX_SUPPRESS_SESSION=1`, so they get no Matrix room, no
+push notification and no text-to-speech. Without that, one round of work would
+put three live rooms on the operator's phone — this orchestrator plus both
+reviewers — and read the reviewers' replies aloud, even though their reports are
+addressed to this flow and not to a human. The assignment travels inside the
+tmux command string on purpose: an exported variable does not reach a pane on an
+already-running tmux server. `just test-bridge-suppression` proves both halves.
+
 Read `$review_dir/claude/claude-quality-review.md` and
 `$review_dir/claude/claude-spec-review.md`, then run synthesize → gate check →
 remediate (above). **Stop the loop when the gate passes OR after 3 rounds**,
