@@ -1,9 +1,9 @@
 # Engineering Standards
 
 Project-agnostic engineering standards that apply to every feature delivered
-through the drk pipeline. These standards are read alongside the PRD and QA
-runbook during brainstorming to ensure technical delivery expectations are
-planned for from the start.
+through the df artifact spine. These standards are read alongside the PRD and
+QA runbook during design so technical delivery expectations are planned for
+from the start.
 
 ## E2e Test Requirement
 
@@ -50,8 +50,8 @@ must be:
 
 - Written during implementation (not deferred to a later PR)
 - Committed on the same feature branch as the feature code
-- Passing before the branch moves to code review (`drk-06-code-review`)
+- Passing before the branch moves to code review (`df-code-review`)
 
-The `drk-05-dev-verify` skill enforces this as a hard gate — the branch
-cannot proceed to code review without passing e2e test coverage for all
-QA runbook test cases.
+The `df-dev-verify` skill enforces this as a hard gate. The branch cannot
+proceed to code review without passing e2e test coverage for all QA runbook
+test cases.

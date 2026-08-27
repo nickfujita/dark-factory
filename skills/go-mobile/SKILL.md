@@ -1,6 +1,6 @@
 ---
 name: go-mobile
-description: "Use when the user is mobile, or hints at it — 'go mobile', 'going mobile', 'heading out', 'on my phone', voice-dictation artifacts or garbled typos, or a message arriving via the phone bridge — or runs /go-mobile. Switches every later reply to a spoken, TTS-safe style until stop-mobile. Optional 'repeat' argument re-delivers the previous reply in spoken form."
+description: "Use when the user explicitly says they are mobile ('go mobile', 'going mobile', 'heading out', 'on my phone'), when a message arrives via the phone bridge, or when they run /go-mobile. Dictation artifacts and garbled typos are NOT a mobile hint; the operator dictates at the desktop too. Switches every later reply to a spoken, TTS-safe style until stop-mobile. Optional 'repeat' argument re-delivers the previous reply in spoken form."
 ---
 
 # Go Mobile

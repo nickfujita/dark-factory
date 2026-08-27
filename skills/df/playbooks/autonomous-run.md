@@ -1,0 +1,14 @@
+# Autonomous run
+
+**You own the exit condition. Define done, then drive to it without stopping.** For "going to bed", "run until done", "keep going until X".
+
+1. State the exit condition as a falsifiable predicate before the first iteration: tests green, repro fixed, all N PRs merge-ready. A vague goal stalls; a predicate lets you stop. A duration is not a finish condition. "Run for two hours" names a budget, not an exit; convert it by asking what should be true at the end. Record the predicate and reserve the run's budget through `scripts/df-state.sh`, which lands in a parallel wave of this port. Budget exhaustion is a stop, not a flag.
+2. Pick the wake mechanism. An event to watch (CI, a merge, a ref advancing) gets a Monitor until-loop on the event with a long heartbeat fallback. No event gets a fixed interval sized to when the result is worth re-checking.
+3. Each iteration makes the smallest change the evidence justifies, verifies it against the predicate, commits when it advanced, and discards changes that did not help. Belt-and-suspenders that "might help" gets reverted, not left to ride. Sequence the work per the sequence-verifiable-units principle, verifying each unit before the next instead of batching checks at the end.
+4. Write a decision row per iteration in `decisions.tsv` via the show-me-your-work skill: what changed and whether the predicate moved. A run with no trail cannot be audited or resumed.
+5. Audit ticks judge progress by side effects only: commits, pushes, check deltas. A delegate's self-report is not progress. A delegate past its expected runtime with no side effect is stuck. Stand it down and replace it with a fresh spawn and a consolidated scope; never resume it to ask how it is going.
+6. Mid-run discoveries are yours. Address related bugs, flaky verifiers, tooling failures, and fixable drift yourself through the matching df playbook, with out-of-band fixes in their own PR. Do not park reversible work for the operator. Surface only the router's always-pause items, genuine product or preference calls no experiment can settle, or a real dead end. Keep the predicate as the main drive and return to it after each side fix.
+7. Retry is bounded. Two retries per failing unit, then abandon it and replan around it. After a few consecutive tool or infrastructure failures, stop retrying entirely. Write a terminal handoff to durable state, naming what is done, where it lives, and the exact command to resume, then end the run. Hours of retry loops against a dead executor produce nothing a handoff would not.
+8. Stop when the predicate is met or the budget exhausts. A plateau is not a stop; pivot the approach to push past it. Surface a genuine dead end rather than spinning, and never relax the predicate to declare victory.
+
+**Reply.** The exit condition, iterations run, what landed, what was discarded, the final predicate state, and the budget spent.
