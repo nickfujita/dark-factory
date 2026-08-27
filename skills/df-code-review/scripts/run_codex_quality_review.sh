@@ -5,6 +5,18 @@ set -euo pipefail
 # Runs a Codex CLI code quality review of the branch diff and writes findings
 # to the output path. Codex has read-only repo access and runs its own
 # git diff / file reads internally — nothing is inlined into the prompt.
+#
+# Output validation is FAIL-CLOSED (ported from df-prd-challenge): an empty or
+# trivial review body is a failed run and a non-zero exit, never a warning.
+# Environment override: CODEX_MIN_BODY_BYTES=400 (minimum accepted body when
+# findings are claimed).
+#
+# Sandbox policy (D26): prefer --sandbox read-only on the live tree. When the
+# read-only sandbox is unavailable (bwrap network namespaces unsupported, e.g.
+# unprivileged VMs), NEVER run full access on the live tree — point codex at a
+# disposable snapshot (temp git worktree, or cp -a copy for non-git trees),
+# created for this review and deleted after. The status output says which mode
+# actually ran.
 
 if [[ $# -lt 2 ]]; then
   echo "Usage: run_codex_quality_review.sh <base-ref> <output-path>" >&2
@@ -20,6 +32,8 @@ repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 base_ref="$1"
 out_path="$2"
 
+MIN_BODY_BYTES="${CODEX_MIN_BODY_BYTES:-400}"
+
 # Validate base ref before using it
 if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
   echo "Error: base-ref '$base_ref' is not a valid git ref." >&2
@@ -32,31 +46,98 @@ if git diff --quiet "$base_ref" HEAD; then
   exit 1
 fi
 
+# ---------------------------------------------------------------- sandbox (D26)
+# Never fall back to danger-full-access on the live tree. If the read-only
+# sandbox is unavailable, review a disposable snapshot instead: a degraded
+# sandbox can then only touch a throwaway copy. The review target is committed
+# state (git diff base..HEAD), so a snapshot at HEAD is exact.
+sandbox_mode="read-only"
+sandbox_note="read-only sandbox on the live tree"
+review_tree="$repo_root"
+snapshot_dir=""
+snapshot_kind=""
+
+cleanup_snapshot() {
+  [[ -n "$snapshot_dir" ]] || return 0
+  if [[ "$snapshot_kind" == "worktree" ]]; then
+    git -C "$repo_root" worktree remove --force "$snapshot_dir/tree" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$snapshot_dir"
+  snapshot_dir=""
+}
+trap cleanup_snapshot EXIT
+
+if ! unshare --net true 2>/dev/null; then
+  snapshot_dir="$(mktemp -d "${TMPDIR:-/tmp}/df-review-snapshot.XXXXXX")"
+  if git -C "$repo_root" rev-parse --git-dir >/dev/null 2>&1 \
+     && git -C "$repo_root" worktree add --detach "$snapshot_dir/tree" HEAD >/dev/null 2>&1; then
+    snapshot_kind="worktree"
+  else
+    snapshot_kind="copy"
+    mkdir -p "$snapshot_dir/tree"
+    cp -a "$repo_root/." "$snapshot_dir/tree/"
+  fi
+  review_tree="$snapshot_dir/tree"
+  sandbox_mode="danger-full-access"
+  sandbox_note="sandbox degraded to danger-full-access on a disposable $snapshot_kind snapshot (unshare --net unavailable); the live tree is not exposed"
+fi
+
 {
   echo "# Codex Code Quality Review"
   echo
   echo "- Base ref: \`$base_ref\`"
   echo "- Generated (UTC): \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`"
   echo "- Reviewer: Codex CLI (code quality axis)"
+  echo "- Sandbox: $sandbox_note"
   echo
 } >"$out_path"
 
+body_path="${out_path%.md}.body.md"
 stderr_log="${out_path%.md}.stderr.log"
 
-# Codex has read-only sandbox access to the repo. Tell it the base ref and
-# let it run git diff and read source files internally — no inlined content.
-# Use read-only sandbox if available, fall back to danger-full-access
-# when bubblewrap network namespaces are unsupported (e.g., unprivileged VMs).
-sandbox_mode="read-only"
-if ! unshare --net true 2>/dev/null; then
-  sandbox_mode="danger-full-access"
-fi
+# A review is accepted only if the body actually contains one (fail-closed,
+# ported from df-prd-challenge's status-file contract).
+validate_body() {
+  # echoes "<verdict> <reason>"
+  local body="$1" bytes=0 findings=0
+  if [[ -f "$body" ]]; then
+    bytes="$(wc -c <"$body" | tr -d ' ')"
+  fi
+  if [[ "$bytes" -eq 0 ]]; then
+    echo "invalid empty_body"
+    return 0
+  fi
+  if ! grep -q '^## Findings — Codex Quality' "$body"; then
+    echo "invalid missing_findings_header"
+    return 0
+  fi
+  # Tolerate case drift and the literal bracket form of the prompt's own
+  # "### [SEVERITY]" template.
+  findings="$(grep -ciE '^###[[:space:]]+(\*\*)?\[?(critical|high|medium|low)\b' "$body" || true)"
+  if [[ "$findings" -eq 0 ]]; then
+    if grep -qE '^[[:space:]]*(\*\*)?NO FINDINGS' "$body"; then
+      echo "valid explicit_no_findings"
+      return 0
+    fi
+    echo "invalid no_structured_findings"
+    return 0
+  fi
+  if [[ "$bytes" -lt "$MIN_BODY_BYTES" ]]; then
+    echo "invalid body_below_min_bytes"
+    return 0
+  fi
+  echo "valid ok"
+}
 
+# Codex has read-only sandbox access to the review tree. Tell it the base ref
+# and let it run git diff and read source files internally — no inlined
+# content. stdin is closed: a reviewer that blocks on stdin produces a header
+# and no findings, then reports success.
 codex_exit=0
 codex exec \
   --sandbox "$sandbox_mode" \
   --config model_reasoning_effort=xhigh \
-  -C "$repo_root" \
+  -C "$review_tree" \
   "You are an independent code quality reviewer examining a feature branch diff.
 
 Run: git diff $base_ref HEAD
@@ -88,9 +169,18 @@ Severity levels:
 - **Medium**: Could cause issues in less common scenarios
 - **Low**: Clarity or style improvement, no functional impact
 
+IF YOU HAVE NO FINDINGS: output the '## Findings — Codex Quality' header
+followed by a line containing exactly:
+
+NO FINDINGS
+
+Never return an empty document. Never stop to ask a question — you are running
+non-interactively with no stdin.
+
 Only report findings on changed code (lines in the diff). Do NOT suggest
 features or refactoring beyond the diff scope. YAGNI applies." \
-  >>"$out_path" \
+  <"/dev/null" \
+  >"$body_path" \
   2>"$stderr_log" \
   || codex_exit=$?
 
@@ -100,15 +190,24 @@ if [[ "$codex_exit" -ne 0 ]]; then
   echo "## Findings — Codex Quality" >>"$out_path"
   echo "" >>"$out_path"
   echo "_Codex CLI exited with code $codex_exit. No findings produced._" >>"$out_path"
+  echo "_This run produced NO reviewer opinion. Do not treat it as a clean round._" >>"$out_path"
   exit 1
 fi
 
-if ! grep -q '^## Findings — Codex Quality' "$out_path"; then
-  echo "Warning: Codex output missing findings header. Check $stderr_log." >&2
+# Post-run validation: FAIL-CLOSED. An empty or trivial review body means the
+# run failed — surface it to the calling skill as a failed run, not a warning.
+read -r verdict reason <<<"$(validate_body "$body_path")"
+if [[ "$verdict" != "valid" ]]; then
+  echo "Error: Codex produced no usable review (reason: $reason). Raw body: $body_path. Stderr: $stderr_log" >&2
+  echo "" >>"$out_path"
+  echo "## Findings — Codex Quality" >>"$out_path"
+  echo "" >>"$out_path"
+  echo "_No usable review produced (reason: \`$reason\`)._" >>"$out_path"
+  echo "_This run produced NO reviewer opinion. Do not treat it as a clean round._" >>"$out_path"
+  exit 1
 fi
 
-if ! grep -Eq '^### \[?(Critical|High|Medium|Low)\]?' "$out_path"; then
-  echo "Warning: Codex produced no structured severity findings. Check $stderr_log for errors." >&2
-fi
+cat "$body_path" >>"$out_path"
 
 echo "Codex quality review written to: $out_path"
+echo "Sandbox: $sandbox_note"

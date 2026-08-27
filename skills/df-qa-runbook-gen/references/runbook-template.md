@@ -27,7 +27,7 @@ timeout: 30000
   sections to include
 - `test_framework`: (for backend/hybrid) the project's test runner. Auto-
   discovered from project config. Default: `vitest`
-- `base_url`: app URL used by drk-07-qa-acceptance. Must point to local/dev/
+- `base_url`: app URL used by df-qa-acceptance. Must point to local/dev/
   test, never production. Required if TC-xxx test cases exist.
 - `generated`: date the runbook was generated
 - `timeout`: default timeout in milliseconds for agent-browser waits

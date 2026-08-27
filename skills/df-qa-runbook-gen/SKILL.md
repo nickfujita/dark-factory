@@ -1,6 +1,7 @@
 ---
-name: drk-03-qa-runbook-gen
-description: "Machine-generate a QA acceptance runbook from a hardened PRD. Use after the PRD challenge round completes, when the user asks to 'generate QA tests', or when a PRD is ready for QA runbook generation. Produces a structured runbook with YAML frontmatter, traceability links, and a coverage matrix. Supports UI-focused, backend/protocol, and hybrid features. No user interaction required — runs autonomously."
+name: df-qa-runbook-gen
+description: "Machine-generate a QA acceptance runbook from a hardened PRD: a structured runbook with YAML frontmatter, traceability links, and a coverage matrix. Supports UI-focused, backend/protocol, and hybrid features; no user interaction once started. Runs when the df feature playbook reaches its QA-runbook stage or when the operator invokes it explicitly — never on its own."
+disable-model-invocation: true
 ---
 
 # QA Runbook Generation
@@ -80,8 +81,8 @@ Record the feature type and test framework for use in subsequent steps.
 ### Step 2: Generate Test Cases
 
 Read `references/runbook-template.md` for the exact output format.
-(This file is in the skill directory: `$HOME/.claude/skills/drk-03-qa-runbook-gen/references/`
-or the repo's `skills/drk-03-qa-runbook-gen/references/` directory. If neither
+(This file is in the skill directory: `$HOME/.claude/skills/df-qa-runbook-gen/references/`
+or the repo's `skills/df-qa-runbook-gen/references/` directory. If neither
 exists, stop and report the error — do not invent a format.)
 
 **Preconditions**: Generate the Preconditions section from the PRD's
@@ -207,10 +208,10 @@ Add YAML frontmatter with:
 - `prd`: relative path to the source PRD
 - `feature_type`: `ui`, `backend`, or `hybrid` (from Step 1.5)
 - `test_framework`: auto-discovered test framework (from Step 1.5, omit for `ui`-only)
-- `base_url`: target app URL for drk-07-qa-acceptance (only if TC-xxx test cases exist)
+- `base_url`: target app URL for df-qa-acceptance (only if TC-xxx test cases exist)
 - `generated`: today's date (YYYY-MM-DD)
 - `timeout`: 30000 (default)
-- `auth`: (optional) authentication hint for drk-07-qa-acceptance
+- `auth`: (optional) authentication hint for df-qa-acceptance
 
 `base_url` rule:
 - Default to `http://localhost:3000`.
@@ -265,8 +266,8 @@ was proposed.
 ### Step 5: Spec Guardian Check
 
 Read `references/spec-guardian-rules.md`.
-(This file is in the skill directory: `$HOME/.claude/skills/drk-03-qa-runbook-gen/references/`
-or the repo's `skills/drk-03-qa-runbook-gen/references/` directory.)
+(This file is in the skill directory: `$HOME/.claude/skills/df-qa-runbook-gen/references/`
+or the repo's `skills/df-qa-runbook-gen/references/` directory.)
 
 **Scope: browser automation test cases (TC-xxx) only.** Programmatic test
 specifications (UT-xxx, IT-xxx, ET-xxx) are exempt from Spec Guardian rules
@@ -335,7 +336,7 @@ Document order for **ui** features:
 
 ### Step 7: Trigger Validation
 
-After the QA runbook is generated, trigger the `drk-04-qa-runbook-validation` skill
+After the QA runbook is generated, trigger the `df-qa-validation` skill
 with both paths:
 - PRD path: the source PRD used for generation
 - QA runbook path: the just-generated `docs/qa/qa-<feature-slug>.md`
@@ -347,8 +348,8 @@ Only skip this trigger if the user explicitly asks to defer it.
 
 - **Reference file resolution**: `references/runbook-template.md` and
   `references/spec-guardian-rules.md` are relative to the skill directory.
-  Look in `$HOME/.claude/skills/drk-03-qa-runbook-gen/references/` (global) or
-  the repo's `skills/drk-03-qa-runbook-gen/references/` directory.
+  Look in `$HOME/.claude/skills/df-qa-runbook-gen/references/` (global) or
+  the repo's `skills/df-qa-runbook-gen/references/` directory.
 - This skill runs autonomously — do not ask the user questions during
   generation except to disambiguate which PRD to use.
 - If the PRD has ambiguous requirements that can't be turned into tests,

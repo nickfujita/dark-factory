@@ -88,7 +88,7 @@ check-agents:
 check-python:
 	python3 -m py_compile skills/skill-creator/scripts/*.py
 
-# Runner smoke tests: drives the drk-02 review runners against fake codex/tmux/
+# Runner smoke tests: drives the df-prd-challenge review runners against fake codex/tmux/
 # claude binaries. Takes ~1 minute (it exercises real timeouts), so it is not
 # part of `just check`.
 test-runners:

@@ -4,4 +4,4 @@
 # Agent definitions are single markdown files with YAML frontmatter. They ship
 # separately from skills because they install to a different global directory
 # and are not skill-shaped (no SKILL.md, no references/).
-claude	agents/drk-reviewer-recheck.md	drk-reviewer-recheck.md
+claude	agents/df-reviewer-recheck.md	df-reviewer-recheck.md

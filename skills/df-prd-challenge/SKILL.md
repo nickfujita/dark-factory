@@ -1,6 +1,7 @@
 ---
-name: drk-02-prd-challenge
-description: "Multi-model PRD challenge round: Claude persona reviewers then Codex, with autonomous PRD remediation, consistency gates and a delta verification after every remediation. Use after a PRD passes its quality gate, when the user wants stress-testing of requirements, or when asked to 'challenge this PRD'."
+name: df-prd-challenge
+description: "Multi-model PRD challenge round: Claude persona reviewers then Codex, with autonomous PRD remediation, consistency gates and a delta verification after every remediation. Runs when the df feature playbook reaches its PRD-challenge stage or when the operator invokes it explicitly — never on its own."
+disable-model-invocation: true
 ---
 
 # PRD Challenge Round
@@ -11,8 +12,8 @@ runs a Codex review in a capped loop for model diversity. The PRD is remediated
 **autonomously between every round** — the author is not asked to hand-fix
 findings.
 
-Upstream: `drk-01-prd-interview` produces the Hardened PRD this skill consumes.
-Downstream: `drk-03-qa-runbook-gen` consumes the PRD this skill approves.
+Upstream: `df-prd-interview` produces the Hardened PRD this skill consumes.
+Downstream: `df-qa-runbook-gen` consumes the PRD this skill approves.
 
 Rationale, evidence, and the failure modes each rule exists to prevent are in
 `references/rationale.md`. This file is instructions only.
@@ -31,7 +32,7 @@ name. Do not restate a value inline — if you need the number, read it here.
 | `VERIFY_RETRY_LIMIT` | 2 | remediate → re-verify cycles allowed on one remediation delta before escalating |
 | `TOOLING_RETRY_LIMIT` | 1 | retries of a crashed or timed-out reviewer run before the phase is declared tooling-blocked |
 | `DISCOVERY_TIER` | **unpinned — inherit from the orchestrator session** (pass no `model`, no `subagent_type` override) | Phase A discovery reviewers |
-| `RECHECK_TIER` | `subagent_type: drk-reviewer-recheck` (agent definition pins `model: opus`, `effort: high`) | Phase A downgraded rechecks |
+| `RECHECK_TIER` | `subagent_type: df-reviewer-recheck` (agent definition pins `model: opus`, `effort: high`) | Phase A downgraded rechecks |
 | `RECHECK_TIER_FLOOR` | **never below Opus-class at effort `high`** | binding floor on `RECHECK_TIER` |
 | `REVIEW_ROOT` | `${TMPDIR:-/tmp}/dark-factory-prd-<repo-key>-<run-id>` | all scratch output for one run |
 | `RUN_DIR_POINTER` | `.dark-factory/tmp/prd-challenge-review-dir` | file recording `REVIEW_ROOT` |
@@ -66,8 +67,8 @@ Phase B round that you intended as a verification and that reports
 
 - A PRD file that has passed the quality gate (Status: Hardened)
 - Codex CLI installed and authenticated (`codex --version` succeeds)
-- The `drk-reviewer-recheck` agent definition installed (see
-  `agents/drk-reviewer-recheck.md` in the dark-factory repo, synced to
+- The `df-reviewer-recheck` agent definition installed (see
+  `agents/df-reviewer-recheck.md` in the dark-factory repo, synced to
   `~/.claude/agents/`). If it is missing, run Phase A rechecks at
   `DISCOVERY_TIER` and note the substitution in the report — never silently
   drop below `RECHECK_TIER_FLOOR`.
@@ -343,7 +344,7 @@ Dispatch mechanics:
   `subagent_type` override** so they inherit the orchestrator session's model
   and effort. The operator controls that tier from above; do not pin it here.
 - `RECHECK_TIER` reviewers are spawned with
-  `subagent_type: drk-reviewer-recheck`. Reasoning effort **cannot** be set
+  `subagent_type: df-reviewer-recheck`. Reasoning effort **cannot** be set
   per-spawn on the Agent tool — only `model` can — so the effort is carried by
   that agent definition's frontmatter. Passing a per-invocation `model` would
   override the definition's model while effort stays locked to frontmatter;
@@ -372,12 +373,12 @@ timeout kills healthy rounds mid-exploration on a large PRD. Start it, then
 poll in slices:
 
 ```bash
-script_path="$HOME/.claude/skills/drk-02-prd-challenge/scripts/run_codex_prd_review.sh"
+script_path="$HOME/.claude/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
 if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/drk-02-prd-challenge/scripts/run_codex_prd_review.sh"
+  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
 fi
 if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/drk-02-prd-challenge/scripts/run_codex_prd_review.sh"
+  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
 fi
 
 if [[ ! -f "$script_path" ]]; then
@@ -563,7 +564,7 @@ Challenge round complete. Full report:
 
 Severity trend: <R1 aC/bH → ... → Rn 0C/0H>.
 Remediated A Critical, B High, and C curated Medium/Low findings in the PRD.
-Deferred D Medium/Low (see report). <PRD set to Status: Approved and committed. Ready for drk-03-qa-runbook-gen. | Approved with open items — N listed at the top of the PRD. | Residual substantive findings remain — your call on how to proceed.>
+Deferred D Medium/Low (see report). <PRD set to Status: Approved and committed. Ready for df-qa-runbook-gen. | Approved with open items — N listed at the top of the PRD. | Residual substantive findings remain — your call on how to proceed.>
 ```
 
 ## Common Mistakes
@@ -606,8 +607,8 @@ Deferred D Medium/Low (see report). <PRD set to Status: Approved and committed. 
 ## Notes
 
 - **Reference file resolution**: `references/*.md` are relative to the skill
-  directory. Look in `$HOME/.claude/skills/drk-02-prd-challenge/references/`
-  (global) or the repo's `skills/drk-02-prd-challenge/references/` directory.
+  directory. Look in `$HOME/.claude/skills/df-prd-challenge/references/`
+  (global) or the repo's `skills/df-prd-challenge/references/` directory.
   If not found, stop and report the error.
 - **Reference files**: `personas.md` (persona prompts, output contract,
   delta-verification and recheck modes), `synthesis-prompt.md` (synthesis rules

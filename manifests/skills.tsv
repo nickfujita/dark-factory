@@ -1,13 +1,13 @@
 # platform	source_path	target_name
 # platform: claude | codex
 claude	skills/agent-browser	agent-browser
-claude	skills/drk-01-prd-interview	drk-01-prd-interview
-claude	skills/drk-02-prd-challenge	drk-02-prd-challenge
-claude	skills/drk-03-qa-runbook-gen	drk-03-qa-runbook-gen
-claude	skills/drk-04-qa-runbook-validation	drk-04-qa-runbook-validation
-claude	skills/drk-05-dev-verify	drk-05-dev-verify
-claude	skills/drk-06-code-review	drk-06-code-review
-claude	skills/drk-07-qa-acceptance	drk-07-qa-acceptance
+claude	skills/df-prd-interview	df-prd-interview
+claude	skills/df-prd-challenge	df-prd-challenge
+claude	skills/df-qa-runbook-gen	df-qa-runbook-gen
+claude	skills/df-qa-validation	df-qa-validation
+claude	skills/df-dev-verify	df-dev-verify
+claude	skills/df-code-review	df-code-review
+claude	skills/df-qa-acceptance	df-qa-acceptance
 codex	codex-skills/dark-factory-codex	dark-factory-codex
 codex	codex-skills/agent-browser	agent-browser
 codex	codex-skills/drk-01-prd-interview	drk-01-prd-interview

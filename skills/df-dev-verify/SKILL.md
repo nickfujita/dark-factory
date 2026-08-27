@@ -1,6 +1,7 @@
 ---
-name: drk-05-dev-verify
-description: "Developer self-verification before code review: runs all tests and QA runbook inline, logs failures, fixes them in a loop, then chains to drk-06-code-review. Use after implementation is complete and before submitting for multi-model code review."
+name: df-dev-verify
+description: "Developer self-verification before code review: runs all tests and the QA runbook inline, logs failures, fixes them in a loop, then chains to df-code-review. Runs when the df feature playbook reaches its dev-verify stage or when the operator invokes it explicitly — never on its own."
+disable-model-invocation: true
 ---
 
 # Developer Self-Verification
@@ -8,7 +9,7 @@ description: "Developer self-verification before code review: runs all tests and
 Run all tests and the QA acceptance runbook against your implementation before
 submitting for code review. Mirrors a developer testing their own work before
 opening a PR. Logs failures, fixes them inline with verification, and chains
-to drk-06-code-review when everything passes.
+to df-code-review when everything passes.
 
 ## Prerequisites
 
@@ -102,7 +103,7 @@ If the snapshot shows an error page or the app is unreachable:
         as `make <target>`
    c. If no command found: log warning and skip to Step 4:
       `- [ ] [APP NOT RUNNING] Cannot reach <base_url> — no startup command
-      found in runbook or repo. Start the app and re-run drk-05-dev-verify`
+      found in runbook or repo. Start the app and re-run df-dev-verify`
 3. Run the resolved command in the background:
    ```bash
    <startup_command> &
@@ -116,9 +117,9 @@ If the snapshot shows an error page or the app is unreachable:
 5. If now reachable: continue with test case execution.
 6. If still unreachable: log warning and skip to Step 4:
    `- [ ] [APP NOT RUNNING] Cannot reach <base_url> after running
-   '<startup_command>' — investigate and re-run drk-05-dev-verify`
+   '<startup_command>' — investigate and re-run df-dev-verify`
 
-**Execute each test case** using the same execution rules as drk-07-qa-acceptance:
+**Execute each test case** using the same execution rules as df-qa-acceptance:
 - Navigate to starting page, execute each step, run assertions
 - Use `agent-browser snapshot -i` for interactive elements; `agent-browser snapshot`
   (no `-i`) for non-interactive assertions
@@ -213,25 +214,25 @@ Scan `.claude/tmp/dev-verify-issues.md` for items marked `[!]`.
 
 If any `[!]` items exist:
 - Present them to the user with failure details
-- Ask: proceed to drk-06-code-review anyway, or stop to investigate?
+- Ask: proceed to df-code-review anyway, or stop to investigate?
 - Treat any affirmative response as proceed; any other response as stop
 
 If no `[!]` items: proceed silently.
 
-### Step 6: Chain to drk-06-code-review
+### Step 6: Chain to df-code-review
 
-Trigger `drk-06-code-review`.
+Trigger `df-code-review`.
 
 ## Notes
 
 - The issues doc at `.claude/tmp/dev-verify-issues.md` is a working scratch
   file — it is not committed
-- Run QA inline (not by chaining to drk-07-qa-acceptance) to keep the fix loop
+- Run QA inline (not by chaining to df-qa-acceptance) to keep the fix loop
   in a single context with all failures visible
 - `agent-browser close` must run at every exit point — after Step 3 success,
   after app-not-running bail-out, and after any unexpected error
 - This skill verifies the developer's own work before review, not after. The
-  multi-model code review in drk-06-code-review is a second opinion on
+  multi-model code review in df-code-review is a second opinion on
   already-verified work.
 - **Safety guard**: only run QA against local/dev/test hosts (`localhost`,
   `127.0.0.1`, `::1`, `.local`, `.test`, `.dev`). If `base_url` looks

@@ -20,9 +20,11 @@ Verify that the implementation satisfies the approved PRD and QA runbook:
 
 ## What to Read
 
-1. Read the PRD file at the path provided in your prompt
-2. Read the QA runbook file at the path provided in your prompt
-3. Read `.claude/tmp/branch-diff.txt` for the full diff
+1. Read the PRD file at the path provided in your dispatch prompt
+2. Read the QA runbook file at the path provided in your dispatch prompt
+3. Read the branch diff file at the path given in your dispatch prompt — the
+   orchestrator passes `<REVIEW_ROOT>/branch-diff.txt`, where `REVIEW_ROOT` is
+   the run-scoped scratch directory created in the skill's Step 1
 4. For each changed file referenced in the diff, read the full file for context
 
 ## Output Format

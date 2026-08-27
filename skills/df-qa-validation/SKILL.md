@@ -1,6 +1,7 @@
 ---
-name: drk-04-qa-runbook-validation
-description: "Validate a PRD + QA runbook pair using parallel Claude and Codex reviews. Auto-applies non-semantic fixes, surfaces semantic findings, presents sign-off package, and chains to superpowers:brainstorming on approval. Max 3 validation rounds."
+name: df-qa-validation
+description: "Validate a PRD + QA runbook pair using parallel Claude and Codex reviews. Auto-applies non-semantic fixes, surfaces semantic findings, presents sign-off package, and chains to superpowers:brainstorming on approval. Max 3 validation rounds. Runs when the df feature playbook reaches its QA-validation stage or when the operator invokes it explicitly — never on its own."
+disable-model-invocation: true
 ---
 
 # QA Runbook Validation
@@ -20,7 +21,7 @@ semantic findings are packaged for user review.
 
 ### Step 1: Resolve Inputs
 
-**If chained from drk-03-qa-runbook-gen:** Use the PRD path and QA runbook path
+**If chained from df-qa-runbook-gen:** Use the PRD path and QA runbook path
 passed from the previous step.
 
 **If invoked standalone:** Ask the user for both paths. If not provided:
@@ -54,12 +55,12 @@ to ground the analysis in what actually exists.
 (10 minutes):
 
 ```bash
-script_path="$HOME/.claude/skills/drk-04-qa-runbook-validation/scripts/run_codex_qa_validation.sh"
+script_path="$HOME/.claude/skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
 if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/drk-04-qa-runbook-validation/scripts/run_codex_qa_validation.sh"
+  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
 fi
 if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/drk-04-qa-runbook-validation/scripts/run_codex_qa_validation.sh"
+  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
 fi
 
 if [[ ! -f "$script_path" ]]; then
@@ -165,8 +166,8 @@ If the trigger condition is NOT met, proceed to Step 7.
 3. **On approve**: Resolve the engineering standards path using the same
    3-location fallback pattern:
    ```
-   $HOME/.claude/skills/drk-04-qa-runbook-validation/references/engineering-standards.md
-   <repo>/skills/drk-04-qa-runbook-validation/references/engineering-standards.md
+   $HOME/.claude/skills/df-qa-validation/references/engineering-standards.md
+   <repo>/skills/df-qa-validation/references/engineering-standards.md
    <repo>/references/engineering-standards.md
    ```
    Then invoke `superpowers:brainstorming` with an opening message
@@ -180,7 +181,7 @@ If the trigger condition is NOT met, proceed to Step 7.
    > described in those documents. Use the PRD requirements and QA runbook
    > test cases as the authoritative definition of what to build.
    > Important: when writing-plans creates the implementation plan, the
-   > final task must be to invoke `drk-05-dev-verify` (not
+   > final task must be to invoke `df-dev-verify` (not
    > `finishing-a-development-branch`) to run the multi-model code review
    > on the completed branch."
 4. **On reject**: classify the feedback type and confirm with the user before
@@ -188,19 +189,19 @@ If the trigger condition is NOT met, proceed to Step 7.
    If the feedback spans multiple categories, ask the user to confirm which
    routing they intend before proceeding.
    - **QA-only** ("this scenario is wrong", "missing a flow", assertion issue)
-     → update QA runbook → re-run `drk-04-qa-runbook-validation` → return to
+     → update QA runbook → re-run `df-qa-validation` → return to
      sign-off
    - **PRD tweak** ("change this requirement", "you misunderstood X") →
-     update PRD → re-run `drk-03-qa-runbook-gen` → re-run validation → return
+     update PRD → re-run `df-qa-runbook-gen` → re-run validation → return
      to sign-off
    - **Major scope change** ("rethink the whole approach") → invoke
-     `drk-01-prd-interview` for a focused re-interview on the changed scope
+     `df-prd-interview` for a focused re-interview on the changed scope
 
 ## Notes
 
 - **Reference file resolution**: `references/*.md` files are relative to the
-  skill directory. Look in `$HOME/.claude/skills/drk-04-qa-runbook-validation/references/`
-  (global) or the repo's `skills/drk-04-qa-runbook-validation/references/` directory.
+  skill directory. Look in `$HOME/.claude/skills/df-qa-validation/references/`
+  (global) or the repo's `skills/df-qa-validation/references/` directory.
   If not found, stop and report the error.
 - Codex provides model diversity (GPT vs Claude). It may catch blind spots
   that Claude misses.

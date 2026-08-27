@@ -1,6 +1,7 @@
 ---
-name: drk-01-prd-interview
-description: "Interactive PRD authoring through structured interview. Use when starting a new feature, writing requirements, creating a PRD, or when the user says 'let's define what to build'. Guides the user through requirements gathering with probing questions, produces a structured PRD document, and enforces a hard quality gate before the PRD is accepted."
+name: df-prd-interview
+description: "Interactive PRD authoring through structured interview: guides the user through requirements gathering with probing questions, produces a structured PRD document, and enforces a hard quality gate before the PRD is accepted. Runs when the df feature playbook reaches its PRD stage or when the operator invokes it explicitly — never on its own."
+disable-model-invocation: true
 ---
 
 # PRD Interview
@@ -88,8 +89,8 @@ Skip topics the user already covered in Phase 1 or in provided material
 When you have enough information:
 
 1. Read `references/prd-template.md` for the exact output format.
-   (This file is in the skill directory: `$HOME/.claude/skills/drk-01-prd-interview/references/`
-   or the repo's `skills/drk-01-prd-interview/references/` directory.
+   (This file is in the skill directory: `$HOME/.claude/skills/df-prd-interview/references/`
+   or the repo's `skills/df-prd-interview/references/` directory.
    If the file cannot be found at either location, stop and report the
    error — do not invent a format.)
 2. Write the PRD following the template structure
@@ -166,7 +167,7 @@ See `references/quality-gate-checklist.md` for full details and examples.
 
 ### Phase 6: Trigger Challenge Round
 
-After the PRD is Hardened, trigger the `drk-02-prd-challenge` skill using the same
+After the PRD is Hardened, trigger the `df-prd-challenge` skill using the same
 PRD path (`docs/prd-<feature-slug>.md`).
 
 1. Start the challenge round immediately after Phase 5.

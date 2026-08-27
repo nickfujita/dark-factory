@@ -1,6 +1,7 @@
 ---
-name: drk-06-code-review
-description: "Multi-model code review for a feature branch: Claude reviewers then Codex, with autonomous remediation looped between rounds. Use after implementation is complete and before QA acceptance. Writes a findings report, applies fixes itself, and chains to drk-07-qa-acceptance."
+name: df-code-review
+description: "Multi-model code review for a feature branch: Claude reviewers then Codex, with autonomous remediation looped between rounds. Writes a findings report, applies fixes itself, and chains to df-qa-acceptance. Runs when the df feature playbook reaches its code-review stage or when the operator invokes it explicitly — never on its own."
+disable-model-invocation: true
 ---
 
 # Code Review
@@ -10,7 +11,7 @@ Review a feature branch in two sequential review-and-remediation phases.
 fix-and-re-review loop until zero Critical/High findings remain. **Phase B**
 runs two Codex reviewers in a capped loop for model diversity. Fixes are
 **applied autonomously between every round** — the user is not asked to approve
-findings one by one. Chains to drk-07-qa-acceptance.
+findings one by one. Chains to df-qa-acceptance.
 
 ## Prerequisites
 
@@ -23,11 +24,20 @@ findings one by one. Chains to drk-07-qa-acceptance.
 
 ## Step 1: Resolve Inputs
 
-**Detect branch and base:**
+**Detect branch and base** (never hardcode `main` — detect the default branch):
 ```bash
 feature_branch=$(git branch --show-current)
-base_ref=$(git merge-base HEAD main)
+default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+if [[ -z "$default_branch" ]]; then
+  if git rev-parse --verify main >/dev/null 2>&1; then default_branch="main";
+  elif git rev-parse --verify master >/dev/null 2>&1; then default_branch="master";
+  else echo "ERROR: Cannot determine default branch. Ask the user for a base ref." >&2; exit 1;
+  fi
+fi
+base_ref="$(git merge-base HEAD "$default_branch")"
 ```
+If the default branch cannot be determined, ask the user for the base ref
+instead of guessing.
 
 **Derive feature slug from branch name:**
 Strip common prefixes (`feat/`, `feature/`, `fix/`, `chore/`). Use the
@@ -38,33 +48,45 @@ remainder as the slug (e.g., `feat/user-auth` → `user-auth`).
 2. Scan `docs/qa/` for `qa-<slug>.md`
 3. If no exact match: list candidate files and ask the user to confirm paths
 
-**Cache the diff** (this is refreshed at the start of every round — see below):
+**Create a run-scoped scratch directory and cache the diff** (the diff is
+refreshed at the start of every round — see below). Never write review output
+to a fixed shared path: concurrent review runs on the same machine will
+clobber each other and destroy a completed review.
 ```bash
-mkdir -p /tmp/dark-factory-review
-git diff "$base_ref" HEAD > /tmp/dark-factory-review/branch-diff.txt
+mkdir -p .dark-factory/reviews/code-review .dark-factory/tmp
+repo_key="$(git rev-parse --show-toplevel 2>/dev/null | sha1sum | cut -c1-12)"
+run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+review_dir="${TMPDIR:-/tmp}/dark-factory-review-${repo_key}-${run_id}"
+mkdir -p "$review_dir"
+printf '%s\n' "$review_dir" > .dark-factory/tmp/code-review-review-dir
+echo "REVIEW_ROOT=$review_dir"
+git diff "$base_ref" HEAD > "$review_dir/branch-diff.txt"
 ```
 
-Read `/tmp/dark-factory-review/branch-diff.txt`. If empty, stop and tell the user there
-are no changes to review vs main.
+Remember `REVIEW_ROOT` — every scratch artifact in this skill (diff cache,
+Codex outputs, stderr logs) lives under it, and later Bash calls must
+substitute the concrete value because shell variables do not persist between
+calls.
+
+Read `$REVIEW_ROOT/branch-diff.txt`. If empty, stop and tell the user there
+are no changes to review vs the detected default branch.
 
 Resolve the reference directory (needed for Claude sub-agent prompts):
 ```bash
-ref_dir="$HOME/.claude/skills/drk-06-code-review/references"
+ref_dir="$HOME/.claude/skills/df-code-review/references"
 if [[ ! -d "$ref_dir" ]]; then
-  ref_dir="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/drk-06-code-review/references"
+  ref_dir="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/df-code-review/references"
 fi
 if [[ ! -d "$ref_dir" ]]; then
-  ref_dir="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/drk-06-code-review/references"
+  ref_dir="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-code-review/references"
 fi
 ```
 
-Reserve the report path now; you assemble and write the full report once, at
-finalize (Step 4). Keep a running record of each round's findings and fixes —
-do not write the report file during the loop, so it stays out of the diff Codex
-reviews and you avoid duplicated headers:
-```bash
-mkdir -p .dark-factory/reviews/code-review
-```
+Reserve the report path now (the directory was created with `REVIEW_ROOT`
+above); you assemble and write the full report once, at finalize (Step 4).
+Keep a running record of each round's findings and fixes — do not write the
+report file during the loop, so it stays out of the diff Codex reviews and you
+avoid duplicated headers.
 Report path: `.dark-factory/reviews/code-review/<timestamp>-<feature>-code-review.md`
 where `<timestamp>` is `YYYY-MM-DDTHH-MM-SSZ` (UTC).
 
@@ -76,11 +98,19 @@ Each phase is a **loop**. One round of the loop is:
    cached diff, so refresh it at the start of each Phase A round to show the
    latest committed state (prior rounds' fixes are committed — see step 5).
    Recompute the base ref in the same command, since shell variables do not
-   persist between separate Bash calls:
+   persist between separate Bash calls (substitute the concrete `REVIEW_ROOT`
+   from Step 1):
    ```bash
-   base_ref="$(git merge-base HEAD main)"
-   mkdir -p /tmp/dark-factory-review
-   git diff "$base_ref" HEAD > /tmp/dark-factory-review/branch-diff.txt
+   review_dir="<REVIEW_ROOT from Step 1>"
+   default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+   if [[ -z "$default_branch" ]]; then
+     if git rev-parse --verify main >/dev/null 2>&1; then default_branch="main";
+     elif git rev-parse --verify master >/dev/null 2>&1; then default_branch="master";
+     else echo "ERROR: Cannot determine default branch." >&2; exit 1;
+     fi
+   fi
+   base_ref="$(git merge-base HEAD "$default_branch")"
+   git diff "$base_ref" HEAD > "$review_dir/branch-diff.txt"
    ```
    Phase B's Codex scripts compute their own diff from the base ref internally,
    so they do not need this refresh.
@@ -121,8 +151,11 @@ Critical/High before Phase B begins.
 
 **Each round, dispatch the 3 Claude reviewers as parallel sub-agents** (all 3
 Agent calls in one message). Each sub-agent reads its prompt file, reads
-`/tmp/dark-factory-review/branch-diff.txt` for the diff, reads the changed files for
-context, and returns findings under a self-identifying header.
+`$REVIEW_ROOT/branch-diff.txt` for the diff, reads the changed files for
+context, and returns findings under a self-identifying header. Sub-agents do
+not inherit your shell variables or context: state the concrete diff path
+(`<REVIEW_ROOT>/branch-diff.txt`) — and for the Spec reviewer the concrete PRD
+and QA runbook paths — in each Agent prompt.
 
 - **Reviewer 1 — Claude Quality:** `$ref_dir/claude-quality-prompt.md`.
   Header: `## Findings — Claude Quality`.
@@ -154,39 +187,53 @@ each with **`timeout: 600000`**). They compute the diff internally from
 
 **Codex Quality:**
 ```bash
-quality_script="$HOME/.claude/skills/drk-06-code-review/scripts/run_codex_quality_review.sh"
+quality_script="$HOME/.claude/skills/df-code-review/scripts/run_codex_quality_review.sh"
 if [[ ! -f "$quality_script" ]]; then
-  quality_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/drk-06-code-review/scripts/run_codex_quality_review.sh"
+  quality_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/df-code-review/scripts/run_codex_quality_review.sh"
 fi
 if [[ ! -f "$quality_script" ]]; then
-  quality_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/drk-06-code-review/scripts/run_codex_quality_review.sh"
+  quality_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-code-review/scripts/run_codex_quality_review.sh"
 fi
 if [[ ! -f "$quality_script" ]]; then
   echo "ERROR: Cannot find run_codex_quality_review.sh" >&2; exit 1
 fi
-mkdir -p /tmp/dark-factory-review
-base_ref="$(git merge-base HEAD main)"
-bash "$quality_script" "$base_ref" "/tmp/dark-factory-review/codex-quality-review.md"
+review_dir="<REVIEW_ROOT from Step 1>"
+default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+if [[ -z "$default_branch" ]]; then
+  if git rev-parse --verify main >/dev/null 2>&1; then default_branch="main";
+  elif git rev-parse --verify master >/dev/null 2>&1; then default_branch="master";
+  else echo "ERROR: Cannot determine default branch." >&2; exit 1;
+  fi
+fi
+base_ref="$(git merge-base HEAD "$default_branch")"
+bash "$quality_script" "$base_ref" "$review_dir/codex-quality-review.md"
 ```
 
 **Codex Spec:**
 ```bash
-spec_script="$HOME/.claude/skills/drk-06-code-review/scripts/run_codex_spec_review.sh"
+spec_script="$HOME/.claude/skills/df-code-review/scripts/run_codex_spec_review.sh"
 if [[ ! -f "$spec_script" ]]; then
-  spec_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/drk-06-code-review/scripts/run_codex_spec_review.sh"
+  spec_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/df-code-review/scripts/run_codex_spec_review.sh"
 fi
 if [[ ! -f "$spec_script" ]]; then
-  spec_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/drk-06-code-review/scripts/run_codex_spec_review.sh"
+  spec_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-code-review/scripts/run_codex_spec_review.sh"
 fi
 if [[ ! -f "$spec_script" ]]; then
   echo "ERROR: Cannot find run_codex_spec_review.sh" >&2; exit 1
 fi
-mkdir -p /tmp/dark-factory-review
-base_ref="$(git merge-base HEAD main)"
-bash "$spec_script" "<prd-path>" "<qa-path>" "$base_ref" "/tmp/dark-factory-review/codex-spec-review.md"
+review_dir="<REVIEW_ROOT from Step 1>"
+default_branch="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+if [[ -z "$default_branch" ]]; then
+  if git rev-parse --verify main >/dev/null 2>&1; then default_branch="main";
+  elif git rev-parse --verify master >/dev/null 2>&1; then default_branch="master";
+  else echo "ERROR: Cannot determine default branch." >&2; exit 1;
+  fi
+fi
+base_ref="$(git merge-base HEAD "$default_branch")"
+bash "$spec_script" "<prd-path>" "<qa-path>" "$base_ref" "$review_dir/codex-spec-review.md"
 ```
 
-Read `/tmp/dark-factory-review/codex-quality-review.md` and `/tmp/dark-factory-review/codex-spec-review.md`,
+Read `$REVIEW_ROOT/codex-quality-review.md` and `$REVIEW_ROOT/codex-spec-review.md`,
 then run synthesize → gate check → remediate (above). **Stop the loop when the
 gate passes OR after 3 rounds**, whichever comes first. After 3 rounds, proceed
 to Step 4 even if Medium/Low remain.
@@ -194,8 +241,8 @@ to Step 4 even if Medium/Low remain.
 **Codex usage-limit exception (the important escape hatch):** if a Codex run
 fails on a usage/rate limit, stop Phase B immediately — do not run any more
 Codex rounds. Each script exits non-zero and writes a stderr log next to its
-output (`/tmp/dark-factory-review/codex-quality-review.stderr.log`,
-`/tmp/dark-factory-review/codex-spec-review.stderr.log`). Read the log: a usage limit shows
+output (`$REVIEW_ROOT/codex-quality-review.stderr.log`,
+`$REVIEW_ROOT/codex-spec-review.stderr.log`). Read the log: a usage limit shows
 up as patterns like `usage limit`, `rate limit`, `quota`, `429`,
 `too many requests`, or `reached your (usage )?limit`. When you detect one:
 - **Remediate any not-yet-remediated findings the limited run returned** (same
@@ -272,7 +319,7 @@ Remediated A Critical, B High, and C curated Medium/Low. Tests passing.
 Deferred D Medium/Low (see report). Fixes committed. <Proceeding to QA acceptance. | Residual Critical/High remain — your call on how to proceed.>
 ```
 
-When zero Critical/High remain, trigger `drk-07-qa-acceptance` with the QA
+When zero Critical/High remain, trigger `df-qa-acceptance` with the QA
 runbook path (`<qa-path>`).
 
 ## Common Mistakes
@@ -288,19 +335,26 @@ runbook path (`<qa-path>`).
   already-fixed findings.
 - **Letting a Codex usage limit abort the whole skill.** Detect it, remediate
   any partial findings, and finalize. Do not retry Codex past the limit.
+- **Reusing a fixed scratch path.** Every run gets its own `REVIEW_ROOT`;
+  writing to a shared path lets concurrent runs clobber each other's reviews.
 
 ## Notes
 
-- **Reference file resolution**: look in `$HOME/.claude/skills/drk-06-code-review/references/`
-  first, then `<repo>/skills/drk-06-code-review/references/`, then
-  `<repo>/.claude/skills/drk-06-code-review/references/`
+- **Reference file resolution**: look in `$HOME/.claude/skills/df-code-review/references/`
+  first, then `<repo>/skills/df-code-review/references/`, then
+  `<repo>/.claude/skills/df-code-review/references/`
 - The diff is refreshed each round via `git diff "$base_ref" HEAD` — committed
   changes only, no working-tree noise
 - Codex is capped at 3 rounds (a usage-limit guard); the Claude phase is capped
   at 10 rounds — set high so real Critical/High get fixed, not abandoned early
-- Scratch (diff cache, Codex outputs, stderr logs) goes to a project-namespaced
-	  directory under /tmp/, never under .claude/, so the autonomous loop never trips
-	  a write-permission prompt; the generated report lives in the gitignored
-	  `.dark-factory/reviews/` directory
+- Scratch (diff cache, Codex outputs, stderr logs) goes to the run-scoped
+  `REVIEW_ROOT` under /tmp/, never under `.claude/`, so the autonomous loop
+  never trips a write-permission prompt; the generated report lives in the
+  gitignored `.dark-factory/reviews/` directory
+- **`REVIEW_ROOT` in your own context is authoritative.** The pointer file
+  `.dark-factory/tmp/code-review-review-dir` is a convenience for a session
+  that lost it, and a second run in the same checkout overwrites it. If the
+  pointer disagrees with the `REVIEW_ROOT` you created in Step 1, trust your
+  own and say so in the report.
 - Run project tests before starting this skill (not its job to fix pre-existing
   failures)

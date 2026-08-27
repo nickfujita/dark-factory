@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-# test_prd_review_runners.sh — smoke tests for the drk-02 review runners.
+# test_prd_review_runners.sh — smoke tests for the df-prd-challenge review runners.
 #
 # Exercises the three runners against FAKE `codex`, `tmux` and `claude` binaries:
 # every terminal state, the acceptance grammar (discovery and verification),
@@ -11,7 +11,7 @@ set -uo pipefail
 # Usage: bash scripts/test_prd_review_runners.sh [-v]
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CODEX_RUNNER="$REPO_ROOT/skills/drk-02-prd-challenge/scripts/run_codex_prd_review.sh"
+CODEX_RUNNER="$REPO_ROOT/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
 PERSONA_RUNNER="$REPO_ROOT/codex-skills/drk-02-prd-challenge/scripts/run_codex_persona_reviews.sh"
 TMUX_RUNNER="$REPO_ROOT/codex-skills/drk-02-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
 

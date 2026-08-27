@@ -21,7 +21,9 @@ Review the branch diff and changed files for security vulnerabilities:
 
 ## What to Read
 
-1. Read `.claude/tmp/branch-diff.txt` for the full diff
+1. Read the branch diff file at the path given in your dispatch prompt — the
+   orchestrator passes `<REVIEW_ROOT>/branch-diff.txt`, where `REVIEW_ROOT` is
+   the run-scoped scratch directory created in the skill's Step 1
 2. For each changed file, read the full file for context
 
 ## Output Format

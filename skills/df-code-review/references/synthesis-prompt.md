@@ -12,8 +12,11 @@ Phase A (Claude rounds):
 - Claude Spec: `## Findings — Claude Spec` section
 
 Phase B (Codex rounds):
-- Codex Quality: read `.claude/tmp/codex-quality-review.md`
-- Codex Spec: read `.claude/tmp/codex-spec-review.md`
+- Codex Quality: read `<REVIEW_ROOT>/codex-quality-review.md`
+- Codex Spec: read `<REVIEW_ROOT>/codex-spec-review.md`
+
+(`REVIEW_ROOT` is the run-scoped scratch directory created in the skill's
+Step 1 — substitute the concrete path.)
 
 ## Step 2: Deduplicate
 

@@ -20,7 +20,15 @@ set -euo pipefail
 #   EXIT=<codex exit code>
 #   BODY_BYTES=<n>
 #   FINDINGS=<n>
+#   SANDBOX=<short machine token>           (the sandbox mode the round ran in)
 #   REASON=<short machine token>            (only when STATE != complete)
+#
+# Sandbox policy (D26): prefer --sandbox read-only on the live tree. When the
+# read-only sandbox is unavailable (bwrap network namespaces unsupported, e.g.
+# unprivileged VMs), NEVER run full access on the live tree — the worker points
+# codex at a disposable snapshot (temp git worktree, or cp -a copy for non-git
+# trees) created for the round and deleted after, and the status file's
+# SANDBOX token says the round ran degraded on a snapshot.
 #
 # Exit codes for `status` / `wait` / legacy mode:
 #   0 complete (or still running, for `wait` that used its whole slice)
@@ -84,10 +92,45 @@ write_status() {
     echo "EXIT=$2"
     echo "BODY_BYTES=$3"
     echo "FINDINGS=$4"
+    if [[ -n "${SANDBOX_NOTE:-}" ]]; then echo "SANDBOX=$SANDBOX_NOTE"; fi
     if [[ -n "${5:-}" ]]; then echo "REASON=$5"; fi
     echo "UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   } >"$tmp"
   mv -f "$tmp" "$status_file"
+}
+
+# ------------------------------------------------------- snapshot (D26 sandbox)
+
+# Globals set by make_snapshot; cleaned by cleanup_snapshot (idempotent).
+SNAPSHOT_DIR=""
+SNAPSHOT_KIND=""
+SNAPSHOT_REPO_ROOT=""
+
+cleanup_snapshot() {
+  [[ -n "$SNAPSHOT_DIR" ]] || return 0
+  if [[ "$SNAPSHOT_KIND" == "worktree" && -n "$SNAPSHOT_REPO_ROOT" ]]; then
+    git -C "$SNAPSHOT_REPO_ROOT" worktree remove --force "$SNAPSHOT_DIR/tree" \
+      >/dev/null 2>&1 || true
+  fi
+  rm -rf "$SNAPSHOT_DIR"
+  SNAPSHOT_DIR=""
+}
+
+make_snapshot() {
+  # make_snapshot <repo_root> — sets SNAPSHOT_DIR/SNAPSHOT_KIND/SNAPSHOT_TREE.
+  # Must NOT run in a command substitution (the globals would be lost).
+  local repo_root="$1"
+  SNAPSHOT_REPO_ROOT="$repo_root"
+  SNAPSHOT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/df-review-snapshot.XXXXXX")"
+  if git -C "$repo_root" rev-parse --git-dir >/dev/null 2>&1 \
+     && git -C "$repo_root" worktree add --detach "$SNAPSHOT_DIR/tree" HEAD >/dev/null 2>&1; then
+    SNAPSHOT_KIND="worktree"
+  else
+    SNAPSHOT_KIND="copy"
+    mkdir -p "$SNAPSHOT_DIR/tree"
+    cp -a "$repo_root/." "$SNAPSHOT_DIR/tree/"
+  fi
+  SNAPSHOT_TREE="$SNAPSHOT_DIR/tree"
 }
 
 read_state() {
@@ -194,9 +237,27 @@ worker() {
   local prompt
   prompt="$(build_prompt "$rel_path")"
 
+  # D26: never full access on the live tree. If the read-only sandbox is
+  # unavailable, review a disposable snapshot instead — a degraded sandbox can
+  # then only touch a throwaway copy, and the status file says so.
   local sandbox_mode="read-only"
+  local review_tree="$repo_root"
+  SANDBOX_NOTE="read-only_live_tree"
   if ! unshare --net true 2>/dev/null; then
+    make_snapshot "$repo_root"
+    # The PRD under review may be uncommitted; overlay the live copy so the
+    # snapshot reviews the current document, not HEAD's.
+    mkdir -p "$SNAPSHOT_TREE/$(dirname "$rel_path")"
+    cp -f "$prd_path" "$SNAPSHOT_TREE/$rel_path"
+    review_tree="$SNAPSHOT_TREE"
     sandbox_mode="danger-full-access"
+    SANDBOX_NOTE="degraded_full_access_on_disposable_${SNAPSHOT_KIND}_snapshot"
+    {
+      echo "SNAPSHOT_DIR=$SNAPSHOT_DIR"
+      echo "SNAPSHOT_KIND=$SNAPSHOT_KIND"
+    } >>"$meta_file"
+    trap 'cleanup_snapshot' EXIT
+    trap 'cleanup_snapshot; exit 143' TERM INT
   fi
 
   # Run codex in its own session, and poll it here rather than capping it in the
@@ -216,7 +277,7 @@ worker() {
   ${launcher[@]+"${launcher[@]}"} codex exec \
     --sandbox "$sandbox_mode" \
     --config "model_reasoning_effort=$REASONING_EFFORT" \
-    -C "$repo_root" \
+    -C "$review_tree" \
     "$prompt" \
     <"/dev/null" \
     >"$body_path" \
@@ -267,6 +328,7 @@ worker() {
   assemble_output "$rel_path" "$state" "$codex_exit" "$reason"
   write_status "$state" "$codex_exit" "$bytes" "$findings" "$reason"
   rm -f "$pid_file"
+  cleanup_snapshot
 }
 
 assemble_output() {
@@ -488,6 +550,19 @@ reap_if_over_window() {
     if [[ -n "$pgid" ]]; then
       kill -KILL "-$pgid" 2>/dev/null || true
       rm -f "$pgid_file"
+    fi
+    # A KILLed worker never runs its cleanup trap; remove any disposable
+    # snapshot it recorded in the meta file so a reaped round leaves no
+    # orphaned worktree/copy behind.
+    local snap_dir snap_kind snap_repo
+    snap_dir="$(sed -n 's/^SNAPSHOT_DIR=//p' "$meta_file" | tail -1)"
+    snap_kind="$(sed -n 's/^SNAPSHOT_KIND=//p' "$meta_file" | tail -1)"
+    snap_repo="$(sed -n 's/^REPO_ROOT=//p' "$meta_file" | tail -1)"
+    if [[ -n "$snap_dir" && -d "$snap_dir" ]]; then
+      if [[ "$snap_kind" == "worktree" && -n "$snap_repo" ]]; then
+        git -C "$snap_repo" worktree remove --force "$snap_dir/tree" >/dev/null 2>&1 || true
+      fi
+      rm -rf "$snap_dir"
     fi
     # Report the mode the round was STARTED in, not the poller's environment.
     local meta_mode
