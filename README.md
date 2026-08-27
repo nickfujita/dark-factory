@@ -305,7 +305,7 @@ dark-factory/
     how/, why/, recall/, blast-radius/, interrogate/, figure-it-out/
     swarm/, arena/, show-me-your-work/
     unslop/, technical-writing/, typescript-best-practices/
-    agent-browser/, skill-creator/, go-mobile/, stop-mobile/
+    agent-browser/, skill-creator/
   codex-skills/               # Codex-native tree, same contract
   agents/                     # Claude agent definitions, one .md per agent
     df-agent.md               # the default worker
