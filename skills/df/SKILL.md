@@ -18,7 +18,7 @@ Start every multi-step task with a todo list whose first item is to read `refere
 
 ## Lane decision
 
-Classify the ask into a lane before any work. Propose the lane, get the operator's confirmation, and record it in the run state. The default is Standard. Nothing escalates itself to High-consequence silently. Review findings never change the lane.
+Classify the ask into a lane before any work. Propose the lane, get the operator's confirmation, and record it in the run state file. The run state schema is pending port; until it lands, record the lane and the finish predicate at the top of the todo list. The default is Standard. Nothing escalates itself to High-consequence silently. Review findings never change the lane.
 
 **Quick.** For a bug fix, small UI change, or config change with named files or a named surface and one acceptance target. Record a finish predicate up front. That predicate is the acceptance. The lane skips the PRD interview, the challenge round, and the QA runbook. Review is one reviewer, single pass, lead adjudication. Verify on the matching surface. Delivery is one PR. The TDD escape hatch ("prefer no new test over a bad test", plus the closest executable check) applies to feature work only, never to a reproduced defect.
 
