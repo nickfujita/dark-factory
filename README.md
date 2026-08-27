@@ -6,6 +6,28 @@ A development workflow for coding agents, packaged as skills for
 and an artifact spine that takes a feature from requirements to merged PRs with
 an executed acceptance runbook.
 
+**The current version is an adaptation of
+[PSTACK](https://github.com/cursor/plugins/tree/main/pstack), Lauren Tan's
+workflow plugin for Cursor, ported to Claude Code and Codex.** PSTACK supplies
+the shape: an explicitly invoked router, lanes, playbooks copied verbatim into
+the todo list, single-pass review by diverse reviewers with a lead who
+adjudicates, and the principle set underneath all of it. This repo carries that
+to two other harnesses and adds three things of its own.
+
+- **Improvements taken from [Superpowers](https://github.com/obra/superpowers)**,
+  which this framework used to depend on and no longer does. The per-task review
+  economy in `df-implement` and the plan step style in `df-plan` are the two
+  that earned their place.
+- **A PRD artifact spine**, which PSTACK does not have. Requirements interview,
+  challenge round, generated QA runbook, validation, and an executed acceptance
+  runbook at the end.
+- **Multi-model review as a first-class mechanism.** One Claude reviewer and one
+  Codex reviewer read the same prompt, and a lead adjudicates. Agreement across
+  model families is the signal worth paying for.
+
+Per-file provenance, naming the base file and what changed, is in
+[`skills/df/references/vendor-manifest.md`](./skills/df/references/vendor-manifest.md).
+
 This repo holds workflow assets only. No application code lives here, and the
 skills are project-agnostic.
 
@@ -415,9 +437,9 @@ required.
 The df skills vendor material from two MIT-licensed sources, recorded per file
 in `skills/df/references/vendor-manifest.md`:
 
-- [PSTACK](https://github.com/cursor/plugins), the `pstack/` plugin directory,
-  pinned at `bdf7aa3`. Copyright (c) 2026 Lauren Tan. The router, the
-  playbooks, the principles, and most of the read-only helpers are ports.
+- [PSTACK](https://github.com/cursor/plugins/tree/main/pstack), pinned at
+  `bdf7aa3`. Copyright (c) 2026 Lauren Tan. The router, the playbooks, the
+  principles, and most of the read-only helpers are ports.
 - [Superpowers](https://github.com/obra/superpowers) v6.3.0, commit `b36e082`.
   The per-task review economy in `df-implement`, the plan step style in
   `df-plan`, and the watch-it-fail TDD rule are grafts.
@@ -426,5 +448,9 @@ Every ported file has a row naming its base and what was changed.
 
 ## Related
 
+- [PSTACK](https://github.com/cursor/plugins/tree/main/pstack), the Cursor
+  plugin this framework adapts
+- [Superpowers](https://github.com/obra/superpowers), the source of the review
+  economy and plan style grafts
 - [Sample QA runbook](./examples/qa-runbooks/qa-sample-checkout-flow.md)
 - [Dan Shapiro, the five levels](https://www.danshapiro.com/blog/2026/01/the-five-levels-from-spicy-autocomplete-to-the-software-factory/)
