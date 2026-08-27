@@ -55,7 +55,7 @@ Match the task to a playbook, open its file, and copy its steps into the todo li
 | A reported defect to reproduce, root-cause, and fix with runtime evidence. | `playbooks/bug-fix.md` | Ported |
 | A measured slowness to trace and improve against a baseline. | `playbooks/perf-issue.md` | Ported |
 | A behavior-preserving change to structure or shape. Rename, extract, inline, dedupe, move. | `playbooks/refactoring.md` | Ported |
-| New or changed behavior. Routes into the artifact spine. PRD, challenge, design, plan, implement, verify, review, acceptance. | `playbooks/feature.md` | Playbook pending port |
+| New or changed behavior. Routes into the artifact spine. PRD, challenge, design, plan, implement, verify, review, acceptance. | `playbooks/feature.md` | Ported |
 
 ## Playbooks into todos
 

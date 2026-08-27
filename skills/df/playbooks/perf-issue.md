@@ -18,6 +18,6 @@
 5. Cite the measurement in the PR.
 6. Run **Opening a PR**, the `playbooks/df-open-pr.md` playbook. It owns the finish: commit shaping, the Why / Scope / Tradeoffs / Blast Radius / Verification description, the worktree cleanup guard, and the never-merge and never-draft rules.
 
-For sustained improvement against a metric rather than a one-off fix, the hillclimb playbook applies. It is pending port. Until it lands, say so and agree a bounded scope with the operator before iterating.
+For sustained improvement against a metric rather than a one-off fix, the hillclimb playbook applies. It is operator-invoked by name.
 
 **Reply.** Baseline number, post-fix number, delta, artifact path.

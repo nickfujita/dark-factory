@@ -1,6 +1,6 @@
 # Pause safely
 
-**You own a clean stop. Leave a checkpoint a cold-start agent can resume from.** For "pause safely", "I need to go offline", "restarting the harness", or "board my flight", and when context is about to compact or summarize. This is explicit only. On "keep going", "going to bed, keep going", or "don't stop", do not pause. Those mean continue. Per-iteration checkpoints belong to the autonomous-run playbook, which is pending port.
+**You own a clean stop. Leave a checkpoint a cold-start agent can resume from.** For "pause safely", "I need to go offline", "restarting the harness", or "board my flight", and when context is about to compact or summarize. This is explicit only. On "keep going", "going to bed, keep going", or "don't stop", do not pause. Those mean continue. Per-iteration checkpoints belong to the autonomous-run playbook.
 
 1. Stop at a safe boundary. Finish the current atomic step or back out of it. Never stop mid-edit in a known-broken state. Start nothing new, and cancel any nested subagents.
 2. Don't cross an irreversible line to pause. No PR and no push unless you already had one out.
