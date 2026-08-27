@@ -126,7 +126,7 @@ and shared across every feature that touches the same surface.
 
 Read `references/runbook-template.md` for the exact output format.
 (This file is in the skill directory: `${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-qa-runbook-gen/references/`
-or the repo's `codex-skills/df-qa-runbook-gen/references/` directory. If neither
+or the repo's `codex-plugin/skills/df-qa-runbook-gen/references/` directory. If neither
 exists, stop and report the error — do not invent a format.)
 
 **Preconditions**: Generate the Preconditions section from the PRD's
@@ -315,7 +315,7 @@ was proposed.
 
 Read `references/spec-guardian-rules.md`.
 (This file is in the skill directory: `${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-qa-runbook-gen/references/`
-or the repo's `codex-skills/df-qa-runbook-gen/references/` directory.)
+or the repo's `codex-plugin/skills/df-qa-runbook-gen/references/` directory.)
 
 **Scope: browser automation test cases (TC-xxx) only.** Programmatic test
 specifications (UT-xxx, IT-xxx, ET-xxx) are exempt from Spec Guardian rules
@@ -398,7 +398,7 @@ was invoked standalone, tell the user the next stage is
 - **Reference file resolution**: `references/runbook-template.md` and
   `references/spec-guardian-rules.md` are relative to the skill directory.
   Look in `${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-qa-runbook-gen/references/` (global) or
-  the repo's `codex-skills/df-qa-runbook-gen/references/` directory.
+  the repo's `codex-plugin/skills/df-qa-runbook-gen/references/` directory.
 - This skill runs autonomously — do not ask the user questions during
   generation except to disambiguate which PRD to use.
 - The project feature map is optional. A repo with no

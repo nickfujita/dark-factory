@@ -470,7 +470,7 @@ cmd_start() {
   local codex_skills_dir="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}"
   local persona_path="$codex_skills_dir/df-prd-challenge/references/personas.md"
   if [[ ! -f "$persona_path" ]]; then
-    persona_path="$repo_root/codex-skills/df-prd-challenge/references/personas.md"
+    persona_path="$repo_root/codex-plugin/skills/df-prd-challenge/references/personas.md"
   fi
   if [[ ! -f "$persona_path" ]]; then
     echo "Error: personas.md not found" >&2

@@ -12,8 +12,8 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CODEX_RUNNER="$REPO_ROOT/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
-PERSONA_RUNNER="$REPO_ROOT/codex-skills/df-prd-challenge/scripts/run_codex_persona_reviews.sh"
-TMUX_RUNNER="$REPO_ROOT/codex-skills/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
+PERSONA_RUNNER="$REPO_ROOT/codex-plugin/skills/df-prd-challenge/scripts/run_codex_persona_reviews.sh"
+TMUX_RUNNER="$REPO_ROOT/codex-plugin/skills/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
 
 VERBOSE=0
 [[ "${1:-}" == "-v" ]] && VERBOSE=1
@@ -133,7 +133,7 @@ export PATH="$BIN:$PATH"
 export CODEX_POLL_SECONDS=1
 export CODEX_WAIT_SLICE_SECONDS=40
 export CODEX_WINDOW_SECONDS=25
-export CODEX_SKILLS_HOME="$REPO_ROOT/codex-skills"
+export CODEX_SKILLS_HOME="$REPO_ROOT/codex-plugin/skills"
 
 PRD="$WORK/prd-sample.md"
 cat >"$PRD" <<'PRDDOC'

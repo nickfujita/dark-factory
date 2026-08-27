@@ -21,8 +21,15 @@ profiles/*.env
 # Agent/browser/session artifacts
 .claude/
 .codex/
-.agents/
 .dark-factory/
+
+# .agents/ is session scratch, except the Codex plugin marketplace manifest,
+# which is a shipped artifact. Git will not descend into an excluded directory,
+# so the carve-out has to re-include each level.
+.agents/*
+!.agents/plugins/
+.agents/plugins/*
+!.agents/plugins/marketplace.json
 qa-results/
 screenshots/
 videos/

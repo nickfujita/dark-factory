@@ -58,7 +58,7 @@ fi
 codex_skills_dir="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}"
 ref_dir="$codex_skills_dir/df-code-review/references"
 if [[ ! -d "$ref_dir" ]]; then
-  ref_dir="$repo_root/codex-skills/df-code-review/references"
+  ref_dir="$repo_root/codex-plugin/skills/df-code-review/references"
 fi
 if [[ ! -d "$ref_dir" ]]; then
   echo "Error: reference directory not found" >&2

@@ -88,6 +88,12 @@ check-agents:
 check-python:
 	python3 -m py_compile skills/skill-creator/scripts/*.py
 
+# Plugin packaging: four manifests carry the version and auto-update reads the
+# manifest rather than the git tag, so drift between them ships a plugin that
+# never updates. Also guards the one file both plugin roots have to share.
+check-plugins:
+	bash scripts/check-plugin-manifests.sh
+
 # D24 run-state store acceptance: 37 assertions over concurrent reservation,
 # stale-lock reclaim, nested budgets, idempotent completion and resume.
 # Offline, no dependencies beyond bash and coreutils, about a second.
@@ -106,8 +112,8 @@ test-runners:
 test-bridge-suppression:
 	bash scripts/test_bridge_suppression.sh
 
-# D30 shared-core parity: every file under codex-skills/*/references/ and
-# codex-skills/df/playbooks/ must be byte-identical to its skills/ counterpart.
+# D30 shared-core parity: every file under codex-plugin/skills/*/references/ and
+# codex-plugin/skills/df/playbooks/ must be byte-identical to its skills/ counterpart.
 # The allowlist names the files with sanctioned harness deltas (spawn
 # transport, reviewer-tier machinery, mirrored reviewer roles). Keep it short;
 # a SKILL.md is never in parity scope, and additions need a reason in the
@@ -136,11 +142,11 @@ check-parity:
 	how/references/explorer-prompt.md \
 	"; \
 	fail=0; \
-	files="$(cd codex-skills && find */references df/playbooks -type f | sort)"; \
+	files="$(cd codex-plugin/skills && find */references df/playbooks -type f | sort)"; \
 	for rel in $files; do \
 		case " $allowlist " in *" $rel "*) continue ;; esac; \
 		skill="${rel%%/*}"; rest="${rel#*/}"; \
-		src="codex-skills/$rel"; dst="skills/$skill/$rest"; \
+		src="codex-plugin/skills/$rel"; dst="skills/$skill/$rest"; \
 		if [[ ! -f "$dst" ]]; then \
 			echo "PARITY FAIL (no skills/ counterpart): $src"; fail=1; \
 		elif ! cmp -s "$src" "$dst"; then \
@@ -166,5 +172,6 @@ check:
 	just check-references
 	just check-agents
 	just check-python
+	just check-plugins
 	just check-parity
 	just check-state

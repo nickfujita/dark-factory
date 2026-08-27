@@ -518,10 +518,13 @@ fi
 if [[ ! -f "$script_path" ]]; then
   script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
 fi
+if [[ ! -f "$script_path" ]]; then
+  script_path="$(ls -d "$HOME"/.claude/plugins/cache/*/dark-factory/*/skills/df-prd-challenge/scripts/run_codex_prd_review.sh 2>/dev/null | sort -V | tail -1)"
+fi
 
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_codex_prd_review.sh" >&2
-  echo "Checked: \$HOME/.claude/skills/, <repo>/skills/, <repo>/.claude/skills/" >&2
+  echo "Checked: \$HOME/.claude/skills/, <repo>/skills/, <repo>/.claude/skills/, and the dark-factory plugin cache" >&2
   exit 1
 fi
 
