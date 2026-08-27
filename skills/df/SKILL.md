@@ -14,11 +14,11 @@ The operator typing `/df` is the only entry. You may suggest `/df` in one line w
 
 ## Non-negotiables
 
-Start every multi-step task with a todo list whose first item is to read `references/principles.md` in full. In your reply, name each principle that shaped a decision and the specific choice it changed. A citation with no decision behind it means you skipped the principle. It must trace to a real choice the rule drove.
+Start every multi-step task with a todo list whose first item is to read this skill's `references/principles.md` in full. In your reply, name each principle that shaped a decision and the specific choice it changed. A citation with no decision behind it means you skipped the principle. It must trace to a real choice the rule drove.
 
 ## Lane decision
 
-Classify the ask into a lane before any work. Propose the lane, get the operator's confirmation, and record it in the run state: `scripts/df-state.sh init` opens the run with its lane, budgets, and finish predicate. The default is Standard. Nothing escalates itself to High-consequence silently. Review findings never change the lane.
+Classify the ask into a lane before any work. Propose the lane, get the operator's confirmation, and record it in the run state: `scripts/df-state.sh init` (at the dark-factory root; the session reminder names that root) opens the run with its lane, budgets, and finish predicate. The default is Standard. Nothing escalates itself to High-consequence silently. Review findings never change the lane.
 
 **Quick.** For a bug fix, small UI change, or config change with named files or a named surface and one acceptance target. Record a finish predicate up front. That predicate is the acceptance. The lane skips the PRD interview, the challenge round, and the QA runbook. Review is one reviewer, single pass, lead adjudication. Verify on the matching surface. Delivery is one PR. The TDD escape hatch ("prefer no new test over a bad test", plus the closest executable check) applies to feature work only, never to a reproduced defect.
 
@@ -67,9 +67,9 @@ Spawn subagents with the Agent tool. Defaults for every spawn:
 
 - run in the background
 - file pointers, not inlined context
-- a role resolved through `references/model-policy.md`, never a hardcoded model slug
+- a role resolved through this skill's `references/model-policy.md`, never a hardcoded model slug
 
-`references/model-policy.md` holds the per-role table. The rules it enforces: the default for every role is inherit. Omit the model field and the spawn runs on the session model. The session model is the operator's usage throttle. Pins exist only as cheap tiers for menial work and as floors for recheck reviewers. A pinned role never runs above the current session model unless it is a designated floor. Floors are the only pins allowed to exceed a throttled session, because their job is to keep a review meaningful. The Agent tool cannot set effort per spawn, so a role that needs a pinned effort resolves to a pinned agent definition, not a bare model name.
+That per-role table's rules, in brief: the default for every role is inherit. Omit the model field and the spawn runs on the session model. The session model is the operator's usage throttle. Pins exist only as cheap tiers for menial work and as floors for recheck reviewers. A pinned role never runs above the current session model unless it is a designated floor. Floors are the only pins allowed to exceed a throttled session, because their job is to keep a review meaningful. The Agent tool cannot set effort per spawn, so a role that needs a pinned effort resolves to a pinned agent definition, not a bare model name.
 
 Tier by difficulty. Judgment-heavy or vague work goes to the strongest judgment model, or stays in-session. A precisely specified sequence of steps goes to the strongest instruction-follower. Trivial mechanical edits and well-scoped investigation go to the cheap tier.
 
@@ -107,7 +107,7 @@ These rules embed here because they must hold while drafting. The unslop skill o
 
 ## Principles
 
-`references/principles.md` condenses the 21 PSTACK principles, grouped Core, Architecture, Verification, Delegation, and Meta. Read it in full at the start of every multi-step task. Cite a principle only when it drove a real choice.
+This skill's `references/principles.md` condenses the 21 PSTACK principles, grouped Core, Architecture, Verification, Delegation, and Meta. Read it in full at the start of every multi-step task. Cite a principle only when it drove a real choice.
 
 ## Project hook
 

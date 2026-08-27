@@ -59,6 +59,44 @@ if ! cmp -s scripts/df-state.sh codex-plugin/scripts/df-state.sh; then
   note "codex-plugin/scripts/df-state.sh differs from scripts/df-state.sh"
 fi
 
+# Root-relative reference docs the skills name must ship in BOTH roots.
+# Byte-identical copies; the repo root is canonical.
+for ref in run-state-schema.md project-manifest-schema.md engineering-standards.md; do
+  [[ -f "codex-plugin/references/$ref" ]] \
+    || { note "codex-plugin/references/$ref is missing"; continue; }
+  cmp -s "references/$ref" "codex-plugin/references/$ref" \
+    || note "codex-plugin/references/$ref differs from references/$ref"
+done
+
+# The session hook ships in both roots too, but as a HARNESS VARIANT, not a
+# copy: the Codex script says \$df where the Claude script says /df. Identity
+# is checked structurally instead: both must exist, parse, and name a root.
+codex_hooks="codex-plugin/hooks/hooks.json"
+if [[ -f "$codex_hooks" ]]; then
+  python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$codex_hooks" \
+    || note "$codex_hooks is not valid JSON"
+  while read -r cmd; do
+    [[ -n "$cmd" ]] || continue
+    rel="codex-plugin/${cmd#*\$\{CLAUDE_PLUGIN_ROOT\}/}"
+    [[ -f "$rel" ]] || note "$codex_hooks names a missing file: $rel"
+  done < <(read_json "$codex_hooks" "'\n'.join(h['command'] for group in d['hooks'].values() for entry in group for h in entry['hooks'])")
+else
+  note "$codex_hooks is missing"
+fi
+# Capture instead of piping into grep -q: under pipefail an early grep exit
+# SIGPIPEs the hook script and fails the pipeline even on a match.
+for hs in scripts/df-session-hook.sh codex-plugin/scripts/df-session-hook.sh; do
+  bash -n "$hs" 2>/dev/null || note "$hs fails a syntax check"
+  out="$(sh "$hs")"
+  [[ "$out" == *"dark-factory root here is"* ]] || note "$hs does not name its root"
+done
+codex_out="$(sh codex-plugin/scripts/df-session-hook.sh)"
+[[ "$codex_out" == *'$df'* ]] \
+  || note "the codex session hook does not use the \$df entry syntax"
+if [[ "$codex_out" =~ /df($|[^-a-z0-9]) ]]; then
+  note "the codex session hook leaks the Claude /df entry syntax"
+fi
+
 # The plugin name has to match across the Claude manifests, or `claude plugin
 # install` resolves nothing.
 n_plugin="$(read_json "$claude_plugin" "d['name']")"

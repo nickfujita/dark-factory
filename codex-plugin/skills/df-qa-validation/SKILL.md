@@ -209,10 +209,11 @@ If the trigger condition is NOT met, proceed to Step 7.
 3. **On approve**: Resolve the engineering standards path using the same
    3-location fallback pattern:
    ```
+   <this skill's own directory>/references/engineering-standards.md
    ${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-qa-validation/references/engineering-standards.md
    <repo>/codex-plugin/skills/df-qa-validation/references/engineering-standards.md
-   <repo>/references/engineering-standards.md
    ```
+   The first tier resolves in every install mode, plugin cache included.
    Then **return control to the df feature playbook**
    (`df/playbooks/feature.md`). The playbook owns sequencing and picks the next
    stage; this skill does not. Invoked standalone, with no playbook driving,

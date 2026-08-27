@@ -42,7 +42,7 @@ The df skills find the verification skill through `.dark-factory/project.yaml`, 
 - `feature_map:` the repo-relative path of the `features/` directory.
 - The launch, doctor, and teardown commands enter the manifest's `commands` table as IDs, for example `verify-launch`, `verify-doctor`, `verify-teardown`. df skills run commands by ID, never raw shell strings read from a document. `{path}` is the only substitution. The generated skill body still shows the same invocations inline for a reader driving by hand.
 
-When no manifest exists, create a minimal version 1 file with `version`, `project`, and the keys above. When one exists, add these keys and touch nothing else. The schema rejects unknown keys, and every path is repo-relative and canonical. The full rules are in the dark-factory repo's `references/project-manifest-schema.md`. A manifest edit is a code change and gets reviewed like one, so name it in the handover.
+When no manifest exists, create a minimal version 1 file with `version`, `project`, and the keys above. When one exists, add these keys and touch nothing else. The schema rejects unknown keys, and every path is repo-relative and canonical. The full rules are in `references/project-manifest-schema.md` at the dark-factory root; the session reminder names that root. A manifest edit is a code change and gets reviewed like one, so name it in the handover.
 
 ## 5. Prove the generated skill before handing it over
 
