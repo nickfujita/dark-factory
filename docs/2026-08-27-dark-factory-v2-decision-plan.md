@@ -57,7 +57,10 @@ on its own. The Codex side gets the equivalent through its skill description ("u
 the user explicitly invokes df") plus the same rule in dark-factory's Codex instructions.
 The SessionStart hook therefore does not activate the mode; it injects only the reminder
 line and the ownership rules, and once `/df` is invoked, the copied-into-todos playbook
-steps and the state files carry the mode across compaction. The invocation policy for
+steps and the state files carry the mode across compaction. The D23 acceptance test proved
+the hook is load-bearing for the suggestion behavior, not decorative:
+`disable-model-invocation` hides the skill from the model entirely, so the model can only
+suggest `/df` because the hook's reminder told it df exists. The invocation policy for
 everything else: read-only helper skills (`how`, `why`, `recall`, `blast-radius`) may
 trigger on their own descriptions; `unslop` stays always-on by operator mandate; playbooks
 and every skill that writes or orchestrates run only when `df` dispatches them or the
