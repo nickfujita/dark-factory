@@ -77,6 +77,51 @@ Default to **hybrid** when uncertain — it produces the most complete runbook.
 
 Record the feature type and test framework for use in subsequent steps.
 
+### Step 1.6: Lane Mode and the Project Feature Map
+
+Read the lane from the run state, and check the target repo for
+`.dark-factory/project.yaml`. Together they decide how much derivation this
+runbook does.
+
+**Check for a feature map.** When `.dark-factory/project.yaml` is present and
+names a feature map, read it. It is the project's standing record of how to
+reach every surface of the app: navigation paths, selectors, keyboard
+shortcuts, one entry per feature or sub-feature, each with a stable ID.
+
+| Lane | Feature map present | Mode |
+|---|---|---|
+| Standard | yes | **thin** |
+| Standard | no | full derivation |
+| High-consequence | either | full derivation |
+
+**Thin mode.** A browser test case names the map entry it runs against and
+states the test intent. It does not re-derive navigation. Where the full mode
+would write "Click the account menu in the top right, choose Settings, then
+open the Billing tab", thin mode writes `Surface: <map-entry-id>` and goes
+straight to the behavior under test. The map owns how to get there; the runbook
+owns what to check when you arrive.
+
+Thin-mode rules:
+
+- Every TC carries `**Surface:** <map-entry-id>` naming a real entry. Never
+  invent an ID. A behavior with no matching entry falls back to full derivation
+  for that TC only, and the TC says
+  `**Surface:** Derived — no feature-map entry` so the gap is visible.
+- Steps start after arrival. Preconditions still state auth and data setup.
+- Assertions are unchanged. Thin mode trims navigation, never verification.
+- Record the map's path and its revision in the frontmatter, so a runbook read
+  six weeks later can tell whether the map it depended on has moved.
+
+**Full derivation** is the existing behavior: each TC spells out navigation
+from the PRD and the codebase. It stays the default for High-consequence,
+because a credential or migration surface is exactly where a stale map entry
+would silently redirect a test, and it is the only option when no map exists.
+
+Thin mode is why the map earns its keep. Under full derivation every runbook
+re-derives the same navigation from scratch and the knowledge stays per-feature.
+Under thin mode the navigation knowledge is cumulative, maintained in one place,
+and shared across every feature that touches the same surface.
+
 ### Step 2: Generate Test Cases
 
 Read `references/runbook-template.md` for the exact output format.
@@ -112,6 +157,8 @@ Rules:
 - Assertions use the `VERIFY` format from the template
 - Each test case has a unique ID (TC-001, TC-002, ...)
 - Test case names are descriptive (not "Test 1")
+- In thin mode (Step 1.6), each TC names its feature-map entry and starts its
+  steps at arrival instead of re-deriving navigation
 
 ---
 
@@ -206,6 +253,8 @@ Add YAML frontmatter with:
 - `id`: `qa-<feature-slug>`
 - `prd`: relative path to the source PRD
 - `feature_type`: `ui`, `backend`, or `hybrid` (from Step 1.5)
+- `runbook_mode`: `thin` or `full` (from Step 1.6)
+- `feature_map`: path and revision of the project feature map (omit in full mode)
 - `test_framework`: auto-discovered test framework (from Step 1.5, omit for `ui`-only)
 - `base_url`: target app URL for df-qa-acceptance (only if TC-xxx test cases exist)
 - `generated`: today's date (YYYY-MM-DD)
@@ -352,6 +401,10 @@ was invoked standalone, tell the user the next stage is
   the repo's `codex-skills/df-qa-runbook-gen/references/` directory.
 - This skill runs autonomously — do not ask the user questions during
   generation except to disambiguate which PRD to use.
+- The project feature map is optional. A repo with no
+  `.dark-factory/project.yaml`, or a manifest that names no map, gets full
+  derivation and a working runbook. Never require the manifest, and never
+  invent a map entry ID to reach thin mode.
 - If the PRD has ambiguous requirements that can't be turned into tests,
   flag them as `UNTESTABLE: <reason>` rather than guessing intent.
 - The coverage matrix is the key quality artifact — it proves bidirectional

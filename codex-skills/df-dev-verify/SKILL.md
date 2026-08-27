@@ -160,6 +160,31 @@ For each unchecked item, work through failures one at a time:
 Prioritise in this order: P0 QA failures first, then P1/P2 QA failures,
 then test failures.
 
+**The evidence standard for every fix claim.** This skill exists to produce
+evidence, so a claim that a fix works is only as good as the rung it reached on
+the `blast-radius` proof ladder (`skills/blast-radius/SKILL.md` § "How sure are
+you"):
+
+| Rung | What it is | Counts as proven? |
+|---|---|---|
+| 1 | You said so | No |
+| 2 | You pointed at the line — a real `file:line`, or the library's own source | No |
+| 3 | You showed the bad case cannot happen — you walked the failure step by step and it does not reach | No |
+| 4 | **You ran it** — a test or script that calls the real code and fails loud if you are wrong | **Yes** |
+| 5 | You reproduced it in the running app | Yes, and better |
+
+**Below rung 4 is unproven.** Mark it `[!]` and say so; do not round it up to
+resolved. Rung 4 is usually one small script or one focused test invocation
+against the exact code you changed, and this skill already has the runners to
+get there. Move an item to `## Resolved` only when you have run something that
+would have failed had the fix been wrong, and record what you ran alongside the
+one-line description.
+
+The same standard applies to a fix's blast radius, not only to the failure it
+targeted. A fix that resolves its own item and breaks something adjacent has
+not been proven; the convergence check below is what catches that, and its cap
+is why the check has to be honest.
+
 **a. Apply fix**
 Read the failure details and locate the relevant code. Apply the minimal fix
 needed. Do not fix multiple unrelated failures in a single edit.
@@ -179,12 +204,23 @@ needed. Do not fix multiple unrelated failures in a single edit.
   e.g., `- [!] TC-003: checkout flow — 3 attempts, not converging`
   Do not loop further on that item.
 
-**Convergence check after all items addressed:**
+**Convergence check after all items addressed (max 2 iterations):**
 Run the full test suite and the full QA runbook (Steps 2 and 3). If new
 failures appear (regressions introduced by fixes), add them to the issues doc
 and re-enter the fix loop for those new items only.
 
-**E2e test coverage gate (hard requirement):**
+**This loop runs at most twice.** Iteration 1 is the check after the first fix
+pass; iteration 2 is the check after fixing whatever iteration 1 surfaced. If
+iteration 2 still surfaces new failures, **stop and surface to the operator**
+with the evidence: the failures, what each fix changed, and which rung of the
+proof ladder each claim reached. Do not start a third iteration.
+
+A third iteration is not a longer path to green; it is the signal that fixes
+are producing regressions faster than they resolve failures, and that is a
+question about the change, not a question about the loop. Mark the outstanding
+items `[!]`, record `convergence cap reached` next to them, and go to Step 5.
+
+**E2e test coverage gate (hard requirement, max 2 iterations):**
 
 After the convergence check passes, verify that automated e2e tests exist
 for every TC-xxx in the QA runbook. This is a hard gate — the branch cannot
@@ -204,12 +240,25 @@ proceed to Step 5 without e2e coverage.
    - Append to `## Test Failures` in `.dark-factory/tmp/dev-verify-issues.md`:
      `- [ ] [COVERAGE] TC-<id>: <name> — no automated e2e test found`
    - Re-enter the fix loop to write the missing e2e tests
-   - After writing tests, re-run the e2e suite to confirm they pass
+   - After writing tests, re-run the e2e suite to confirm they pass — writing a
+     test is rung 2, running it is rung 4, and only rung 4 closes a coverage item
    - Re-check coverage (repeat from step 1 of this gate)
+
+**This gate runs at most twice.** Iteration 1 is the first coverage scan;
+iteration 2 is the re-check after writing the missing tests. If iteration 2
+still finds an uncovered TC, **stop and surface to the operator**: list every
+TC still without a running e2e test, say what was written and what it did when
+run, and let them decide. Do not start a third iteration, and do not delete or
+weaken a TC to close the gap. An uncovered TC is a real hole in the acceptance
+evidence, and the operator is the one who gets to accept it.
 
 ### Step 5: Check for Unresolved Items
 
 Scan `.dark-factory/tmp/dev-verify-issues.md` for items marked `[!]`.
+
+Items hitting either outer cap — `convergence cap reached`, or a TC still
+uncovered after the coverage gate's second iteration — are `[!]` items too.
+A cap is a stop that surfaces, never a silent pass.
 
 If any `[!]` items exist:
 - Present them to the user with failure details
@@ -234,6 +283,14 @@ next stage is `df-code-review`.
   in a single context with all failures visible
 - `agent-browser close` must run at every exit point — after Step 3 success,
   after app-not-running bail-out, and after any unexpected error
+- **Evidence, not assertion.** Every fix claim is scored against the
+  `blast-radius` proof ladder (`skills/blast-radius/SKILL.md`). Below "you ran
+  it" is unproven, and unproven items stay `[!]` rather than moving to
+  `## Resolved`.
+- **Both outer loops are capped at 2.** The convergence re-run and the e2e
+  coverage gate each get two iterations. Hitting a cap surfaces to the operator
+  with the evidence; it never loops a third time and never lowers the bar to
+  reach green.
 - This skill verifies the developer's own work before review, not after. The
   multi-context code review in df-code-review is a second opinion on
   already-verified work.

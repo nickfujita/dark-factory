@@ -2,8 +2,8 @@
 
 Project-agnostic engineering standards that apply to every feature delivered
 through the df pipeline. These standards are read alongside the PRD and QA
-runbook during brainstorming to ensure technical delivery expectations are
-planned for from the start.
+runbook at the design and planning stages, so technical delivery expectations
+are planned for from the start.
 
 ## E2e Test Requirement
 
@@ -40,7 +40,7 @@ already has:
 4. Follow the project's existing patterns for test file naming, directory
    structure, and assertion style
 
-If no e2e framework exists in the project, flag this during brainstorming so
+If no e2e framework exists in the project, flag it at the design stage so
 framework selection becomes an explicit planning task.
 
 ## Tests Committed Alongside Feature Code

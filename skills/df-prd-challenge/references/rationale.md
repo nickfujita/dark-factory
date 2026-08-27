@@ -131,11 +131,59 @@ evidence of convergence and justifies another round; a flat or rising count, or
 a round whose findings are mostly in freshly-added prose, is evidence that
 another round of the same kind will not help.
 
-**Caps are usage guards, not quality judgments.** The round caps stopped all
-three runs *before* convergence, and all three then needed out-of-band
-authorization to continue. But an uncapped loop is not acceptable either — hence
-soft caps plus an explicit termination rule, and a bounded extension available
-only for method-change rounds.
+**Counting rounds was the wrong meter, and this is the correction.** The
+hardened generation of this skill capped rounds, and a run still reached
+fifteen of them legally, because the expensive work was typed as something
+other than a round. Delta verifications were exempt by design. Adopted orphan
+reviews were exempt. A convergence extension added rounds past the cap. The cap
+was real and the work went around it. So the cap is now a **single budget of
+reviewer dispatches that everything consumes**, reserved before the spawn in a
+store that refuses rather than warns. A mechanism that cannot be reached
+without a reservation cannot be exempted from one.
+
+**Growth was a sensor wired to the wrong actuator.** The old
+`GROWTH_WARN_ROUND_PCT` and `GROWTH_WARN_TOTAL_PCT` flagged; nothing stopped. On
+the measured run the PRD went from 4,265 words to 62,445, a 14.6x expansion,
+flagging the whole way. The sensors were right and the actuator was a note in a
+report. They are now one hard stop at twice the interview's output, and
+crossing it terminates the run as non-converging. There is no extension,
+because "converging" is exactly what a self-feeding loop reports about itself:
+run B's trend looked monotonic while half its yield was defects its own fixes
+had created.
+
+**Remediation that adds mechanism is the ratchet's engine.** Each round's fixes
+added queues, DLQs, signed admission permits, watchdogs, a 131-entry producer
+manifest. The next round then found technically real Critical/High gaps in that
+new prose. Every individual step was locally correct and the aggregate was a
+47-hour program with zero visible product. Autonomy over wording is safe;
+autonomy over mechanism compounds. So a fix that would introduce
+infrastructure escalates to the operator instead of landing.
+
+**Model-enumerated inventories are hallucination bait by construction.** The one
+systematic worker failure class in the forensics was a 94-entry census with
+guessed and nonexistent boundaries. A model asked to enumerate exhaustively
+will produce a complete-looking list whether or not it can see the whole set.
+Generating the census from source and reviewing it costs less and is true.
+
+**Most work does not need the loop at all.** The multi-round persona challenge
+was calibrated for models that half-followed instructions; models that follow
+maximally never run out of legitimate findings, so a zero-findings exit
+condition never fires. For a typical feature the single pass is the better
+trade: two families on one prompt, adjudicated by a lead who is told that an
+Act-On list over five items means under-filtering. The adversarial signal comes
+from model diversity rather than assigned personas, and one remediation wave
+with one delta verification is where the yield curve flattens. The multi-round
+loop survives only where wrongness is a security incident, and there it runs
+under the budget above.
+
+**Re-review survives, in bounded forms.** The operator's original observation
+was right: a review pass is a sample, and resampling catches real findings.
+What blew up was the coupling. Same-model reruns are correlated draws,
+autonomous remediation between draws manufactures fresh review surface, and a
+zero-findings exit needs reviewer exhaustion. So resampling is kept and the
+couplings are cut: delta verification instead of rediscovery, one fresh verdict
+per new artifact version, and an operator-invoked second opinion that is
+decorrelated by construction, budget-counted, and cannot move the gates.
 
 **Open items belong at the top of the PRD.** When a PRD is approved with
 residue, full disclosure to the implementing agent beats an extra round of

@@ -1,6 +1,9 @@
 # PRD Quality Gate Checklist
 
-All 7 items must pass before the PRD status changes from "Draft" to "Hardened".
+All 8 items must pass before the PRD status changes from "Draft" to "Hardened".
+
+Items 1 through 7 are lane-independent. Item 8 is the header gate and applies
+in both the lite and the full interview.
 
 ## The Checklist
 
@@ -32,6 +35,13 @@ All 7 items must pass before the PRD status changes from "Draft" to "Hardened".
   P0, P1, or P2. Priorities must have been confirmed with the user during
   the interview — do not assign priorities without user input.
 
+- [ ] **Header complete**: `Status`, `Lane`, `Effort-Anchor`, `Author`, `Date`
+  and `Feature ID` are all filled in. `Effort-Anchor` records the operator's
+  own answer verbatim, in their units. An anchor the agent estimated, or a
+  placeholder like "TBD", fails this item — the anchor exists so every later
+  stage has something to measure its projected cost against, and an invented
+  number measures nothing.
+
 ## How to Run the Gate
 
 After drafting the PRD, evaluate each item:
@@ -45,6 +55,8 @@ After drafting the PRD, evaluate each item:
 5. Check Out of Scope — is it non-empty with specific exclusions?
 6. Verify at least one REQ-xxx exists with acceptance criteria.
 7. Verify every REQ-xxx has a Priority field (P0, P1, or P2).
+8. Read the header block. Every field is filled, and `Effort-Anchor` is the
+   operator's own words rather than a number you produced.
 
 If any item fails, tell the user which item failed and what's missing.
 Loop back to the relevant interview topic to fill the gap.

@@ -10,6 +10,8 @@ adapts based on `feature_type` in the frontmatter.
 id: qa-<feature-slug>
 prd: docs/prd-<feature-slug>.md
 feature_type: ui | backend | hybrid
+runbook_mode: thin | full
+# feature_map: { path: <path from .dark-factory/project.yaml>, revision: <rev> }  # thin mode only
 # test_framework: vitest  # include for backend/hybrid; auto-discovered
 base_url: http://localhost:3000
 generated: YYYY-MM-DD
@@ -25,6 +27,10 @@ timeout: 30000
 - `prd`: relative path to the source PRD
 - `feature_type`: `ui`, `backend`, or `hybrid` — determines which test
   sections to include
+- `runbook_mode`: `thin` when the cases reference a project feature map,
+  `full` when they derive navigation themselves
+- `feature_map`: (thin mode only) the map's path and the revision the cases
+  were written against, so a later reader can tell whether it has moved
 - `test_framework`: (for backend/hybrid) the project's test runner. Auto-
   discovered from project config. Default: `vitest`
 - `base_url`: app URL used by df-qa-acceptance. Must point to local/dev/
@@ -51,6 +57,7 @@ timeout: 30000
 ### TC-001: <Descriptive Scenario Name> [P0 - Critical]
 
 **Traces to:** REQ-001
+**Surface:** <feature-map entry ID>   <!-- thin mode; omit in full mode -->
 
 Steps:
 1. [User action in natural language]
@@ -63,6 +70,13 @@ Assertions:
 ---
 
 [Continue for all test cases]
+
+In **thin mode** a TC names its feature-map entry on the `Surface:` line and
+its steps begin at arrival: the map owns navigation, the runbook owns what to
+check once you are there. A behavior with no matching entry keeps its derived
+navigation and says `**Surface:** Derived — no feature-map entry`, so the gap
+in the map is visible rather than silent. Assertions are identical in both
+modes; thin mode trims navigation, never verification.
 
 ## Coverage Matrix
 

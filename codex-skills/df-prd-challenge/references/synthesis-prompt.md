@@ -1,8 +1,10 @@
 # Challenge Round Synthesis Prompt
 
 After a review round's reviewers complete, synthesize their findings into a
-single prioritized list for that round. This runs once per round in both
-phases (Phase A: the 3 Claude personas; Phase B: Codex).
+single prioritized list for that round, then adjudicate it.
+
+The Standard lane runs this once, over the two single-pass reviewers. The
+High-consequence lane runs it once per round in both phases.
 
 ## Synthesis Instructions
 
@@ -62,6 +64,43 @@ the two cases — they are not the same:
    matches a Decision Register entry is dismissed by citing that entry unless
    its severity rose or the reviewer brought new evidence.
 
+## Lead adjudication
+
+You are the lead. The reviewers produced findings; you decide what happens to
+each one. Do not aggregate. Filter, contextualize, and decide. The reviewers saw
+the PRD and a slice of the codebase. You have the whole run: what the operator
+actually asked for, the Effort-Anchor, what the Decision Register already
+settled, and what the lane is.
+
+Excerpted from `interrogate`'s `references/lead-judgment.md`, which is the
+normative home for these rules:
+
+- **Nitpick Gravity.** Reviewers, especially adversarial ones, tend to fill
+  their review. If they do not find critical issues, they inflate nits to fill
+  the space. If a reviewer's findings are all nits and style preferences, the
+  document is probably fine. Say so.
+- **Hypothetical versus actual.** "What if someone passes null here" is only a
+  finding if a caller can actually pass null. Trace it. A finding that cannot
+  name a real path is dismissed.
+- **"I would have done it differently."** The most common false positive.
+  Not a bug, not a design flaw, not actionable unless the reviewer shows a
+  concrete problem with the current approach.
+- **Verdict calibration.** A good verdict is useful, not comprehensive. **If
+  your Act-On list has more than 5 items, you are probably not filtering hard
+  enough.** Re-read it and cut.
+- **Dismissals are legitimate and they are stated.** The dismissed list is a
+  trust mechanism, not busywork. It lets the operator override you where they
+  disagree, which is more valuable than hiding what you rejected.
+
+Two things pull the other way, and they win where they apply. Multiple
+reviewers flagging the same issue independently is a consensus signal. Security
+findings and correctness bugs get more scrutiny before dismissal, even from a
+single reviewer.
+
+Adjudication produces a disposition per finding, and the disposition is what
+the remediation step acts on. The vocabulary is fixed in
+`prd-structure-rules.md` § 1.
+
 ## Report format
 
 The report is written once, at finalize. It must be self-contained — readable
@@ -72,7 +111,9 @@ without the original chat context.
 
 **Date:** YYYY-MM-DD
 **PRD:** <prd-path>
-**Outcome:** Approved | Approved with open items | Escalated — substantive residue
+**Lane:** Standard | High-consequence
+**Outcome:** Approved | Approved with open items | Escalated — substantive residue | Terminated — non-converging
+**Dispatches:** <used> of <DISPATCH_BUDGET>
 **Reviewers:** Skeptical User Advocate, Technical Feasibility, Scope & Complexity, Codex
 
 ## Summary
@@ -138,7 +179,7 @@ in one place, including the fixes that were modified or rejected on their way in
 ## Notes
 
 <tooling blockers, adopted reviews, reviewer threads that could not be continued
-for their delta verification, retried rounds, convergence-extension rounds used>
+for their delta verification, retried rounds, the dispatch count, and the reason the run terminated>
 ```
 
 Rules for the report:
@@ -153,3 +194,6 @@ Rules for the report:
   not be verified. An unverified delta is a stated fact in the report, never an
   omission.
 - If a phase was tooling-blocked, say so in **Outcome**, not only in Notes.
+- A Standard-lane report has one row in the Rounds table, typed
+  `single-pass`, and its Notes say whether the operator invoked the
+  second-opinion pass.

@@ -9,6 +9,27 @@ disable-model-invocation: true
 Conduct a structured interview to produce a PRD (Product Requirements Document)
 that passes a hard quality gate. The PRD captures what to build, not how.
 
+## Lane mode
+
+The df router classified the lane before this skill ran. Read it from the run
+state and run the matching mode. Ask the operator only if no lane is recorded.
+The Quick lane never reaches this skill — it records a finish predicate instead
+of a PRD.
+
+| Lane | Mode | Phase 2 coverage | Target question count |
+|---|---|---|---|
+| Standard | **lite** | topics 1, 2, 4, 8, and one combined pass over 3/5/6/7 | 5 to 8 |
+| High-consequence | **full** | all 8 topics, each probed on its own | 8 to 15 |
+
+Lite is a smaller interview, not a lower bar. The quality gate is identical in
+both modes, and the same 8 items must pass. What lite drops is the separate
+question per topic, not the topic. Write the chosen mode into the round record
+and the PRD header's `Lane:` field.
+
+A lite interview that keeps discovering material is telling you the lane was
+wrong. Say so and ask the operator to re-lane before continuing. Never
+self-escalate to the full interview.
+
 ## Before Starting
 
 1. Read the project's CLAUDE.md, README, and recent git log (last 10 commits)
@@ -49,11 +70,29 @@ by saying: "Great, let me ask some more specific questions."
 panel"), help them scope: "That sounds like N separate features. Which one
 should we define first? We can do the others after."
 
+**Effort-Anchor (mandatory, both modes).** Close Phase 1 with exactly this
+question:
+
+> "If you did this yourself, how long would it take?"
+
+Record the answer **verbatim**, in the operator's own units, into the PRD
+header as `Effort-Anchor:`. Do not convert it, round it, or replace it with an
+estimate of your own. If the operator declines to answer, ask once more and
+say why the number matters. If they still decline, write
+`Effort-Anchor: declined` and say in your Phase 5 report that every downstream
+proportionality check is now unanchored.
+
+The anchor is the only number in the pipeline that comes from the operator
+rather than from an agent. Every later stage compares its projected cost
+against it and stops to ask when the projection exceeds it by the anchor stop
+multiple. On the run this rule exists to prevent, the anchor lived in the
+operator's head for 35 hours and was never written down anywhere.
+
 ### Phase 2: Structured Probing
 
 Ask questions **one at a time**. Prefer multiple choice when possible.
-Aim for 8-15 questions in Phase 2 (not counting Phase 1). Cover these
-topics in order:
+Aim for the question count your lane mode sets (lite 5 to 8, full 8 to 15),
+not counting Phase 1. Cover these topics in order:
 
 1. **User flows** — "Walk me through the happy path. What does the user do
    step by step?" Then for each flow: "What could go wrong here?"
@@ -74,6 +113,14 @@ topics in order:
 
 Skip topics the user already covered in Phase 1 or in provided material
 (Phase 0). Do not re-ask what's already clear.
+
+**In lite mode**, ask topics 1, 2, 4 and 8 as their own questions, then fold
+3, 5, 6 and 7 into a single closing question: "Anything that must keep working
+exactly as it does today, any performance or security threshold, any term here
+that two people could read differently, or any constraint or dependency I
+should write down?" A "no" to that closing question is a real answer. Record it
+as such rather than probing each fold separately, and let the quality gate
+catch what it misses.
 
 **Handling user shortcuts:**
 - If the user says "I don't know" — note it as a gap, move on, and flag
@@ -116,9 +163,36 @@ the user.
 
 **Feature ID field:** Set this to the derived feature slug.
 
+**Lane field:** the lane the router recorded, `Standard` or
+`High-consequence`. Never write a lane the operator did not confirm.
+
+**Effort-Anchor field:** the operator's Phase 1 answer, verbatim.
+
+**Status field:** `Draft` or `Hardened` at this stage. `Approved` and
+`Approved with open items` are set by `df-prd-challenge`, never here.
+
+**Pinned Parameters table:** fill it from every threshold, limit, timeout,
+default, retry budget, size cap and enum the interview surfaced. Requirements
+then refer to each parameter by name instead of restating its value. A feature
+with no tunables says so in one line; an empty table is a gap, not a pass.
+
+**Decision Register:** the interview leaves the table present and empty.
+`df-prd-challenge` owns its rows. Do not delete the section because it has no
+rows yet — an absent register is where the next round's re-litigation starts.
+
+**Known open items:** the interview does not write this section. The challenge
+round adds it if the PRD is approved with residue.
+
+**Exhaustive inventories are banned.** Never write a census, manifest, or
+complete enumeration of anything in the codebase from your own reading. If the
+PRD needs one, name the script that generates it and record the requirement as
+"inventory generated by `<command>`, reviewed before use". A model-enumerated
+inventory is hallucination bait by construction; one measured run shipped a
+94-entry census with guessed and nonexistent entries.
+
 ### Phase 4: Quality Gate
 
-Evaluate the draft against all 7 gate items. **Important: read each item
+Evaluate the draft against all 8 gate items. **Important: read each item
 as if you are a QA engineer who has never seen this feature. Would you know
 exactly what to test and what the expected outcome is?** Do not rubber-stamp
 your own work — actively look for items that technically conform but are
@@ -140,6 +214,12 @@ too vague to be useful.
    acceptance criteria
 7. **Priority assigned** — Every REQ-xxx has a priority (P0, P1, or P2)
    that was confirmed with the user
+8. **Header complete** — `Status`, `Lane`, `Effort-Anchor`, `Author`, `Date`
+   and `Feature ID` are all filled, and `Effort-Anchor` is the operator's own
+   answer rather than one you produced
+
+The gate is the same in lite and full mode. Lite trims the interview, not the
+bar.
 
 See `references/quality-gate-checklist.md` for full details and examples.
 
@@ -177,6 +257,12 @@ PRD path (`docs/prd-<feature-slug>.md`).
 ## Key Rules
 
 - **One question at a time.** Never ask multiple questions in one message.
+  The lite mode's closing fold is one question, asked once.
+- **The Effort-Anchor is the operator's, not yours.** Record it verbatim and
+  never revise it later. A stage that finds the anchor wrong escalates to the
+  operator; it does not edit the header.
+- **Lane comes from the router.** Run the mode the lane names. Never
+  self-escalate from lite to full.
 - **Multiple choice preferred.** When there are a few obvious options, present
   them as choices rather than asking open-ended.
 - **Do not suggest implementation.** The PRD is about requirements, not

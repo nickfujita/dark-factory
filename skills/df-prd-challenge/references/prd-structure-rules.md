@@ -121,10 +121,11 @@ Rules:
 - Never leave process annotations (`challenge round 3:`, `per reviewer
   feedback:`) in the specification body. That is round metadata; it belongs in
   the challenge report, and the *content* belongs in a `Why:` block.
-- Record the PRD word count each round and flag growth against the thresholds in
-  the skill's pinned parameters. Growth is not automatically wrong — but growth
-  concentrated in prose, while the finding count is not falling, means the loop
-  is feeding on itself.
+- Record the PRD word count after every change and measure it against
+  `GROWTH_HARD_CAP` in the skill's pinned parameters. That cap is a stop, not a
+  flag. Growth is not automatically wrong — but growth concentrated in prose,
+  while the finding count is not falling, means the loop is feeding on itself,
+  and the skill terminates the run rather than extending it.
 
 ---
 
