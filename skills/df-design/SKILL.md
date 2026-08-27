@@ -48,7 +48,7 @@ You synthesize. Pick a base candidate, graft what the others did better, reject 
 
 The checkpoint follows the lane. It is not opt-in.
 
-- **Standard.** No separate pause here. The synthesized design ships with the plan, and the operator signs off on both together at the df-plan sign-off. df-plan is pending port. Until it lands, surface the design with whatever plan the lane produces and get one combined sign-off.
+- **Standard.** No separate pause here. The synthesized design ships with the plan, and the operator signs off on both together at the df-plan sign-off. Surface the design with the plan and get one combined sign-off.
 - **High-consequence.** Explicit checkpoint. Surface the synthesized design and pause for operator sign-off before any implementation.
 - **Quick escalation.** Surface the sketch in the thread and continue. The recorded finish predicate stays the acceptance.
 

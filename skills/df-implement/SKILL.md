@@ -16,7 +16,7 @@ Narrate at most one short line between tool calls. The ledger and the tool resul
 
 ## Inputs
 
-- The plan, one todo per task, from df-plan. df-plan is pending port. Until it lands, any checklist plan the lane produced serves, held to the same task granularity.
+- The plan, one todo per task, from df-plan. It comes from df-plan.
 - The spec. The PRD in the Standard and High-consequence lanes, the recorded finish predicate in Quick. The spec is the binding authority and the plan is its argument. Conflicts resolve against the spec. A plan with no reachable spec gets a ledger note, and rulings made without one are provisional.
 - The lane, from the run state. It sets the TDD rule and the budgets.
 
