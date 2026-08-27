@@ -108,6 +108,8 @@ timestamp. The wall clock keeps running through a crash.
 Append-only. One row per review-finding disposition, written by review stages under the
 run lock with the same temp-file-plus-mv discipline.
 
+The verdict vocabulary for disposition rows: `live-verified | test-verified | type-check-only | blocked | failed`. The UI-specific prefixes from the base ledger are dropped, since verified surfaces here include backend runbooks.
+
 | column | meaning |
 |---|---|
 | ts | ISO 8601 UTC timestamp |
