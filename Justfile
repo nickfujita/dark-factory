@@ -88,6 +88,12 @@ check-agents:
 check-python:
 	python3 -m py_compile skills/skill-creator/scripts/*.py
 
+# D24 run-state store acceptance: 37 assertions over concurrent reservation,
+# stale-lock reclaim, nested budgets, idempotent completion and resume.
+# Offline, no dependencies beyond bash and coreutils, about a second.
+check-state:
+	bash scripts/test-df-state.sh
+
 # Runner smoke tests: drives the df-prd-challenge review runners against fake codex/tmux/
 # claude binaries. Takes ~1 minute (it exercises real timeouts), so it is not
 # part of `just check`.
@@ -143,6 +149,17 @@ check-parity:
 	done; \
 	[[ $fail -eq 0 ]] && echo "Parity OK" || exit 1
 
+# D23 invocation contract: proves in clean headless sessions that ordinary
+# prompts cannot activate the df router and that explicit /df can. Spends real
+# tokens under a budget cap, so it is not part of `just check`.
+test-invocation:
+	bash scripts/test-df-invocation.sh
+
+# df-eval scenario suite. Some scenarios drive live sessions; those name their
+# missing dependency and SKIP rather than fail. Not part of `just check`.
+evals *scenarios:
+	bash scripts/run-df-evals.sh {{scenarios}}
+
 check:
 	just check-shell
 	just check-manifest
@@ -150,3 +167,4 @@ check:
 	just check-agents
 	just check-python
 	just check-parity
+	just check-state
