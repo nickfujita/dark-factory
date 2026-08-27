@@ -22,3 +22,17 @@ codex	skills/go-mobile	go-mobile
 claude	skills/stop-mobile	stop-mobile
 codex	skills/stop-mobile	stop-mobile
 claude	skills/df	df
+claude	skills/df-design	df-design
+claude	skills/df-implement	df-implement
+claude	skills/swarm	swarm
+claude	skills/arena	arena
+claude	skills/how	how
+claude	skills/why	why
+claude	skills/recall	recall
+claude	skills/blast-radius	blast-radius
+claude	skills/figure-it-out	figure-it-out
+claude	skills/show-me-your-work	show-me-your-work
+claude	skills/interrogate	interrogate
+claude	skills/unslop	unslop
+claude	skills/technical-writing	technical-writing
+claude	skills/typescript-best-practices	typescript-best-practices

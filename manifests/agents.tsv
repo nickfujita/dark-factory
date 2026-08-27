@@ -5,3 +5,4 @@
 # separately from skills because they install to a different global directory
 # and are not skill-shaped (no SKILL.md, no references/).
 claude	agents/df-reviewer-recheck.md	df-reviewer-recheck.md
+claude	agents/df-agent.md	df-agent.md

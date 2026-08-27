@@ -18,7 +18,7 @@ Start every multi-step task with a todo list whose first item is to read `refere
 
 ## Lane decision
 
-Classify the ask into a lane before any work. Propose the lane, get the operator's confirmation, and record it in the run state file. The run state schema is pending port; until it lands, record the lane and the finish predicate at the top of the todo list. The default is Standard. Nothing escalates itself to High-consequence silently. Review findings never change the lane.
+Classify the ask into a lane before any work. Propose the lane, get the operator's confirmation, and record it in the run state: `scripts/df-state.sh init` opens the run with its lane, budgets, and finish predicate. The default is Standard. Nothing escalates itself to High-consequence silently. Review findings never change the lane.
 
 **Quick.** For a bug fix, small UI change, or config change with named files or a named surface and one acceptance target. Record a finish predicate up front. That predicate is the acceptance. The lane skips the PRD interview, the challenge round, and the QA runbook. Review is one reviewer, single pass, lead adjudication. Verify on the matching surface. Delivery is one PR. The TDD escape hatch ("prefer no new test over a bad test", plus the closest executable check) applies to feature work only, never to a reproduced defect.
 
@@ -43,7 +43,7 @@ The operator may invoke one second-opinion pass. It is a deliberately decorrelat
 
 Every lane runs under a dispatch and wall-clock budget. Budget exhaustion is a stop, not a flag.
 
-The stage skills the Standard and High-consequence lanes name (`df-prd-interview`, `df-prd-challenge`, and the rest of the artifact spine) are pending port. Where a named skill does not exist yet, say so and apply the lane's discipline inline. Never invent a file.
+The stage skills the lanes name are live: `df-prd-interview`, `df-prd-challenge`, `df-design`, `df-qa-runbook-gen`, `df-qa-validation`, `df-implement`, `df-dev-verify`, `df-code-review`, `df-qa-acceptance`. Where a named skill is absent on a box, say so and apply the lane's discipline inline. Never invent a file.
 
 ## Playbook triggers
 
