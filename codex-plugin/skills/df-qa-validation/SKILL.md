@@ -78,11 +78,14 @@ to ground the analysis in what actually exists.
 ```bash
 script_path="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-qa-validation/scripts/run_codex_qa_validation.sh"
 if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
+  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-plugin/skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
+fi
+if [[ ! -f "$script_path" ]]; then
+  script_path="$(ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/*/dark-factory/*/skills/df-qa-validation/scripts/run_codex_qa_validation.sh 2>/dev/null | sort -V | tail -1)"
 fi
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_codex_qa_validation.sh" >&2
-  echo "Checked: \${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/ and <repo>/codex-skills/" >&2
+  echo "Checked: \${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/, <repo>/codex-plugin/skills/, and the dark-factory plugin cache" >&2
   exit 1
 fi
 
@@ -207,7 +210,7 @@ If the trigger condition is NOT met, proceed to Step 7.
    3-location fallback pattern:
    ```
    ${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-qa-validation/references/engineering-standards.md
-   <repo>/codex-skills/df-qa-validation/references/engineering-standards.md
+   <repo>/codex-plugin/skills/df-qa-validation/references/engineering-standards.md
    <repo>/references/engineering-standards.md
    ```
    Then **return control to the df feature playbook**
@@ -247,7 +250,7 @@ If the trigger condition is NOT met, proceed to Step 7.
 
 - **Reference file resolution**: `references/*.md` files are relative to the
   skill directory. Look in `${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-qa-validation/references/`
-  (global) or the repo's `codex-skills/df-qa-validation/references/` directory.
+  (global) or the repo's `codex-plugin/skills/df-qa-validation/references/` directory.
   If not found, stop and report the error.
 - The CLI review provides an independent context. It may catch blind spots
   the inline review misses.

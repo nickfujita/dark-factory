@@ -168,7 +168,10 @@ Resolve the reference directory (needed for the Codex subagent prompts):
 ```bash
 ref_dir="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-code-review/references"
 if [[ ! -d "$ref_dir" ]]; then
-  ref_dir="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-skills/df-code-review/references"
+  ref_dir="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-plugin/skills/df-code-review/references"
+fi
+if [[ ! -d "$ref_dir" ]]; then
+  ref_dir="$(ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/*/dark-factory/*/skills/df-code-review/references 2>/dev/null | sort -V | tail -1)"
 fi
 ```
 
@@ -223,11 +226,14 @@ combined-rubric subagent and do not reach for it to save a message.
 ```bash
 script_path="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-code-review/scripts/run_codex_subagent_reviews.sh"
 if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-skills/df-code-review/scripts/run_codex_subagent_reviews.sh"
+  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-plugin/skills/df-code-review/scripts/run_codex_subagent_reviews.sh"
+fi
+if [[ ! -f "$script_path" ]]; then
+  script_path="$(ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/*/dark-factory/*/skills/df-code-review/scripts/run_codex_subagent_reviews.sh 2>/dev/null | sort -V | tail -1)"
 fi
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_codex_subagent_reviews.sh" >&2
-  echo "Checked: \${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/ and <repo>/codex-skills/" >&2
+  echo "Checked: \${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/, <repo>/codex-plugin/skills/, and the dark-factory plugin cache" >&2
   exit 1
 fi
 
@@ -262,7 +268,10 @@ dispatch per window before it runs.
 ```bash
 script_path="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-code-review/scripts/run_claude_code_reviews_tmux.sh"
 if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-skills/df-code-review/scripts/run_claude_code_reviews_tmux.sh"
+  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-plugin/skills/df-code-review/scripts/run_claude_code_reviews_tmux.sh"
+fi
+if [[ ! -f "$script_path" ]]; then
+  script_path="$(ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/*/dark-factory/*/skills/df-code-review/scripts/run_claude_code_reviews_tmux.sh 2>/dev/null | sort -V | tail -1)"
 fi
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_claude_code_reviews_tmux.sh" >&2; exit 1
@@ -533,7 +542,7 @@ standalone, tell the user the next stage is `df-qa-acceptance`.
 
 - **Reference file resolution**: look in
   `${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-code-review/references/`
-  first, then `<repo>/codex-skills/df-code-review/references/`
+  first, then `<repo>/codex-plugin/skills/df-code-review/references/`
 - **Reference files**: `codex-quality-subagent-prompt.md`,
   `codex-security-subagent-prompt.md` and `codex-spec-subagent-prompt.md`
   (the discovery rubrics),

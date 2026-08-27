@@ -171,6 +171,9 @@ fi
 if [[ ! -d "$ref_dir" ]]; then
   ref_dir="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-code-review/references"
 fi
+if [[ ! -d "$ref_dir" ]]; then
+  ref_dir="$(ls -d "$HOME"/.claude/plugins/cache/*/dark-factory/*/skills/df-code-review/references 2>/dev/null | sort -V | tail -1)"
+fi
 ```
 
 Reserve the report path now; you assemble and write the full report once, at
@@ -244,6 +247,9 @@ if [[ ! -f "$quality_script" ]]; then
   quality_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-code-review/scripts/run_codex_quality_review.sh"
 fi
 if [[ ! -f "$quality_script" ]]; then
+  quality_script="$(ls -d "$HOME"/.claude/plugins/cache/*/dark-factory/*/skills/df-code-review/scripts/run_codex_quality_review.sh 2>/dev/null | sort -V | tail -1)"
+fi
+if [[ ! -f "$quality_script" ]]; then
   echo "ERROR: Cannot find run_codex_quality_review.sh" >&2; exit 1
 fi
 review_dir="<REVIEW_ROOT from Step 1>"
@@ -259,6 +265,9 @@ if [[ ! -f "$spec_script" ]]; then
 fi
 if [[ ! -f "$spec_script" ]]; then
   spec_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-code-review/scripts/run_codex_spec_review.sh"
+fi
+if [[ ! -f "$spec_script" ]]; then
+  spec_script="$(ls -d "$HOME"/.claude/plugins/cache/*/dark-factory/*/skills/df-code-review/scripts/run_codex_spec_review.sh 2>/dev/null | sort -V | tail -1)"
 fi
 if [[ ! -f "$spec_script" ]]; then
   echo "ERROR: Cannot find run_codex_spec_review.sh" >&2; exit 1

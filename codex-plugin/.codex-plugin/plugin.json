@@ -1,0 +1,38 @@
+{
+  "name": "dark-factory",
+  "version": "1.0.0",
+  "description": "Spec-driven development pipeline for coding agents: lanes, playbooks, budgeted dispatch, and multi-model review",
+  "author": {
+    "name": "nickfujita",
+    "url": "https://github.com/nickfujita"
+  },
+  "homepage": "https://github.com/nickfujita/dark-factory",
+  "repository": "https://github.com/nickfujita/dark-factory",
+  "keywords": [
+    "workflow",
+    "skills",
+    "planning",
+    "code-review",
+    "qa",
+    "orchestration",
+    "spec-driven"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Dark Factory",
+    "shortDescription": "Lanes, playbooks, and budgeted dispatch for routed development work",
+    "longDescription": "Dark Factory routes development work through a spec-driven pipeline: classify the ask into a lane, run the matching playbook, reserve every dispatch against a run budget, and close with multi-model review and QA acceptance. Entry is explicit; the router never activates itself.",
+    "developerName": "nickfujita",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Route this work through a df lane and playbook.",
+      "Run a df code review on the current branch.",
+      "Interview me for a PRD on this feature."
+    ]
+  }
+}

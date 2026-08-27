@@ -136,7 +136,7 @@ When you have enough information:
 
 1. Read `references/prd-template.md` for the exact output format.
    (This file is in the skill directory: `${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-prd-interview/references/`
-   or the repo's `codex-skills/df-prd-interview/references/` directory.
+   or the repo's `codex-plugin/skills/df-prd-interview/references/` directory.
    If the file cannot be found at either location, stop and report the
    error — do not invent a format.)
 2. Write the PRD following the template structure

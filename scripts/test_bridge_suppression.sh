@@ -21,8 +21,8 @@ set -uo pipefail
 # Usage: bash scripts/test_bridge_suppression.sh
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PRD_RUNNER="$REPO_ROOT/codex-skills/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
-CODE_RUNNER="$REPO_ROOT/codex-skills/df-code-review/scripts/run_claude_code_reviews_tmux.sh"
+PRD_RUNNER="$REPO_ROOT/codex-plugin/skills/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
+CODE_RUNNER="$REPO_ROOT/codex-plugin/skills/df-code-review/scripts/run_claude_code_reviews_tmux.sh"
 VAR="CCMATRIX_SUPPRESS_SESSION"
 
 PASS=0

@@ -1,0 +1,21 @@
+{
+  "name": "dark-factory",
+  "interface": {
+    "displayName": "Dark Factory"
+  },
+  "plugins": [
+    {
+      "name": "dark-factory",
+      "version": "1.0.0",
+      "source": {
+        "source": "local",
+        "path": "./codex-plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

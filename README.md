@@ -263,7 +263,7 @@ degraded sandbox must only ever touch a throwaway.
 ## Prerequisites
 
 **Claude Code, Codex CLI, or both.** The two trees are peers. `skills/` is the
-Claude source of truth and `codex-skills/` is the Codex-native tree. Shared
+Claude source of truth and `codex-plugin/skills/` is the Codex-native tree. Shared
 reference files are held byte-identical by `just check-parity`, with a short
 allowlist for the files that carry sanctioned harness differences.
 
@@ -286,6 +286,13 @@ removed from both harnesses. See the provenance section.
 
 ```
 dark-factory/
+  .claude-plugin/             # Claude plugin and marketplace manifests
+    plugin.json               # the plugin: name, version, metadata
+    marketplace.json          # the marketplace that serves it
+  hooks/
+    hooks.json                # SessionStart hook, shipped with the plugin
+  .agents/plugins/
+    marketplace.json          # Codex marketplace, points at codex-plugin/
   skills/                     # Claude Code skill source of truth
     df/                       # the router: lanes, playbook triggers, subagent rules
       playbooks/              # 16 playbooks, copied verbatim into the todo list
@@ -306,7 +313,12 @@ dark-factory/
     swarm/, arena/, show-me-your-work/
     unslop/, technical-writing/, typescript-best-practices/
     agent-browser/, skill-creator/, go-mobile/, stop-mobile/
-  codex-skills/               # Codex-native tree, same contract
+  codex-plugin/               # Codex plugin root
+    .codex-plugin/
+      plugin.json             # the Codex plugin manifest
+    skills/                   # Codex-native tree, same contract
+    scripts/
+      df-state.sh             # copy of the run-state store, held identical
   agents/                     # Claude agent definitions, one .md per agent
     df-agent.md               # the default worker
     df-reviewer-recheck.md    # pinned floor for scoped rechecks
@@ -323,7 +335,8 @@ dark-factory/
     sync-from-global.sh       # global skill dirs back into the repo
     df-state.sh               # run-state store, atomic pre-dispatch reservation
     df-codex-review.sh        # cross-model review wrapper with a sandbox contract
-    df-session-hook.sh        # SessionStart reminder
+    df-session-hook.sh        # SessionStart reminder, names the resolved root
+    check-plugin-manifests.sh # holds the four plugin manifests in agreement
     run-df-evals.sh           # df-eval scenario runner
     worktree-audit.sh         # read-only worktree survey, never deletes
   profiles/
@@ -338,7 +351,40 @@ Living documentation is this README, `references/`, and the skills themselves.
 
 ## Installation
 
-Skills are copied with `rsync`, or `cp` as a fallback. They are not symlinked.
+Install as a plugin. Both harnesses read this repo as a plugin marketplace, so
+a machine tracks a version instead of a copy.
+
+### Claude Code
+
+```bash
+claude plugin marketplace add nickfujita/dark-factory
+claude plugin install dark-factory@dark-factory
+```
+
+That installs the skills, the agent definitions, and the SessionStart hook.
+Nothing to add to `settings.json`.
+
+### Codex
+
+```bash
+codex plugin marketplace add nickfujita/dark-factory
+codex plugin add dark-factory@dark-factory
+```
+
+That installs the Codex-native skill tree and the run-state store. Codex plugins
+carry skills, hooks and MCP servers, but not agent definitions, so the named
+Codex agents stay in `~/.codex/agents/*.toml` and are not shipped here. The
+repo-level tooling, the sync scripts, the eval harness and the `just` checks,
+also stays out of the plugin; clone the repo when you want it.
+
+Start a new session after either install. Neither harness picks up a plugin
+mid-session.
+
+### Sync mode, for hacking on the skills
+
+The sync scripts remain the dev-mode path. Use them when you are editing skill
+content and want the change live without cutting a release. Skills are copied
+with `rsync`, or `cp` as a fallback. They are not symlinked.
 
 - Claude skills go to `~/.claude/skills/`
 - Codex skills go to `~/.codex/skills/`, overridable with `CODEX_SKILLS_HOME`
@@ -355,6 +401,9 @@ Reverse sync when you have been editing directly in the global directories:
 just sync-from-global-dry
 just sync-from-global
 ```
+
+Pick one mode per machine. A box running both gets each skill twice and the
+session reminder twice.
 
 ### Agent definitions
 
@@ -373,8 +422,12 @@ deliberate, and it is the throttle rule described above.
 ### Session hook
 
 The SessionStart hook prints the df reminder and the ownership rules. It does
-not activate the mode. Install and uninstall steps are in
-`references/df-hook-install.md`.
+not activate the mode. It also names the dark-factory root it ran from, so a
+skill that refers to `scripts/df-state.sh` resolves the same way under either
+install mode.
+
+A plugin install wires the hook itself through `hooks/hooks.json`. A sync
+install wires it by hand. Both paths are in `references/df-hook-install.md`.
 
 ### Machine profile
 
@@ -392,9 +445,14 @@ just check
 ```
 
 Validates shell syntax, the skills manifest, skill reference directories, agent
-definitions, bundled Python helpers, cross-tree parity, and the run-state store
-(37 assertions over concurrent reservation, stale-lock reclaim, nested budgets,
-idempotent completion and resume). It is offline and takes a few seconds.
+definitions, bundled Python helpers, the plugin manifests, cross-tree parity,
+and the run-state store (37 assertions over concurrent reservation, stale-lock
+reclaim, nested budgets, idempotent completion and resume). It is offline and
+takes a few seconds.
+
+`just check-plugins` is the packaging gate. Four manifests carry the version,
+and both harnesses read the manifest rather than the git tag, so a version that
+drifts between them ships a plugin that never updates.
 
 Three suites sit outside `just check` because they are slow or spend tokens:
 
@@ -409,14 +467,23 @@ just evals                    # df-eval scenarios; live ones SKIP and name what 
 
 ## Multi-machine workflow
 
-1. Edit and test on one machine.
+A fleet tracks a version, not a copy.
+
+1. Edit and test on one machine, in sync mode.
 2. Reverse sync into this repo.
-3. Commit and push.
-4. Pull on the other machines and run `just sync`.
+3. Bump the version in the four plugin manifests. `just check-plugins` fails if
+   they disagree.
+4. Commit, push, merge.
+5. The fleet picks the new version up. Claude Code auto-updates installed
+   plugins; `claude plugin update dark-factory` forces it. Codex takes
+   `codex plugin marketplace upgrade` then `codex plugin add dark-factory@dark-factory`.
 
 Skill drift between the repo and an installed copy is a real failure mode and
 it is silent. A box running an old generation of a skill produces results the
-repo cannot explain. Sync before trusting a run.
+repo cannot explain. Versioned installs make the generation legible:
+`claude plugin list` and `codex plugin list` both print it.
+
+On a sync-mode box the old rule still holds: sync before trusting a run.
 
 ## Project hook
 

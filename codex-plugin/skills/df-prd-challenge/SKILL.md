@@ -454,11 +454,14 @@ timeout kills healthy passes mid-exploration on a large PRD.
 ```bash
 script_path="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-prd-challenge/scripts/run_codex_persona_reviews.sh"
 if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-skills/df-prd-challenge/scripts/run_codex_persona_reviews.sh"
+  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-plugin/skills/df-prd-challenge/scripts/run_codex_persona_reviews.sh"
+fi
+if [[ ! -f "$script_path" ]]; then
+  script_path="$(ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/*/dark-factory/*/skills/df-prd-challenge/scripts/run_codex_persona_reviews.sh 2>/dev/null | sort -V | tail -1)"
 fi
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_codex_persona_reviews.sh" >&2
-  echo "Checked: \${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/ and <repo>/codex-skills/" >&2
+  echo "Checked: \${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/, <repo>/codex-plugin/skills/, and the dark-factory plugin cache" >&2
   exit 1
 fi
 
@@ -571,11 +574,14 @@ through tmux. Set the Bash timeout above `CLAUDE_REVIEW_TIMEOUT_SECONDS`.
 ```bash
 script_path="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
 if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-skills/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
+  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-plugin/skills/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
+fi
+if [[ ! -f "$script_path" ]]; then
+  script_path="$(ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/*/dark-factory/*/skills/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh 2>/dev/null | sort -V | tail -1)"
 fi
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_claude_prd_review_tmux.sh" >&2
-  echo "Checked: \${CODEX_SKILLS_HOME:-\${CODEX_HOME:-\$HOME/.codex}/skills}/ and <repo>/codex-skills/" >&2
+  echo "Checked: \${CODEX_SKILLS_HOME:-\${CODEX_HOME:-\$HOME/.codex}/skills}/, <repo>/codex-plugin/skills/, and the dark-factory plugin cache" >&2
   exit 1
 fi
 
@@ -827,7 +833,7 @@ Deferred D Medium/Low (see report). <PRD set to Status: Approved and committed. 
 - **Reference file resolution**: `references/*.md` are relative to the skill
   directory. Look in
   `${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-prd-challenge/references/`
-  (global) or the repo's `codex-skills/df-prd-challenge/references/` directory.
+  (global) or the repo's `codex-plugin/skills/df-prd-challenge/references/` directory.
   If not found, stop and report the error.
 - **Reference files**: `single-pass.md` (the Standard-lane contract, shared
   rubric, and terminal outcomes), `personas.md` (High-consequence persona

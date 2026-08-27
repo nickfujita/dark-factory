@@ -1,0 +1,17 @@
+{
+  "description": "Dark Factory session hook. Prints the df reminder and the one-owner rule at session start, and names the resolved dark-factory root so skills can find scripts/ and references/. It does not activate df mode; entry stays the operator typing /df.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/scripts/df-session-hook.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
