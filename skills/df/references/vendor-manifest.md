@@ -23,3 +23,4 @@ The drafting checkout was at HEAD `799151d91b6e12ee7dbd09f708eec108d7de9b3b`. Ev
 | `skills/df/references/model-policy.md` | none | New, no base text. Per-role model tables and the two routing rules, derived from the v2 decision plan §6 draft. |
 | `scripts/df-session-hook.sh` | none | New, no base text. SessionStart reminder script, derived from the v2 decision plan §1 and D22. |
 | `references/df-hook-install.md` | none | New, no base text. Install and uninstall doc for the SessionStart hook. |
+| `scripts/test-df-invocation.sh` | none | New, no base text. D23 acceptance harness, derived from the v2 decision plan D23 row. Runs three clean headless sessions against a throwaway project-level install of the df skill and proves ordinary prompts cannot activate it while explicit `/df` invocation can. |
