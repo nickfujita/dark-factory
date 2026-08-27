@@ -47,14 +47,14 @@ The stage skills the Standard and High-consequence lanes name (`df-prd-interview
 
 ## Playbook triggers
 
-Match the task to a playbook, open its file, and copy its steps into the todo list verbatim. Only bug-fix is ported today. For a pending playbook, say so and apply the lane's discipline inline. Never invent a playbook file.
+Match the task to a playbook, open its file, and copy its steps into the todo list verbatim. For a pending playbook, say so and apply the lane's discipline inline. Never invent a playbook file.
 
 | Task shape | Playbook | Status |
 |---|---|---|
-| Read-only question. How does X work, why was Y built this way, are we sure about Z. | `playbooks/investigation.md` | Playbook pending port |
+| Read-only question. How does X work, why was Y built this way, are we sure about Z. | `playbooks/investigation.md` | Ported |
 | A reported defect to reproduce, root-cause, and fix with runtime evidence. | `playbooks/bug-fix.md` | Ported |
-| A measured slowness to trace and improve against a baseline. | `playbooks/perf-issue.md` | Playbook pending port |
-| A behavior-preserving change to structure or shape. Rename, extract, inline, dedupe, move. | `playbooks/refactoring.md` | Playbook pending port |
+| A measured slowness to trace and improve against a baseline. | `playbooks/perf-issue.md` | Ported |
+| A behavior-preserving change to structure or shape. Rename, extract, inline, dedupe, move. | `playbooks/refactoring.md` | Ported |
 | New or changed behavior. Routes into the artifact spine. PRD, challenge, design, plan, implement, verify, review, acceptance. | `playbooks/feature.md` | Playbook pending port |
 
 ## Playbooks into todos
