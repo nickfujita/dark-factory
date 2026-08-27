@@ -35,10 +35,6 @@ codex	codex-skills/swarm	swarm
 codex	codex-skills/arena	arena
 codex	codex-skills/create-verification-skill	create-verification-skill
 codex	codex-skills/maintain-verification-skill	maintain-verification-skill
-claude	skills/go-mobile	go-mobile
-codex	skills/go-mobile	go-mobile
-claude	skills/stop-mobile	stop-mobile
-codex	skills/stop-mobile	stop-mobile
 claude	skills/df	df
 claude	skills/df-design	df-design
 claude	skills/df-implement	df-implement
