@@ -38,3 +38,5 @@ claude	skills/technical-writing	technical-writing
 claude	skills/typescript-best-practices	typescript-best-practices
 claude	skills/df-eval	df-eval
 claude	skills/df-plan	df-plan
+claude	skills/create-verification-skill	create-verification-skill
+claude	skills/maintain-verification-skill	maintain-verification-skill

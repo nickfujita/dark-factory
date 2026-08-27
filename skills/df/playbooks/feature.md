@@ -9,7 +9,7 @@
 1. **Requirements.** Run `df-prd-interview`. Lite interview in Standard, full interview in High-consequence.
 2. **Challenge.** Run `df-prd-challenge`. Standard is a single pass, one Claude reviewer plus one Codex reviewer, lead adjudication, one remediation wave, one delta verification. High-consequence runs the hardened loop with its dispatch budget and growth stop.
 3. **Design.** Run `df-design`. Skipping stays in the todo list as `df-design skipped: <reason>`; do not fold the design decision silently into implementation. A design still contested after the checkpoint goes through `interrogate` before implementation.
-4. **Plan.** `df-plan` is pending port. Until it lands, write a checklist plan inline: one section per PR, each item a checkbox that names its verification, no placeholders. The plan decides the PR slicing before any code exists.
+4. **Plan.** Run `df-plan`. The plan decides the PR slicing before any code exists, and its checker validates the format including the D5 task-count gate.
 5. **QA runbook.** Run `df-qa-runbook-gen`, then `df-qa-validation`. Standard gets a thin runbook and one combined validation pass. High-consequence gets the full runbook and full validation, three rounds maximum.
 6. **Throughput checkpoint.** Write it as four todo items. A dimension that genuinely does not apply keeps its item with `n/a: <reason>` rather than being dropped.
    - **Blocking first steps.** Gates run before fan-out.
