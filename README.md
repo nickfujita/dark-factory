@@ -7,8 +7,7 @@ and an artifact spine that takes a feature from requirements to merged PRs with
 an executed acceptance runbook.
 
 **The current version is an adaptation of
-[PSTACK](https://github.com/cursor/plugins/tree/main/pstack), Lauren Tan's
-workflow plugin for Cursor, ported to Claude Code and Codex.** PSTACK supplies
+[PSTACK](https://github.com/cursor/plugins/tree/main/pstack) workflow plugin for Cursor, ported to Claude Code and Codex.** PSTACK supplies
 the shape: an explicitly invoked router, lanes, playbooks copied verbatim into
 the todo list, single-pass review by diverse reviewers with a lead who
 adjudicates, and the principle set underneath all of it. This repo carries that
@@ -46,7 +45,7 @@ modeled after the NHTSA driving automation levels. See also:
 - [Anthropic, 2026 Agentic Coding Trends Report](https://resources.anthropic.com/2026-agentic-coding-trends-report)
 
 | Level | Name | Description |
-|-------|------|-------------|
+| ------- | ------ | ------------- |
 | 0 | Manual | Traditional development, no AI assistance |
 | 1 | Task automation | AI writes tests, docs, boilerplate |
 | 2 | Paired programming | Developer pairs with AI in the IDE |
@@ -91,7 +90,7 @@ The router classifies the ask into a lane before any work, proposes it, and
 records it in the run state. Nothing escalates itself silently.
 
 | Lane | For | Shape |
-|---|---|---|
+| --- | --- | --- |
 | Quick | A bug fix, small UI change, or config change with a named surface and one acceptance target | Finish predicate recorded up front, no PRD, one reviewer, one PR |
 | Standard | A typical feature whose requirements fit a small PRD | Lite PRD, single-pass challenge, thin runbook, several small PRs behind a flag |
 | High-consequence | Credential or auth boundaries, migrations, protocol compatibility, anywhere wrongness is a security incident | Full PRD, written autonomy contract, hardened loop under a dispatch budget |
