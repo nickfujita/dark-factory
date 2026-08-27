@@ -312,7 +312,7 @@ dark-factory/
     how/, why/, recall/, blast-radius/, interrogate/, figure-it-out/
     swarm/, arena/, show-me-your-work/
     unslop/, technical-writing/, typescript-best-practices/
-    agent-browser/, skill-creator/, go-mobile/, stop-mobile/
+    agent-browser/, skill-creator/
   codex-plugin/               # Codex plugin root
     .codex-plugin/
       plugin.json             # the Codex plugin manifest
