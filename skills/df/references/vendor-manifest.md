@@ -12,6 +12,18 @@ Provenance record for PSTACK material vendored into the df skills, per D30. Mini
 
 The drafting checkout was at HEAD `799151d91b6e12ee7dbd09f708eec108d7de9b3b`. Every base file in the table below was verified identical between that HEAD and the pinned commit on 2026-08-27.
 
+## Second source: superpowers
+
+| Field | Value |
+|---|---|
+| Repo | https://github.com/obra/superpowers |
+| Release | v6.3.0, commit `b36e082` |
+| License | MIT |
+
+The superpowers assessment (2026-08-27) attests the installed 6.3.0 cache is byte-identical
+to that commit. df-implement's references graft its subagent-driven-development prompts and
+the test-driven-development watch-it-fail rule.
+
 ## File mapping
 
 | Our file | Base pstack file(s) | Local modifications |
@@ -72,3 +84,9 @@ The drafting checkout was at HEAD `799151d91b6e12ee7dbd09f708eec108d7de9b3b`. Ev
 | `skills/df/playbooks/hillclimb.md` | `pstack/skills/poteto-mode/playbooks/hillclimb.md` | Ported gated: operator-invoked by name, budget reserved through df-state with a mid-climb stop. Frozen-harness, one-hypothesis-per-iteration, keep-or-revert, and the target-plus-attempt-floor stop predicate kept. decisions.tsv in the run store replaces gitignoring as the survives-reverts mechanism. |
 | `skills/df/playbooks/runtime-forensics.md` | `pstack/skills/poteto-mode/playbooks/runtime-forensics.md` | Diagnosis-only contract kept. The control skill became the project verification skill from the manifest with a closest-reachable-surface fallback. Artifact parsing on the menial investigation role. |
 | `skills/df/playbooks/trace-forensics.md` | `pstack/skills/poteto-mode/playbooks/trace-forensics.md` | Near-faithful, sqlite reduction mechanics kept verbatim. Artifact parsing on the menial investigation role; hand-back re-routes through /df. |
+| `skills/df-implement/SKILL.md` | `pstack/skills/poteto-mode/playbooks/feature.md` + `pstack/skills/poteto-mode/playbooks/orchestrate.md` (brief/TIMEBOX) + `pstack/skills/tdd/SKILL.md` (Quick-lane escape hatch); superpowers 6.3.0 `subagent-driven-development/SKILL.md` + `test-driven-development/SKILL.md` | The ratified composite. PSTACK delegation posture and brief template merged with SDD's review economy: fresh implementer per brief, one two-verdict reviewer, five-round capped fix loop with adjudication only at the cap, minors to ledger, delta-scoped re-review, micro-task batching. Ledger relocated into the D24 run-state store with reserve-before-spawn and nested-against-parent budgets. SA trims applied: no whole-branch review here, ledger retained at finish, terminal is df-dev-verify. Model slugs became model-policy roles; rounds 4 and 5 escalate to the judgment tier under the throttle rule. D26 disposable-snapshot rule for reviewers. SDD workspace scripts replaced by manual git packaging. |
+| `skills/df-implement/references/implementer-prompt.md` | superpowers 6.3.0 `subagent-driven-development/implementer-prompt.md` | Per-lane TDD block, NEEDS_CONTEXT instead of interactive questions, TIMEBOX added, budget rationale in the no-subagents contract, VERIFY-commands-not-whole-suite. |
+| `skills/df-implement/references/task-reviewer-prompt.md` | superpowers 6.3.0 `subagent-driven-development/task-reviewer-prompt.md` | Emoji verdicts became words, D26 snapshot placeholder, lane-aware TDD evidence check, df-code-review as the branch-review owner, recheck-floor role. |
+| `skills/df-implement/references/re-review-prompt.md` | superpowers 6.3.0 `subagent-driven-development/re-review-prompt.md` | Same substitutions; out-of-scope observations ledgered for df-code-review. |
+| `skills/swarm/SKILL.md` | `pstack/skills/swarm/SKILL.md` | Cloud spawns became local background Agent spawns in a rolling window capped at 3 concurrent. Models via model-policy roles. Scratchpad outputs. Feature-map slicing and df-state reservations added; workers never spawn their own subagents; race rules declared up front. |
+| `skills/arena/SKILL.md` | `pstack/skills/arena/SKILL.md` | Gated: High-consequence, hand-invoked, never a default. Runner slugs became the design_runners role; cross-judge via the cross-model transport preferring the other family, with a recorded same-family fallback. Worktrees per candidate; df-state reservations. |
