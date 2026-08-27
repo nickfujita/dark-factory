@@ -512,6 +512,9 @@ in `skills/df/references/vendor-manifest.md`:
 
 Every ported file has a row naming its base and what was changed.
 
+The repo itself is MIT licensed (see `LICENSE`). `skills/skill-creator`
+vendors Apache 2.0 content and carries its own license text.
+
 ## Related
 
 - [PSTACK](https://github.com/cursor/plugins/tree/main/pstack), the Cursor

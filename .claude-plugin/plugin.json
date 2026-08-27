@@ -1,6 +1,6 @@
 {
   "name": "dark-factory",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Spec-driven development pipeline for coding agents: lanes, playbooks, budgeted dispatch, and multi-model review",
   "author": {
     "name": "nickfujita",
@@ -8,6 +8,7 @@
   },
   "homepage": "https://github.com/nickfujita/dark-factory",
   "repository": "https://github.com/nickfujita/dark-factory",
+  "license": "MIT",
   "keywords": [
     "workflow",
     "skills",
