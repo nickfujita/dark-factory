@@ -12,8 +12,8 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CODEX_RUNNER="$REPO_ROOT/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
-PERSONA_RUNNER="$REPO_ROOT/codex-skills/drk-02-prd-challenge/scripts/run_codex_persona_reviews.sh"
-TMUX_RUNNER="$REPO_ROOT/codex-skills/drk-02-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
+PERSONA_RUNNER="$REPO_ROOT/codex-skills/df-prd-challenge/scripts/run_codex_persona_reviews.sh"
+TMUX_RUNNER="$REPO_ROOT/codex-skills/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
 
 VERBOSE=0
 [[ "${1:-}" == "-v" ]] && VERBOSE=1

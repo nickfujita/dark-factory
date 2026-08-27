@@ -100,9 +100,53 @@ test-runners:
 test-bridge-suppression:
 	bash scripts/test_bridge_suppression.sh
 
+# D30 shared-core parity: every file under codex-skills/*/references/ and
+# codex-skills/df/playbooks/ must be byte-identical to its skills/ counterpart.
+# The allowlist names the files with sanctioned harness deltas (spawn
+# transport, reviewer-tier machinery, mirrored reviewer roles). Keep it short;
+# a SKILL.md is never in parity scope, and additions need a reason in the
+# commit that makes them.
+check-parity:
+	@echo "Checking codex/claude shared-core parity..."
+	@allowlist=" \
+	df/playbooks/autonomous-run.md \
+	df/playbooks/babysit.md \
+	df/playbooks/bug-fix.md \
+	df/playbooks/hillclimb.md \
+	df/playbooks/orchestrate.md \
+	df-prd-challenge/references/personas.md \
+	df-prd-challenge/references/rationale.md \
+	df-prd-challenge/references/synthesis-prompt.md \
+	df-qa-validation/references/synthesis-prompt.md \
+	df-qa-validation/references/codex-inline-review-prompt.md \
+	df-code-review/references/synthesis-prompt.md \
+	df-code-review/references/codex-quality-subagent-prompt.md \
+	df-code-review/references/codex-security-subagent-prompt.md \
+	df-code-review/references/codex-spec-subagent-prompt.md \
+	df-implement/references/implementer-prompt.md \
+	df-implement/references/re-review-prompt.md \
+	df-implement/references/task-reviewer-prompt.md \
+	how/references/critic-prompt.md \
+	how/references/explorer-prompt.md \
+	"; \
+	fail=0; \
+	files="$(cd codex-skills && find */references df/playbooks -type f | sort)"; \
+	for rel in $files; do \
+		case " $allowlist " in *" $rel "*) continue ;; esac; \
+		skill="${rel%%/*}"; rest="${rel#*/}"; \
+		src="codex-skills/$rel"; dst="skills/$skill/$rest"; \
+		if [[ ! -f "$dst" ]]; then \
+			echo "PARITY FAIL (no skills/ counterpart): $src"; fail=1; \
+		elif ! cmp -s "$src" "$dst"; then \
+			echo "PARITY FAIL (differs from $dst): $src"; fail=1; \
+		fi; \
+	done; \
+	[[ $fail -eq 0 ]] && echo "Parity OK" || exit 1
+
 check:
 	just check-shell
 	just check-manifest
 	just check-references
 	just check-agents
 	just check-python
+	just check-parity
