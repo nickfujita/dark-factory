@@ -23,8 +23,6 @@ profiles/*.env
 .codex/
 .agents/
 .dark-factory/
-docs/reviews/
-docs/archive/
 qa-results/
 screenshots/
 videos/
@@ -36,8 +34,15 @@ recordings/
 tmp/
 temp/
 
+# Working documents are never committed. Plans, decision records, review
+# reports, forensics, retros and transcripts are snapshots of a moment, and a
+# committed snapshot goes stale the day after it is written. Living
+# documentation lives in README.md, references/, and the skills themselves.
+# A run of df inside this repo also writes its PRD and QA runbook here.
+docs/
+plans/
+
 # defensive patterns (publish hardening)
-docs/retro/
 *.pem
 *.key
 id_rsa*
