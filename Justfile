@@ -112,6 +112,14 @@ test-runners:
 test-bridge-suppression:
 	bash scripts/test_bridge_suppression.sh
 
+# Drives the Claude PRD reviewer runner against a REAL tmux server, under both
+# base-index settings, with a fake reviewer. `test-runners` stubs tmux with a
+# script that exits 0 for everything, so it cannot catch a bad window target;
+# this can. Spawns throwaway tmux servers on private -L labels and takes ~40s,
+# so it is not part of `just check`.
+test-tmux-transport:
+	bash scripts/test_tmux_transport.sh
+
 # D30 shared-core parity: every file under codex-plugin/skills/*/references/ and
 # codex-plugin/skills/df/playbooks/ must be byte-identical to its skills/ counterpart.
 # The allowlist names the files with sanctioned harness deltas (spawn
