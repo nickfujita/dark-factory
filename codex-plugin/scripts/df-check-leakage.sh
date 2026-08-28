@@ -21,14 +21,29 @@ fi
 git rev-parse --verify --quiet "$base" >/dev/null \
   || { echo "df-check-leakage: no such base ref '$base'" >&2; exit 1; }
 
+# dark-factory is the repo that OWNS this vocabulary. Its own source, manifests
+# and Justfile name these skills on every branch, so scanning it reports dozens
+# of hits that are all correct usage. A gate that fires every time is a gate
+# people learn to skip, and skipping is exactly when a real leak into a product
+# repo gets through. Recognise the home repo and say nothing.
+top=$(git rev-parse --show-toplevel 2>/dev/null) || top=""
+if [ -n "$top" ] && [ -f "$top/.claude-plugin/plugin.json" ] \
+   && grep -q '"name"[[:space:]]*:[[:space:]]*"dark-factory"' "$top/.claude-plugin/plugin.json"; then
+  echo "df-check-leakage: skipped, this is dark-factory itself and it owns the vocabulary"
+  exit 0
+fi
+
 # Anchor on names that are unambiguously ours. A bare `df-` would fire on any
 # project with its own df prefix, so the skill names are listed explicitly.
 PATTERN='\bdrk-[0-9]|\bdrk-reviewer|dark-factory-codex|[Dd]ark [Ff]actory|df-prd-interview|df-prd-challenge|df-verify-coverage|df-qa-validation|df-dev-verify|df-code-review|df-acceptance|df-implement|df-design|df-plan|df-eval|df-reviewer-recheck|df-state\.sh|df-open-pr'
 
-# The run-state store lives outside the repo, so nothing under it can be in a
-# diff. A repo's own verification skill may name whatever it likes.
+# Two exemptions, both from the router's writing-into-the-project rule.
+# `.dark-factory/` holds a run's local working output. A repo's own verification
+# skill is the project's asset and may name whatever it likes, so anything under
+# a `skills/verify-*/` directory is out of scope wherever the harness keeps it.
 files=$(git diff --name-only --diff-filter=ACMR "$base"...HEAD -- . \
-        ':(exclude).dark-factory/**' 2>/dev/null) || files=""
+        ':(exclude).dark-factory/**' \
+        ':(exclude,glob)**/skills/verify-*/**' 2>/dev/null) || files=""
 [ -n "$files" ] || { echo "df-check-leakage: no changed files against $base"; exit 0; }
 
 hits=0
