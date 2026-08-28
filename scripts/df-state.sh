@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # df-state.sh: the D24 run-state store for Dark Factory runs.
 #
-# One authoritative state directory per run, under .dark-factory/runs/<run-id>/
-# (override the root with DF_STATE_ROOT). Every dispatch is reserved here
+# One authoritative state directory per run, under <store-root>/<run-id>/.
+# The store lives OUTSIDE the repo being worked on: df leaves no trace in a
+# target repo. Default root is
+# ${XDG_STATE_HOME:-~/.local/state}/dark-factory/runs/<repo-slug>, keyed by a
+# slug of the repo top level so worktrees and checkouts stay separate. Print it
+# with `df-state.sh path`; override it with DF_STATE_ROOT. Every dispatch is
+# reserved here
 # BEFORE it spawns. A refused reservation means the dispatch does not happen.
 # A nested dispatch reserves with its parent's seq and draws from the same
 # per-run budget. Budget exhaustion is a stop, not a flag: reserve records
@@ -16,6 +21,8 @@
 #   complete <run-id> <seq> ok|failed|expired
 #   status   <run-id>
 #   stop     <run-id> done|budget|operator
+#   path     [run-id]                                   prints the store root,
+#                                                       or one run's directory
 #
 # Exit codes: 0 success, 1 usage or argument error, 2 unknown run or seq,
 # 3 reservation refused, 4 outcome already recorded differently, 5 lock
@@ -27,7 +34,24 @@
 
 set -u
 
-ROOT=${DF_STATE_ROOT:-$PWD/.dark-factory/runs}
+# Resolve the store root. The upstream this ports from keeps run state in the
+# agent's own store, never in the repo it operates on, and namespaces it per
+# project. Same here. Keying on the git top level means a worktree gets its own
+# bucket, which suits the one-writer-per-worktree rule.
+df_state_root() {
+  if [ -n "${DF_STATE_ROOT:-}" ]; then
+    printf '%s' "$DF_STATE_ROOT"
+    return 0
+  fi
+  local base top key
+  base=${XDG_STATE_HOME:-${HOME:-/tmp}/.local/state}
+  top=$(git rev-parse --show-toplevel 2>/dev/null) || top=""
+  [ -n "$top" ] || top=$PWD
+  key=$(printf '%s' "$top" | sed 's#[^a-zA-Z0-9]#-#g')
+  printf '%s/dark-factory/runs/%s' "$base" "$key"
+}
+
+ROOT=$(df_state_root)
 LOCK_WAIT_SECS=${DF_STATE_LOCK_WAIT:-10}
 NO_OWNER_GRACE_SECS=5
 LOCKED_DIR=""
@@ -303,8 +327,19 @@ cmd_stop() {
   printf 'run %s: %s -> %s\n' "$run_id" "$state" "$target" >&2
 }
 
+# Print the store root, or one run's directory. Skills call this instead of
+# rebuilding the path, so the location can move again without touching prose.
+cmd_path() {
+  if [ $# -eq 0 ]; then
+    printf '%s\n' "$ROOT"
+    return 0
+  fi
+  [ $# -eq 1 ] || die "usage: df-state.sh path [run-id]"
+  printf '%s\n' "$ROOT/$1"
+}
+
 main() {
-  [ $# -ge 1 ] || die "usage: df-state.sh init|reserve|complete|status|stop ..."
+  [ $# -ge 1 ] || die "usage: df-state.sh init|reserve|complete|status|stop|path ..."
   local cmd=$1
   shift
   case $cmd in
@@ -313,7 +348,8 @@ main() {
     complete) cmd_complete "$@" ;;
     status)   cmd_status "$@" ;;
     stop)     cmd_stop "$@" ;;
-    *) die "unknown subcommand '$cmd'. subcommands: init reserve complete status stop" ;;
+    path)     cmd_path "$@" ;;
+    *) die "unknown subcommand '$cmd'. subcommands: init reserve complete status stop path" ;;
   esac
 }
 

@@ -21,7 +21,7 @@ Depth stays at coordinator and worker. In-flight children cap at 3. That cap mak
 
 ## Store
 
-The run-state store is `.dark-factory/runs/<run-id>/`. Every file has exactly one writer; owners publish facts, readers aggregate at read time. Writes to the tsv files go through `scripts/df-state.sh`, and the plain TSV stays readable without it.
+The run-state store is `scripts/df-state.sh path <run-id>`, outside the repo. Every file has exactly one writer; owners publish facts, readers aggregate at read time. Writes to the tsv files go through `scripts/df-state.sh`, and the plain TSV stays readable without it.
 
 - `run.tsv` is the run row: lane, finish predicate, wall-clock budget, land-by time, state.
 - `dispatches.tsv` has one row per dispatch, written before the spawn. The reservation is atomic and pre-dispatch, so a dispatch is counted before it exists. A nested dispatch counts against the parent's budget.

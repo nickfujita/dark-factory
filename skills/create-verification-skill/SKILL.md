@@ -1,6 +1,6 @@
 ---
 name: create-verification-skill
-description: "Generate a project-local verification skill that drives the target app the way a user does, any language, framework, or platform, and register it in the repo's project manifest. Use for /create-verification-skill, \"make a verification skill for this repo\", or when a project has no scripted way to prove UI, CLI, or service behavior."
+description: "Generate a project-local verification skill that drives the target app the way a user does, any language, framework, or platform. One skill per user-facing medium when a repo has several. Use for /create-verification-skill, \"make a verification skill for this repo\", or when a project has no scripted way to prove UI, CLI, or service behavior."
 disable-model-invocation: true
 ---
 
@@ -8,11 +8,32 @@ disable-model-invocation: true
 
 Every serious project needs a scripted way to drive the real app and prove behavior: launch it, exercise a feature the way a user would, and capture evidence. This skill generates that as a project-local skill tailored to the repo, written into the target repo's own skill directory. Use `.agents/skills/verify-<app>/` when the repo already has that convention, else `.claude/skills/verify-<app>/`. You write the generator's output for the next agent, not for a human. It will be read cold, mid-task, by an agent that has never seen the app.
 
+## 0. Inventory what the repo already has
+
+Never generate over the top of existing work. A repo that has been worked on
+for a while usually has pieces of this already: a dev-stack skill, an e2e
+harness, a sandbox or workbench helper, a provisioning script. List the repo's
+own skill directories and its scripts before writing anything.
+
+For each thing you find, decide one of three, and say which in the handover:
+
+- **Adopt.** It already drives a real surface. The generated skill points at it
+  rather than restating it.
+- **Absorb.** It is a fragment, a launch command or a single recipe. Fold it in
+  and delete nothing without asking.
+- **Leave.** It is unrelated to driving the app.
+
+Consolidating beats generating. A second skill that launches the app a slightly
+different way is how a repo ends up with two answers to one question.
+
 ## 1. Interview the repo, not the user
 
 Answer these from the codebase and only ask the user what you cannot observe:
 
-- **Surface.** What does a user actually touch? A web UI, a CLI or TUI, a desktop app, an API, a mobile app, a library? A repo can have several. Pick the primary one and note the rest.
+- **Surface.** What does a user actually touch? A web UI, a CLI or TUI, a desktop app, an API, a mobile app, a library? A repo can have several, and a real product usually does.
+  - One medium, one skill. Two media that are driven completely differently, a web dashboard and an interactive TUI say, get one skill each: `verify-<app>-<medium>`. Their launch, drive, and evidence recipes share almost nothing, and a single skill that tries to cover both is read cold by an agent that then picks the wrong half.
+  - When you generate more than one, also write a short `verify-<app>` index skill whose only job is to name the media and say which skill drives which. That is the one an agent reaches for when it does not yet know the surface.
+  - Do not split a medium by feature. The feature map handles that.
 - **Run.** How does the app start locally? Prefer the repo's own documented dev command (package scripts, Makefile, README quickstart). Note ports, env vars, seed data, auth.
 - **Drive.** How can an agent interact with it programmatically? Existing harnesses first: Playwright or Cypress specs, expect scripts, PTY helpers, curl-able endpoints, a debug port. Only then pick a generic recipe: agent-browser for web UIs and Electron, the tmux workbench pattern for TUIs and interactive CLIs, plain CLI execution (plus curl for services) for everything else.
 - **Observe.** What evidence can be captured? Screenshots, terminal transcripts, response bodies, logs, exit codes, DB state.
@@ -33,17 +54,27 @@ Write `SKILL.md` in the chosen skill directory. The YAML frontmatter carries `na
 
 ## 3. Seed the feature map
 
-Create `features/README.md` in the skill directory plus one file per user-facing feature you can identify (aim for the top 3 to 5 to start, from routes, commands, menus, or docs). Follow the shape in [`references/feature-map-example/`](references/feature-map-example/), with a README index and one file per feature. Each file answers, from the user's point of view, what the feature is, how to reach it, how to drive it with the harness, and what observable end state proves it works. The four H2s are `Sub-features`, `How to get to it (user POV)`, `Driving it with <harness>`, and `Gotchas`. When the project manifest names a catalog, each feature file carries a `Catalog IDs:` line directly under its opening paragraph naming the catalog entries it covers, so review scoping and acceptance can key on them. The map is the repo's maintained verification source. A proof that drives one convenient entry point is incomplete when the map lists others.
+Create `features/README.md` in the skill directory plus one file per user-facing feature you can identify (aim for the top 3 to 5 to start, from routes, commands, menus, or docs). Follow the shape in [`references/feature-map-example/`](references/feature-map-example/), with a README index and one file per feature. Each file answers, from the user's point of view, what the feature is, how to reach it, how to drive it with the harness, and what observable end state proves it works. The four H2s are `Sub-features`, `How to get to it (user POV)`, `Driving it with <harness>`, and `Gotchas`. When the project keeps a product catalog, each feature file carries a `Catalog IDs:` line directly under its opening paragraph naming the catalog entries it covers, so review scoping and acceptance can key on them. Name the catalog and where it lives in the skill body; that pointer belongs to the project, not to df. The map is the repo's maintained verification source. A proof that drives one convenient entry point is incomplete when the map lists others.
 
-## 4. Register in the project manifest
+## 4. How df finds it
 
-The df skills find the verification skill through `.dark-factory/project.yaml`, not by globbing. Register what you generated:
+Nothing to register. The skill is a skill: the harness loads it from the repo's
+own skill directory and its frontmatter `description` is what makes an agent
+reach for it. That is the whole discovery mechanism, so the description has to
+earn it. Name the app, name the medium, and name the moment ("use before
+claiming a dashboard change works").
 
-- `verification_skill: verify-<app>`. A skill name resolved from the repo's own skill directory, never a path outside the repo.
-- `feature_map:` the repo-relative path of the `features/` directory.
-- The launch, doctor, and teardown commands enter the manifest's `commands` table as IDs, for example `verify-launch`, `verify-doctor`, `verify-teardown`. df skills run commands by ID, never raw shell strings read from a document. `{path}` is the only substitution. The generated skill body still shows the same invocations inline for a reader driving by hand.
+df writes no config into the target repo, and no df file is committed there.
+A verification skill is the project's own asset. It stays useful if df is
+never used again.
 
-When no manifest exists, create a minimal version 1 file with `version`, `project`, and the keys above. When one exists, add these keys and touch nothing else. The schema rejects unknown keys, and every path is repo-relative and canonical. The full rules are in `references/project-manifest-schema.md` at the dark-factory root; the session reminder names that root. A manifest edit is a code change and gets reviewed like one, so name it in the handover.
+Two consequences worth stating in the handover:
+
+- The skill and its `features/` map are committed. They travel with a branch,
+  and a change to either is a code change that gets reviewed like one.
+- The generated skill must not name df, its skills, or its stage vocabulary.
+  A teammate reading it should see a way to drive their app, not a pipeline
+  artifact.
 
 ## 5. Prove the generated skill before handing it over
 

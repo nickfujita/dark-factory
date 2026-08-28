@@ -21,7 +21,7 @@ Only edit the verification skill's own directory: its SKILL.md, its features/, a
 
 ## Pass
 
-0. **Locate the target.** Read `.dark-factory/project.yaml` first. Its `verification_skill` key names the skill to maintain. With no manifest or no key, look for a project-local skill whose body has launch and drive sections and a feature map, usually under `.agents/skills/verify-*/` or `.claude/skills/verify-*/`. Several candidates means ask which one. None means stop and point at `$create-verification-skill` instead of inventing a target.
+0. **Locate the target.** Look for a project-local skill whose body has launch and drive sections and a `features/` map, usually under `.agents/skills/verify-*/` or `.claude/skills/verify-*/`. Several candidates is normal in a repo with several user-facing media, one skill per medium: maintain the one whose medium the change touched, and say which. Ambiguous means ask. None means stop and point at the verification-skill generator instead of inventing a target.
 
 1. **Index hygiene.** Read the feature map README and glob its sibling files. Fix missing, extra, duplicate, or dead entries. Lightweight. No generated inventory.
 

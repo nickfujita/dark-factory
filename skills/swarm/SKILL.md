@@ -26,7 +26,7 @@ Open a todo list with one entry per phase before launching anything.
 3. Set N from the user or derive it from the shape. N is total workers. Concurrency is capped separately at 3; a larger N runs as a rolling window.
 4. Resolve worker models through roles in `../df/references/model-policy.md`, never a hardcoded slug. Read-only coverage, verification, and exploration slices run the menial investigation tier. Workers that write code run the implementation-delegate role. A model race names each arm's role or family up front.
 5. Give each writing worker its own writable output, per the separate-before-serializing-shared-state principle. A worktree, a branch, or its own subdirectory under the session scratchpad. Read-only workers get a read-only instruction instead.
-6. For verification coverage, when `.dark-factory/project.yaml` names a feature map, slice by feature-map entry so every slice traces to a named feature and the gaps are enumerable.
+6. For verification coverage, when the repo's verification skill carries a feature map, slice by feature-map entry so every slice traces to a named feature and the gaps are enumerable.
 7. Inside a df run, reserve every worker through `scripts/df-state.sh` before spawning; swarm workers are nested dispatches and count against the run's budget. The script lands in this same wave; until it is on disk, write the reservation lines to the run state file by hand, still before spawning.
 
 ## Phase B: Fan out

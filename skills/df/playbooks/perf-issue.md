@@ -2,7 +2,7 @@
 
 **You own the measurement story. Plan, review, verify the numbers.** Tie every fix to a measurement. Do not read source instead of measuring.
 
-1. Capture a baseline trace. When `.dark-factory/project.yaml` names a verification skill, drive the surface through it and use the profiler it or the manifest names. Otherwise use the closest measurement tooling you can reach on this box, and record exactly how the number was captured so the post-fix run can repeat it.
+1. Capture a baseline trace. When the repo registers a verification skill, drive the surface through it and use the profiler that skill names. Otherwise use the closest measurement tooling you can reach on this box, and record exactly how the number was captured so the post-fix run can repeat it.
 2. Ground hypotheses with the **how** skill. Never claim a perf ceiling without running it first.
    Most fixes come from eight strategy families. Use them as hypothesis generators, not a checklist. A family earns an attempt only when the trace shows the signal it names, and a focused fix for the dominant cost beats applying all eight.
    - **Elimination.** The cheapest work is work that doesn't run. Before optimizing the hot path, ask whether it needs to exist. A computation nobody consumes, a feature gate that's always off for this user, a sync that redundantly mirrors state, a legacy path kept just in case. The trace shows what's slow, never that it's deletable, so this family needs the `how` pass, not the profiler. Deleting the work beats every other family when it applies.

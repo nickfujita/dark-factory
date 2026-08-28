@@ -152,6 +152,33 @@ assert_code "resume can record a dead pending dispatch as expired" 0 \
   bash "$DF" complete run-e 2 expired
 assert_eq "expired count is 1 after the resume sweep" 1 "$(count_of run-e expired)"
 
+# == 8. store location: outside any repo, keyed per checkout ==
+echo "== 8. store location =="
+assert_eq "path echoes the DF_STATE_ROOT override" "$DF_STATE_ROOT" \
+  "$(bash "$DF" path)"
+assert_eq "path <run-id> appends the run directory" "$DF_STATE_ROOT/run-a" \
+  "$(bash "$DF" path run-a)"
+
+# Unset the override to exercise the real default. The store must never land
+# inside the repo being worked on; that is the whole point of the relocation.
+default_root=$(cd "$REPO_DIR" && env -u DF_STATE_ROOT bash "$DF" path)
+case $default_root in
+  "$REPO_DIR"/*) assert_eq "default root is outside the repo" outside inside ;;
+  *) assert_eq "default root is outside the repo" outside outside ;;
+esac
+case $default_root in
+  */dark-factory/runs/*) assert_eq "default root is namespaced per checkout" yes yes ;;
+  *) assert_eq "default root is namespaced per checkout" yes "$default_root" ;;
+esac
+other_root=$(cd "$TMP" && env -u DF_STATE_ROOT bash "$DF" path)
+if [ "$other_root" = "$default_root" ]; then
+  assert_eq "two different checkouts get different buckets" differ same
+else
+  assert_eq "two different checkouts get different buckets" differ differ
+fi
+assert_code "an unknown subcommand still refuses" 1 \
+  bash "$DF" definitely-not-a-subcommand
+
 echo
 printf '%d assertions, %d failures\n' "$ASSERTS" "$FAILURES"
 [ "$FAILURES" -eq 0 ] || exit 1

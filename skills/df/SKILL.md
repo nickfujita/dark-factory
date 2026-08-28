@@ -105,16 +105,40 @@ Write the reply clean as you draft it. The cleanup-afterward pass has been measu
 
 These rules embed here because they must hold while drafting. The unslop skill owns the full rule set and applies to every prose surface.
 
+## Writing into the project
+
+The project's tree belongs to the project. Never write df's own vocabulary into it. A teammate reading `df-code-review` in a code comment has no way to learn what that is, and these names change: a whole generation of stage names retired in a day and left dead references across shared source.
+
+Name the kind of work, not the skill that did it.
+
+| Instead of | Write |
+|---|---|
+| `df-prd-challenge` | spec review |
+| `df-dev-verify` | dev verification |
+| `df-code-review` | code review |
+| `df-qa-acceptance` | QA acceptance |
+| lanes, dispatch budgets, df file paths | a plain description, or nothing |
+
+Keep finding ids verbatim. `FIX A`, `C5`, `CR-001` still index the artifact that recorded them, and stripping them loses the only durable link.
+
+This holds on every surface the project keeps: code comments, test names and `describe` labels, commit messages, PR titles and bodies, PRDs, QA runbooks, and any committed doc. It holds for a delegate's diff as much as your own, so it goes in the brief. Like the reply rules, write it clean the first time; a cleanup pass afterwards has been measured to fail.
+
+Two things are not leakage. A repo's own verification skill is the project's asset and may say whatever it likes. A repo that deliberately documents its tooling choice is making a choice, not leaking.
+
+`scripts/df-check-leakage.sh` scans the branch and is a gate in `playbooks/df-open-pr.md`. It reports, it never edits, because the fix is a judgment about what the sentence meant.
+
 ## Principles
 
 This skill's `references/principles.md` condenses the 21 PSTACK principles, grouped Core, Architecture, Verification, Delegation, and Meta. Read it in full at the start of every multi-step task. Cite a principle only when it drove a real choice.
 
 ## Project hook
 
-Check for `.dark-factory/project.yaml` in the target repo. When present, read from it:
+df writes no config into a target repo and commits nothing there. What a repo may offer instead is its own verification skill, a project-local `verify-*` skill the harness registers like any other. When one is present, use it:
 
-- the project verification skill, for matching-surface verification
-- the feature map, for splitting verification and scoping review
-- the catalog path, for naming which features a change touches
+- to drive the matching surface for verification, rather than improvising a way in
+- for its `features/` map, which splits verification and scopes review
+- for whatever product catalog that skill names, when naming which features a change touches
 
-A repo with no manifest gets the full generic flow without pre-context. Proceed generically. Never require the manifest.
+Several media means several such skills, one per medium, sometimes behind a small index skill. Pick the one whose medium the change touches.
+
+A repo with no verification skill gets the full generic flow without pre-context. Proceed generically. Never require one, and never create one mid-run; that is the verification-skill generator's job and it is invoked deliberately.

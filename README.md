@@ -113,15 +113,13 @@ flowchart TD
   CASUAL["Any ask without /df"] -.->|model may suggest /df in one line, never enters| PLAIN["Plain reply"]
 
   subgraph PROJ["Project layer, optional per repo"]
-    YAML[".dark-factory/project.yaml"]
-    VSK["Verification skill"]
-    FMAP["Feature map"]
-    CAT["Feature catalog"]
-    YAML --> VSK
-    YAML --> FMAP
-    YAML --> CAT
+    VSK["Project verification skill, one per medium"]
+    FMAP["features/ map"]
+    CAT["Product catalog the skill names"]
+    VSK --> FMAP
+    VSK --> CAT
   end
-  PROJ -.->|pre-context when the manifest exists| DF
+  PROJ -.->|pre-context when the repo has one| DF
 
   DF --> LANE{"Pick a lane"}
   LANE --> QUICK["Quick"]
@@ -323,7 +321,6 @@ dark-factory/
     df-agent.md               # the default worker
     df-reviewer-recheck.md    # pinned floor for scoped rechecks
   references/                 # repo-level living documentation
-    project-manifest-schema.md  # the .dark-factory/project.yaml trust contract
     run-state-schema.md         # the run-state store contract
     df-hook-install.md          # SessionStart hook install and uninstall
     engineering-standards.md    # project-agnostic delivery standards
@@ -487,15 +484,19 @@ On a sync-mode box the old rule still holds: sync before trusting a run.
 
 ## Project hook
 
-A target repo can hand project context to the skills through
-`.dark-factory/project.yaml`: a verification skill for matching-surface
-verification, a feature map for scoping review, and a catalog path for naming
-which features a change touches. The manifest is a trust boundary, because it
-names files an agent will read and commands an agent will run, and it can
-arrive on an untrusted branch. The schema and its validation rules are in
-`references/project-manifest-schema.md`.
+df writes no configuration into a target repo and commits nothing there. What
+a repo can offer instead is its own verification skill: a project-local
+`verify-*` skill that the harness registers like any other, carrying the
+recipes for launching and driving the real app, a `features/` map for scoping
+review, and a pointer to whatever product catalog the project keeps. A repo
+with several user-facing media gets one skill per medium, sometimes behind a
+small index skill.
 
-A repo with no manifest gets the full generic flow. The manifest is never
+That skill belongs to the project, not to df. It stays useful if df is never
+used again, and `create-verification-skill` generates one by adopting the
+verification work a repo already has rather than duplicating it.
+
+A repo with no verification skill gets the full generic flow. One is never
 required.
 
 ## Provenance

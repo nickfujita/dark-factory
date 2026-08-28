@@ -12,16 +12,30 @@ exhaustion is a stop, not a flag.
 A run lives in one directory:
 
 ```
-.dark-factory/runs/<run-id>/
+<store-root>/<run-id>/
   run.tsv           one row of run facts, including the current state
   dispatches.tsv    append-only dispatch ledger
   dispositions.tsv  append-only finding dispositions from review stages
   lock/             mkdir-based mutex, holds an owner file
 ```
 
-The root defaults to `.dark-factory/runs` under the working directory. The
-`DF_STATE_ROOT` environment variable overrides it. `<run-id>` matches
-`[A-Za-z0-9._-]+`.
+**The store lives outside the repo being worked on.** A run leaves no file in a
+target repo, so no repo needs a `.gitignore` entry for df and no run ledger can
+be committed by accident. The default root is
+`${XDG_STATE_HOME:-~/.local/state}/dark-factory/runs/<repo-slug>`, where the
+slug is the git top level with every non-alphanumeric character replaced by a
+dash. Keying on the top level gives each worktree its own bucket, which suits
+the one-writer-per-worktree rule. Outside a git checkout the working directory
+is used instead.
+
+`DF_STATE_ROOT` overrides the whole root. `<run-id>` matches `[A-Za-z0-9._-]+`.
+
+Never rebuild this path in prose or in a script. Ask for it:
+
+```bash
+scripts/df-state.sh path            # the store root
+scripts/df-state.sh path <run-id>   # one run's directory
+```
 
 Every `.tsv` file is tab-separated with one header row. Field values never contain a
 tab or a newline. The writer replaces both with a space.

@@ -55,13 +55,17 @@ done
 
 # Both plugin roots need the run-state accessor, and the two roots do not nest,
 # so the Codex root carries a copy. Byte-identical or it is drift.
-if ! cmp -s scripts/df-state.sh codex-plugin/scripts/df-state.sh; then
-  note "codex-plugin/scripts/df-state.sh differs from scripts/df-state.sh"
-fi
+for s in df-state.sh df-check-leakage.sh; do
+  if ! cmp -s "scripts/$s" "codex-plugin/scripts/$s"; then
+    note "codex-plugin/scripts/$s differs from scripts/$s"
+  fi
+  [[ -x "scripts/$s" && -x "codex-plugin/scripts/$s" ]] \
+    || note "$s is not executable in both plugin roots"
+done
 
 # Root-relative reference docs the skills name must ship in BOTH roots.
 # Byte-identical copies; the repo root is canonical.
-for ref in run-state-schema.md project-manifest-schema.md engineering-standards.md; do
+for ref in run-state-schema.md engineering-standards.md; do
   [[ -f "codex-plugin/references/$ref" ]] \
     || { note "codex-plugin/references/$ref is missing"; continue; }
   cmp -s "references/$ref" "codex-plugin/references/$ref" \

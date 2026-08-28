@@ -56,7 +56,7 @@ df-implement dispatches a fresh implementer per task from the task's text alone.
 Every PR block ends with unit, live, and perf verification, and each of the three opens with this sentence pair verbatim. "Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked." That is the verification rule (the prove-it-works principle).
 
 - **Unit** names the test file, the case it gains, and the exact command.
-- **Live is mandatory.** Each box is one concrete scenario on the matching surface, driven through the project verification skill named in `.dark-factory/project.yaml` when present, otherwise agent-browser for UI or the closest surface you can reach. Each box names the evidence file it saves and its pass predicate.
+- **Live is mandatory.** Each box is one concrete scenario on the matching surface, driven through the repo's own verification skill when it has one, otherwise agent-browser for UI or the closest surface you can reach. Each box names the evidence file it saves and its pass predicate.
 - **Perf** names the metric, the probe, the trunk baseline measured first, and the rule with the number that fails. A PR with no perf-sensitive path writes `Not perf-sensitive.` plus a one-line reason after the rule, and no boxes. An invented metric to fill the block is worse than the stated skip.
 
 ## Budget notes

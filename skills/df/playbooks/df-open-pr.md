@@ -6,6 +6,8 @@ Invoked at the end of every other playbook.
 
 **Commits.** Commit liberally; rebase into small, ordered commits before the first push. Each commit is a future PR: landable, ordered to tell the story. Amend when the fix belongs in a just-made commit; new commit when separable. Once a branch is pushed it moves forward with new commits. Never force-push.
 
+**Leakage gate.** Before the first push, run `scripts/df-check-leakage.sh` at the dark-factory root the session reminder names. It scans the branch for df's own vocabulary in the project's tree, and a hit is a stop. Fix it by naming the kind of work instead of the skill that did it, per the router's writing-into-the-project rule. Keep finding ids. A deliberate mention gets stated in the PR rather than silently kept.
+
 **PRs.** Write every PR title, PR description, and commit body with `technical-writing`, then apply `unslop`. Apply every technical-writing layer except Diátaxis. Use one word for each action, keep articles, and avoid `-ing` when a plain verb works.
 
 **Titles.** Use Conventional Commits in the form `type(scope): subject`. Use `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, or `perf` as the type. Use the changed area, such as `df` or the touched package, as the scope. Keep the subject short and imperative. Apply the same `technical-writing` and `unslop` pass as the body. Name a real symbol when one carries the change. For example, `fix(df): retarget the open-pr babysit trigger`. Do not add a trailing period.

@@ -79,12 +79,11 @@ Record the feature type and test framework for use in subsequent steps.
 
 ### Step 1.6: Lane Mode and the Project Feature Map
 
-Read the lane from the run state, and check the target repo for
-`.dark-factory/project.yaml`. Together they decide how much derivation this
-runbook does.
+Read the lane from the run state, and check whether the repo registers a
+verification skill. Together they decide how much derivation this runbook does.
 
-**Check for a feature map.** When `.dark-factory/project.yaml` is present and
-names a feature map, read it. It is the project's standing record of how to
+**Check for a feature map.** When the repo's verification skill carries a
+`features/` map, read it. It is the project's standing record of how to
 reach every surface of the app: navigation paths, selectors, keyboard
 shortcuts, one entry per feature or sub-feature, each with a stable ID.
 
@@ -401,10 +400,9 @@ was invoked standalone, tell the user the next stage is
   the repo's `codex-plugin/skills/df-qa-runbook-gen/references/` directory.
 - This skill runs autonomously — do not ask the user questions during
   generation except to disambiguate which PRD to use.
-- The project feature map is optional. A repo with no
-  `.dark-factory/project.yaml`, or a manifest that names no map, gets full
-  derivation and a working runbook. Never require the manifest, and never
-  invent a map entry ID to reach thin mode.
+- The project feature map is optional. A repo with no verification skill, or
+  one that carries no map, gets full derivation and a working runbook. Never
+  require a feature map, and never invent a map entry ID to reach thin mode.
 - If the PRD has ambiguous requirements that can't be turned into tests,
   flag them as `UNTESTABLE: <reason>` rather than guessing intent.
 - The coverage matrix is the key quality artifact — it proves bidirectional

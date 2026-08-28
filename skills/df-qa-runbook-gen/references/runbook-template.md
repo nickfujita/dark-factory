@@ -11,7 +11,7 @@ id: qa-<feature-slug>
 prd: docs/prd-<feature-slug>.md
 feature_type: ui | backend | hybrid
 runbook_mode: thin | full
-# feature_map: { path: <path from .dark-factory/project.yaml>, revision: <rev> }  # thin mode only
+# feature_map: { path: <the verification skill's features/ dir>, revision: <rev> }  # thin mode only
 # test_framework: vitest  # include for backend/hybrid; auto-discovered
 base_url: http://localhost:3000
 generated: YYYY-MM-DD
