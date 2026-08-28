@@ -142,3 +142,11 @@ df writes no config into a target repo and commits nothing there. What a repo ma
 Several media means several such skills, one per medium, sometimes behind a small index skill. Pick the one whose medium the change touches.
 
 A repo with no verification skill gets the full generic flow without pre-context. Proceed generically. Never require one, and never create one mid-run; that is the verification-skill generator's job and it is invoked deliberately.
+
+## External tools
+
+df drives real surfaces rather than describing them, so a few tools are hard requirements when the surface exists.
+
+**agent-browser** is required for any project with a browser surface. It backs dev verification, acceptance, prototyping, and runtime forensics. It ships its own plugin for both harnesses from one marketplace, and its skill is a discovery stub that pulls current usage from the installed CLI, so never vendor or restate its documentation. Ask the CLI: `agent-browser skills get core`.
+
+When a browser surface needs driving and agent-browser is absent, stop and say so with the install command. Do not substitute a fetch tool, a screenshot you cannot interact with, or a test that asserts on markup instead of the running app. A verification claim made without driving the surface is the failure mode the tested-end-to-end bar exists to prevent.

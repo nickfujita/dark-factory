@@ -1,6 +1,5 @@
 # platform	source_path	target_name
 # platform: claude | codex
-claude	skills/agent-browser	agent-browser
 claude	skills/df-prd-interview	df-prd-interview
 claude	skills/df-prd-challenge	df-prd-challenge
 claude	skills/df-qa-runbook-gen	df-qa-runbook-gen
@@ -8,7 +7,6 @@ claude	skills/df-qa-validation	df-qa-validation
 claude	skills/df-dev-verify	df-dev-verify
 claude	skills/df-code-review	df-code-review
 claude	skills/df-qa-acceptance	df-qa-acceptance
-codex	codex-plugin/skills/agent-browser	agent-browser
 codex	codex-plugin/skills/df	df
 codex	codex-plugin/skills/df-prd-interview	df-prd-interview
 codex	codex-plugin/skills/df-prd-challenge	df-prd-challenge

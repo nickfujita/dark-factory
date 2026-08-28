@@ -269,9 +269,30 @@ allowlist for the files that carry sanctioned harness differences.
 Claude Code sessions inside tmux. The Codex flow does not use `claude -p`,
 `--print`, SDK mode, or stdout piping.
 
-**agent-browser**, for QA acceptance. Install
-[agent-browser](https://github.com/vercel-labs/agent-browser) and put it on
-your PATH.
+**agent-browser**, required for any project with a browser surface. It is what
+df drives a web UI with, for dev verification, acceptance, prototyping, and
+runtime forensics. Install the CLI and its own plugin, which ships a discovery
+stub that pulls current usage from the installed CLI rather than from a copy
+that goes stale:
+
+```bash
+npm i -g agent-browser && agent-browser install
+
+claude plugin marketplace add vercel-labs/agent-browser
+claude plugin install agent-browser@agent-browser
+
+codex plugin marketplace add https://github.com/vercel-labs/agent-browser.git
+codex plugin add agent-browser@agent-browser
+```
+
+One marketplace serves both harnesses; Codex reads the same
+`.claude-plugin/marketplace.json`. dark-factory used to vendor a copy of this
+documentation and no longer does, because the CLI serves content matching its
+own version through `agent-browser skills get core`.
+
+On a box where Chromium cannot use its sandbox, put
+`{"args": "--no-sandbox"}` in `~/.agent-browser/config.json`. A shell export
+will not do: it has to work for non-interactive shells.
 
 **just**, for the commands below.
 
@@ -310,7 +331,7 @@ dark-factory/
     how/, why/, recall/, blast-radius/, interrogate/, figure-it-out/
     swarm/, arena/, show-me-your-work/
     unslop/, technical-writing/, typescript-best-practices/
-    agent-browser/, skill-creator/
+    skill-creator/
   codex-plugin/               # Codex plugin root
     .codex-plugin/
       plugin.json             # the Codex plugin manifest
