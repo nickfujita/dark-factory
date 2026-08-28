@@ -155,6 +155,11 @@ check-parity:
 	done; \
 	[[ $fail -eq 0 ]] && echo "Parity OK" || exit 1
 
+# df leaves no trace in a target repo: no skill may write scratch, review output
+# or evidence into the repo it operates on. Grep over every SKILL.md, instant.
+check-no-repo-scratch:
+	bash scripts/check-no-repo-scratch.sh
+
 # D23 invocation contract: proves in clean headless sessions that ordinary
 # prompts cannot activate the df router and that explicit /df can. Spends real
 # tokens under a budget cap, so it is not part of `just check`.
@@ -175,3 +180,4 @@ check:
 	just check-plugins
 	just check-parity
 	just check-state
+	just check-no-repo-scratch
