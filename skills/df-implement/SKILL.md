@@ -28,7 +28,7 @@ Read the plan once. Note its global constraints. Create one todo per task. Then 
 
 ## Budget and ledger
 
-The task ledger lives in the run state store under `.dark-factory/`, the single authoritative record per run. `scripts/df-state.sh` is the accessor. The script lands in this same wave; until it is on disk, append the same lines to the run state file by hand, reservation still before spawn.
+The task ledger lives in the run state store outside the repo, the single authoritative record per run. `scripts/df-state.sh` is the accessor. The script lands in this same wave; until it is on disk, append the same lines to the run state file by hand, reservation still before spawn.
 
 - Reserve every dispatch through `scripts/df-state.sh` **before** spawning. A dispatch is counted the moment it is reserved, not when it returns. A spawn without a reservation is a budget leak.
 - Nested dispatches count against the parent budget. When df-implement itself runs as a dispatched stage, its implementers, reviewers, and re-reviewers draw down the run's budget, never a fresh one.

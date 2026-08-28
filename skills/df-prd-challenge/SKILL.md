@@ -48,9 +48,8 @@ name. Do not restate a value inline — if you need the number, read it here.
 | `DISCOVERY_TIER` | **unpinned — inherit from the orchestrator session** (pass no `model`, no `subagent_type` override) | discovery reviewers, both lanes |
 | `RECHECK_TIER` | `subagent_type: df-reviewer-recheck` (agent definition pins `model: opus`, `effort: high`) | High-consequence downgraded rechecks |
 | `RECHECK_TIER_FLOOR` | **never below Opus-class at effort `high`** | binding floor on `RECHECK_TIER` |
-| `REVIEW_ROOT` | `${TMPDIR:-/tmp}/dark-factory-prd-<repo-key>-<run-id>` | all scratch output for one run |
-| `RUN_DIR_POINTER` | `.dark-factory/tmp/prd-challenge-review-dir` | file recording `REVIEW_ROOT` |
-| `REPORT_DIR` | `.dark-factory/reviews/prd-challenge/` | the final report |
+| `REVIEW_ROOT` | `<run-dir>/work/prd-challenge` | all scratch output for one run |
+| `REPORT_DIR` | `<run-dir>/reviews/prd-challenge/` | the final report |
 | `CODEX_REASONING_EFFORT` | `xhigh` in High-consequence, the operator's default in Standard | Codex reviewer |
 | `CODEX_WINDOW_SECONDS` | `3600` | total detached window for one Codex leg |
 | `CODEX_WAIT_SLICE_SECONDS` | `480` | one foreground poll slice (keeps each Bash call under the harness cap) |
@@ -101,18 +100,18 @@ report once, at finalize (Step 5). Across the run keep a **running record**
 (see "The round record" below) — do not append to the report file each round
 (that would duplicate the document header).
 
-Create a **run-scoped** scratch directory. Never write review output to a fixed
-shared path: concurrent challenge runs on the same machine will clobber each
-other and destroy a completed review.
+Resolve this run's directory. Everything this skill produces lives under it in
+the agent's own store, never in the repo being reviewed. `<run-dir>` is
+`bash scripts/df-state.sh path "<run-id>"`, and the run id scopes it, so
+concurrent challenge runs cannot clobber each other.
 
 ```bash
-mkdir -p .dark-factory/reviews/prd-challenge .dark-factory/tmp
-repo_key="$(git rev-parse --show-toplevel 2>/dev/null | sha1sum | cut -c1-12)"
-run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
-review_dir="${TMPDIR:-/tmp}/dark-factory-prd-${repo_key}-${run_id}"
-mkdir -p "$review_dir"
-printf '%s\n' "$review_dir" > .dark-factory/tmp/prd-challenge-review-dir
+run_dir="$(bash scripts/df-state.sh path "<run-id>")"
+review_dir="$run_dir/work/prd-challenge"
+report_dir="$run_dir/reviews/prd-challenge"
+mkdir -p "$review_dir" "$report_dir"
 echo "REVIEW_ROOT=$review_dir"
+echo "REPORT_DIR=$report_dir"
 sha256sum "<prd-path>" | cut -d' ' -f1   # baseline PRD hash
 wc -w "<prd-path>"                       # baseline word count
 ```
@@ -807,11 +806,11 @@ Deferred D Medium/Low (see report). <PRD set to Status: Approved and committed. 
 - Codex provides model diversity (GPT vs Claude). It may catch blind spots all
   Claude reviewers share. That diversity, not persona assignment, is where the
   adversarial signal comes from.
-- Scratch (Codex output, status file, stderr log, delta files) goes to
-  `REVIEW_ROOT` under /tmp/, never under `.claude/`, so the autonomous loop
-  never trips a write-permission prompt; the generated report lives in the
-  gitignored `.dark-factory/reviews/` directory.
-- **`REVIEW_ROOT` in your own context is authoritative.** `RUN_DIR_POINTER` is a
-  convenience for a session that lost it, and a second run in the same checkout
-  overwrites it. If the pointer disagrees with the `REVIEW_ROOT` you created in
-  Step 1, trust your own and say so in the report.
+- Scratch (Codex output, status file, stderr log, delta files) and the finished
+  report both live under this run's directory in the agent's own store, never
+  inside the repo, so the autonomous loop leaves the project's tree untouched
+  and never trips a write-permission prompt.
+- **`REVIEW_ROOT` is recoverable, not remembered.** A session that lost it
+  rebuilds the path from the run id with `df-state.sh path`. There is no
+  pointer file to go stale, and a second run in the same checkout is a second
+  run id with its own directory.

@@ -43,10 +43,13 @@ remainder as the slug (e.g., `feat/user-auth` → `user-auth`).
 **Initialize issues doc:**
 
 ```bash
-mkdir -p .dark-factory/tmp
+run_dir="$(bash scripts/df-state.sh path "<run-id>")"
+mkdir -p "$run_dir/work"
 ```
 
-Create `.dark-factory/tmp/dev-verify-issues.md`:
+Create `<run-dir>/work/dev-verify-issues.md`, where `<run-dir>` is
+`bash scripts/df-state.sh path "<run-id>"`. It lives in the agent's own store,
+not in the repo being verified:
 
 ```markdown
 # Dev Verify Issues: <feature>
@@ -63,7 +66,7 @@ Create `.dark-factory/tmp/dev-verify-issues.md`:
 ### Step 2: Run All Tests
 
 For each discovered test runner, execute the full suite. For each failure:
-- Append to `## Test Failures` in `.dark-factory/tmp/dev-verify-issues.md`
+- Append to `## Test Failures` in `<run-dir>/work/dev-verify-issues.md`
 - Format: `- [ ] \`<suite> > <test name>\` — <failure message> — \`<file:line>\``
 
 Continue running all suites even after failures — collect everything before
@@ -134,7 +137,7 @@ If the snapshot shows an error page or the app is unreachable:
   re-snapshot, retry once. Never retry assertion failures.
 
 For each TC failure:
-- Append to `## QA Failures` in `.dark-factory/tmp/dev-verify-issues.md`
+- Append to `## QA Failures` in `<run-dir>/work/dev-verify-issues.md`
 - Format: `- [ ] TC-<id>: <name> — Step <N> failed — expected <X>, got <Y>`
 
 **Browser session loss during execution:** If any `agent-browser` command
@@ -154,7 +157,7 @@ agent-browser close
 
 ### Step 4: Fix Loop
 
-If `.dark-factory/tmp/dev-verify-issues.md` has no unchecked items (`- [ ]`) in
+If `<run-dir>/work/dev-verify-issues.md` has no unchecked items (`- [ ]`) in
 `## Test Failures` or `## QA Failures`, skip directly to Step 5.
 
 For each unchecked item, work through failures one at a time:
@@ -244,7 +247,7 @@ works now. The standard requires both, per `references/engineering-standards.md`
 4. **Compare**: for each entry id, confirm a matching reference
    exists in the e2e tests
 5. **If any entry id is missing e2e coverage**:
-   - Append to `## Test Failures` in `.dark-factory/tmp/dev-verify-issues.md`:
+   - Append to `## Test Failures` in `<run-dir>/work/dev-verify-issues.md`:
      `- [ ] [COVERAGE] TC-<id>: <name> — no automated e2e test found`
    - Re-enter the fix loop to write the missing e2e tests
    - After writing tests, re-run the e2e suite to confirm they pass — writing a
@@ -261,7 +264,7 @@ evidence, and the operator is the one who gets to accept it.
 
 ### Step 5: Check for Unresolved Items
 
-Scan `.dark-factory/tmp/dev-verify-issues.md` for items marked `[!]`.
+Scan `<run-dir>/work/dev-verify-issues.md` for items marked `[!]`.
 
 Items hitting either outer cap — `convergence cap reached`, or a TC still
 uncovered after the coverage gate's second iteration — are `[!]` items too.
@@ -284,7 +287,7 @@ next stage is `df-code-review`.
 
 ## Notes
 
-- The issues doc at `.dark-factory/tmp/dev-verify-issues.md` is a working scratch
+- The issues doc at `<run-dir>/work/dev-verify-issues.md` is a working scratch
   file — it is not committed
 - Drive the recipes inline (not by invoking df-acceptance) to keep the fix loop
   in a single context with all failures visible

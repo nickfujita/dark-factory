@@ -90,8 +90,9 @@ if [[ ! -f "$script_path" ]]; then
   exit 1
 fi
 
-out_path=".dark-factory/tmp/codex-qa-validation-review.md"
-mkdir -p .dark-factory/tmp
+run_dir="$(bash scripts/df-state.sh path "<run-id>")"
+out_path="$run_dir/work/codex-qa-validation-review.md"
+mkdir -p "$run_dir/work"
 bash "$script_path" \
   "<prd-path>" \
   "<qa-path>" \
@@ -99,7 +100,9 @@ bash "$script_path" \
 echo "OUTPUT_PATH=$out_path"
 ```
 
-The output path is deterministic: `.dark-factory/tmp/codex-qa-validation-review.md`.
+The output path is deterministic: `<run-dir>/work/codex-qa-validation-review.md`,
+where `<run-dir>` is `bash scripts/df-state.sh path "<run-id>"`. It is in the
+agent's own store, not in the repo.
 
 **If the Codex CLI Bash command fails** (non-zero exit, timeout, or Codex not
 installed), apply D7 for the lane:
@@ -126,7 +129,7 @@ package off two Codex reads of the same documents.
 After both reviews complete:
 
 1. Collect the inline review output (produced in Step 2)
-2. Read the Codex CLI output file at `.dark-factory/tmp/codex-qa-validation-review.md`.
+2. Read the Codex CLI output file at `<run-dir>/work/codex-qa-validation-review.md`.
    If the file is missing or empty, note: "[Codex CLI]
    No findings produced — possible tool failure."
 3. Read `references/synthesis-prompt.md` for synthesis instructions
@@ -181,8 +184,8 @@ If the trigger condition is NOT met, proceed to Step 7.
    - Auto-Applied Fixes: list of all auto-applied changes with before/after
    - Proposed Changes: list of all semantic findings with proposed diffs
    - Unresolved Contradictions: (if any remain after max rounds)
-2. Create the output directory: `mkdir -p .dark-factory/reviews/qa-validation`
-3. Save to `.dark-factory/reviews/qa-validation/<timestamp>-<feature>-validation.md`
+2. Create the output directory: `mkdir -p "<run-dir>/reviews/qa-validation"`
+3. Save to `<run-dir>/reviews/qa-validation/<timestamp>-<feature>-validation.md`
    where `<timestamp>` is `YYYY-MM-DDTHH-MM-SSZ` (UTC) and `<feature>` is
    the feature slug from the PRD
 	4. Commit:
@@ -198,7 +201,7 @@ If the trigger condition is NOT met, proceed to Step 7.
 1. Present the sign-off package:
    - PRD path and current status
    - the verification skill and the entries reviewed
-   - Validation report path (`.dark-factory/reviews/qa-validation/<file>`)
+   - Validation report path (`<run-dir>/reviews/qa-validation/<file>`)
    - Count of auto-applied fixes (from Step 4)
    - List of any pending semantic proposals (from Step 5), or "None" if clean
    - Any leg that was degraded under D7, named. A sign-off package that hides
