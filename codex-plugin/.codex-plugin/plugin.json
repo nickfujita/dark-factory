@@ -1,6 +1,6 @@
 {
   "name": "dark-factory",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Spec-driven development pipeline for coding agents: lanes, playbooks, budgeted dispatch, and multi-model review",
   "author": {
     "name": "nickfujita",

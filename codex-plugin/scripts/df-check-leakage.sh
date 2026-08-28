@@ -23,7 +23,7 @@ git rev-parse --verify --quiet "$base" >/dev/null \
 
 # Anchor on names that are unambiguously ours. A bare `df-` would fire on any
 # project with its own df prefix, so the skill names are listed explicitly.
-PATTERN='\bdrk-[0-9]|\bdrk-reviewer|dark-factory-codex|[Dd]ark [Ff]actory|df-prd-interview|df-prd-challenge|df-qa-runbook-gen|df-qa-validation|df-dev-verify|df-code-review|df-qa-acceptance|df-implement|df-design|df-plan|df-eval|df-reviewer-recheck|df-state\.sh|df-open-pr'
+PATTERN='\bdrk-[0-9]|\bdrk-reviewer|dark-factory-codex|[Dd]ark [Ff]actory|df-prd-interview|df-prd-challenge|df-verify-coverage|df-qa-validation|df-dev-verify|df-code-review|df-acceptance|df-implement|df-design|df-plan|df-eval|df-reviewer-recheck|df-state\.sh|df-open-pr'
 
 # The run-state store lives outside the repo, so nothing under it can be in a
 # diff. A repo's own verification skill may name whatever it likes.
@@ -52,7 +52,7 @@ Name the kind of work, not the skill that did it. Keep finding ids verbatim.
   df-prd-challenge  -> spec review
   df-dev-verify     -> dev verification
   df-code-review    -> code review
-  df-qa-acceptance  -> QA acceptance
+  df-acceptance     -> QA acceptance
 
 A deliberate mention (a repo documenting its own tooling) is fine: rerun with
 that file committed on the base, or state the exemption in the PR.

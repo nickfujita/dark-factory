@@ -18,8 +18,8 @@ to two other harnesses and adds three things of its own.
   economy in `df-implement` and the plan step style in `df-plan` are the two
   that earned their place.
 - **A PRD artifact spine**, which PSTACK does not have. Requirements interview,
-  challenge round, generated QA runbook, validation, and an executed acceptance
-  runbook at the end.
+  challenge round, a coverage gate that makes sure the feature's verification
+  recipe is committed, validation, and an executed acceptance pass at the end.
 - **Multi-model review as a first-class mechanism.** One Claude reviewer and one
   Codex reviewer read the same prompt, and a lead adjudicates. Agreement across
   model families is the signal worth paying for.
@@ -177,7 +177,7 @@ flowchart TD
   PRDC -.->|hardened loop High-consequence, dispatch budget, delta-only recheck| PRDC
   PRDC -->|single pass in Standard| DESIGN["df-design"]
   DESIGN --> PLAN["df-plan (skippable for small changes)"]
-  PLAN --> QAGEN["df-qa-runbook-gen"]
+  PLAN --> QAGEN["df-verify-coverage"]
   QAGEN --> QAVAL["df-qa-validation"]
 
   subgraph IMPL["df-implement, per-task loop"]
@@ -210,7 +210,7 @@ flowchart TD
   OPENPR --> PRS["small PR merges behind a flag, typically 3 to 7"]
   PRS -.->|next slice, the loop repeats per PR| IMPL
   PRS -->|last PR| FLIP["flag-flip PR"]
-  FLIP --> QAACC["df-qa-acceptance, full runbook"]
+  FLIP --> QAACC["df-acceptance, every entry the chain touched"]
   FLIP --> INTEG["df-code-review integrated pass, once per chain"]
 ```
 
@@ -320,12 +320,12 @@ dark-factory/
     df-prd-challenge/         # model-diverse PRD stress test, single pass by lane
     df-design/                # design alternatives and the rationale artifact
     df-plan/                  # checklist plans with a mutation-tested checker
-    df-qa-runbook-gen/        # machine-generated QA runbook from the PRD
+    df-verify-coverage/       # can this be proven, and is the recipe committed
     df-qa-validation/         # multi-model PRD and runbook validation
     df-implement/             # per-task delegation with the review economy
     df-dev-verify/            # developer self-verification on the matching surface
     df-code-review/           # discovery pass plus delta verification
-    df-qa-acceptance/         # runbook execution through agent-browser
+    df-acceptance/            # drives the committed recipes, writes the evidence
     df-eval/                  # blinded scenario harness and capped retro
     create-verification-skill/, maintain-verification-skill/
     how/, why/, recall/, blast-radius/, interrogate/, figure-it-out/

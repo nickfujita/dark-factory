@@ -2,19 +2,19 @@
 # platform: claude | codex
 claude	skills/df-prd-interview	df-prd-interview
 claude	skills/df-prd-challenge	df-prd-challenge
-claude	skills/df-qa-runbook-gen	df-qa-runbook-gen
+claude	skills/df-verify-coverage	df-verify-coverage
 claude	skills/df-qa-validation	df-qa-validation
 claude	skills/df-dev-verify	df-dev-verify
 claude	skills/df-code-review	df-code-review
-claude	skills/df-qa-acceptance	df-qa-acceptance
+claude	skills/df-acceptance	df-acceptance
 codex	codex-plugin/skills/df	df
 codex	codex-plugin/skills/df-prd-interview	df-prd-interview
 codex	codex-plugin/skills/df-prd-challenge	df-prd-challenge
-codex	codex-plugin/skills/df-qa-runbook-gen	df-qa-runbook-gen
+codex	codex-plugin/skills/df-verify-coverage	df-verify-coverage
 codex	codex-plugin/skills/df-qa-validation	df-qa-validation
 codex	codex-plugin/skills/df-dev-verify	df-dev-verify
 codex	codex-plugin/skills/df-code-review	df-code-review
-codex	codex-plugin/skills/df-qa-acceptance	df-qa-acceptance
+codex	codex-plugin/skills/df-acceptance	df-acceptance
 codex	codex-plugin/skills/df-design	df-design
 codex	codex-plugin/skills/df-plan	df-plan
 codex	codex-plugin/skills/df-implement	df-implement

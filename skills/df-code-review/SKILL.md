@@ -1,6 +1,6 @@
 ---
 name: df-code-review
-description: "Multi-model code review for a feature branch: one whole-branch discovery pass on a frozen tree, lead adjudication, autonomous remediation, then delta verification of the fixes only. Carries the flag-flip integrated mode for the last PR in a chain. Writes a findings report and chains to df-qa-acceptance. Runs when the df feature playbook reaches its code-review stage or when the operator invokes it explicitly — never on its own."
+description: "Multi-model code review for a feature branch: one whole-branch discovery pass on a frozen tree, lead adjudication, autonomous remediation, then delta verification of the fixes only. Carries the flag-flip integrated mode for the last PR in a chain. Writes a findings report and chains to df-acceptance. Runs when the df feature playbook reaches its code-review stage or when the operator invokes it explicitly — never on its own."
 disable-model-invocation: true
 ---
 
@@ -9,7 +9,7 @@ disable-model-invocation: true
 Review a feature branch in **one whole-branch discovery pass on a frozen tree**,
 then verify the remediation and stop. There is no round loop. Fixes are applied
 autonomously — the user is not asked to approve findings one by one. Chains to
-df-qa-acceptance.
+df-acceptance.
 
 The shape, in five moves: freeze, discover once, adjudicate, remediate, verify
 the delta. Anything that wants a sixth move is either the operator's
@@ -483,8 +483,8 @@ Remediated A findings and E curated Medium/Low. Tests passing.
 Deferred F Medium/Low (see report). Fixes committed. <Proceeding to QA acceptance. | Residual Critical/High remain — your call on how to proceed. | Ran single-family: the Codex leg was blocked, logged as a degrade.>
 ```
 
-When zero Critical/High remain, trigger `df-qa-acceptance` with the QA
-runbook path (`<qa-path>`).
+When zero Critical/High remain, trigger `df-acceptance` with the coverage
+handoff from `df-verify-coverage`.
 
 ## Common Mistakes
 

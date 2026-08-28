@@ -11,7 +11,7 @@ one runs. The PRD is remediated **autonomously** in both — the author is not
 asked to hand-fix findings.
 
 Upstream: `df-prd-interview` produces the Hardened PRD this skill consumes.
-Downstream: `df-qa-runbook-gen` consumes the PRD this skill approves.
+Downstream: `df-verify-coverage` consumes the PRD this skill approves.
 
 Rationale, evidence, and the failure modes each rule exists to prevent are in
 `references/rationale.md`. This file is instructions only.
@@ -731,7 +731,7 @@ Termination: <clean gate | budget | non-converging, growth | non-converging, sel
 
 Severity trend: <R1 aC/bH → ... → Rn 0C/0H>.
 Remediated A Critical, B High, and C curated Medium/Low findings in the PRD.
-Deferred D Medium/Low (see report). <PRD set to Status: Approved and committed. Ready for df-qa-runbook-gen. | Approved with open items — N listed at the top of the PRD. | Residual substantive findings remain — your call on how to proceed.>
+Deferred D Medium/Low (see report). <PRD set to Status: Approved and committed. Ready for df-verify-coverage. | Approved with open items — N listed at the top of the PRD. | Residual substantive findings remain — your call on how to proceed.>
 ```
 
 ## Common Mistakes

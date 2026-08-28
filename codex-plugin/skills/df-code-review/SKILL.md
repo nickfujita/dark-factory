@@ -502,10 +502,11 @@ Remediated A findings and E curated Medium/Low. Tests passing.
 Deferred F Medium/Low (see report). Fixes committed. <Ready for QA acceptance. | Residual Critical/High remain — your call on how to proceed. | Ran single-family: the Claude leg was blocked, logged as a degrade.>
 ```
 
-When zero Critical/High remain, report the QA runbook path (`<qa-path>`) and
-QA-ready status. When running under the df feature playbook, stop here so the
-router can explicitly invoke `df-qa-acceptance`. If this skill was invoked
-standalone, tell the user the next stage is `df-qa-acceptance`.
+When zero Critical/High remain, report the coverage handoff from
+`df-verify-coverage` and acceptance-ready status. When running under the df
+feature playbook, stop here so the router can explicitly invoke
+`df-acceptance`. If this skill was invoked standalone, tell the user the next
+stage is `df-acceptance`.
 
 ## Common Mistakes
 

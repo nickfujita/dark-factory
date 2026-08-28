@@ -1,11 +1,12 @@
 ---
 name: df-qa-validation
-description: "Validate a PRD + QA runbook pair using a Codex inline review and a fresh Codex CLI review. Auto-applies non-semantic fixes, surfaces semantic findings, and presents a sign-off package. Standard runs one combined pass; High-consequence runs up to three contradiction rounds and requires a cross-family second leg. Returns control to the df feature playbook on approval. Runs when the df feature playbook reaches its QA-validation stage or when the operator invokes it explicitly — never on its own."
+description: "Validate a PRD against the feature's committed verification recipes using a Codex inline review and a fresh Codex CLI review. Auto-applies non-semantic fixes, surfaces semantic findings, and presents a sign-off package. Standard runs one combined pass; High-consequence runs up to three contradiction rounds and requires a cross-family second leg. Returns control to the df feature playbook on approval. Runs when the df feature playbook reaches its QA-validation stage or when the operator invokes it explicitly — never on its own."
 ---
 
-# QA Runbook Validation
+# Verification validation
 
-Validate a PRD + QA runbook pair using two independent review contexts: the
+Validate a PRD against the feature's committed verification recipes using two
+independent review contexts: the
 current Codex session and a fresh Codex CLI process. Use them to catch coverage
 gaps, consistency issues, and testability problems that the generation step may
 have missed. Non-semantic fixes are auto-applied; semantic findings are packaged
@@ -18,7 +19,7 @@ the lane from the run state; ask the operator only if none is recorded.
 
 | Lane | Passes | Contradiction loop |
 |---|---|---|
-| Quick | not run — the lane has no runbook | n/a |
+| Quick | not run, the lane has no PRD | n/a |
 | Standard | **one combined validation pass** | none. There is no round 2. |
 | High-consequence | up to **3** | the contradiction loop in Step 6 |
 
@@ -34,21 +35,21 @@ and let the operator re-lane rather than looping.
 ## Prerequisites
 
 - A PRD file with Status: Approved (or Approved with open items)
-- A QA runbook file generated from that PRD
+- The feature-map entries named by `df-verify-coverage`, inside the project's verification skill
 - Codex CLI installed and authenticated (`codex --version` succeeds)
 
 ## Workflow
 
 ### Step 1: Resolve Inputs
 
-**If invoked by the df router after df-qa-runbook-gen:** Use the
-PRD path and QA runbook path passed from the previous step.
+**If invoked by the df router after df-verify-coverage:** Use the
+PRD path and the entry list passed from the previous step.
 
 **If invoked standalone:** Ask the user for both paths. If not provided:
 1. Scan `docs/` for files matching `prd-*.md` with Status: Approved (or
    Approved with open items)
-2. Scan `docs/qa/` for files matching `qa-*.md`
-3. If exactly one PRD and one QA runbook are found, confirm with the user
+2. Locate the project's verification skill and read the `features/` entries that name this feature
+3. If exactly one PRD and one entry set are found, confirm with the user
 4. If multiple matches, list them and ask which pair to validate
 
 **Validate:**
@@ -56,7 +57,7 @@ PRD path and QA runbook path passed from the previous step.
 - PRD status is "Approved" or "Approved with open items" — the latter carries a
   "Known open items — read first" section whose items are known-unresolved, not
   validation findings
-- QA runbook's `prd` frontmatter field points to the correct PRD
+- Each feature-map entry traces to a requirement in the correct PRD
 
 Read both documents fully into context.
 
@@ -68,7 +69,7 @@ instructions.
 Launch both reviews simultaneously in a single message:
 
 **Review 1 (Codex inline):** Using the instructions from
-`references/codex-inline-review-prompt.md`, review the PRD+QA pair. Produce
+`references/codex-inline-review-prompt.md`, review the PRD against the verification recipes. Produce
 findings with the header `## Findings — Codex Inline`. Explore the codebase
 to ground the analysis in what actually exists.
 
@@ -136,7 +137,7 @@ After both reviews complete:
 ### Step 4: Auto-Apply Non-Semantic Fixes
 
 For each finding tagged `[AUTO-FIX]`:
-1. Apply the fix directly to the PRD or QA runbook file as appropriate
+1. Apply the fix directly to the PRD, or to the feature-map entry through `maintain-verification-skill`, as appropriate
 2. Record the change in an "Auto-Applied Fixes" section for the validation
    report
 
@@ -146,7 +147,7 @@ Apply each fix as a targeted edit — do not rewrite entire files.
 
 For each finding tagged `[PROPOSED]`:
 - Record in a "Proposed Changes" section for the validation report
-- Include: the finding, severity, source tag, the affected requirement/TC,
+- Include: the finding, severity, source tag, the affected requirement or feature-map entry,
   and the specific proposed edit as a diff
 
 ### Step 6: Check for Additional Rounds (High-consequence only)
@@ -174,7 +175,7 @@ If the trigger condition is NOT met, proceed to Step 7.
 ### Step 7: Output
 
 1. Assemble the validation report with these sections:
-   - Header: feature name, PRD path, QA runbook path, date, lane, pass count,
+   - Header: feature name, PRD path, verification skill and entries, date, lane, pass count,
      and whether any leg was degraded under D7
    - Validation Summary: total findings by severity, auto-fix count, proposed count
    - Auto-Applied Fixes: list of all auto-applied changes with before/after
@@ -183,11 +184,11 @@ If the trigger condition is NOT met, proceed to Step 7.
 2. Create the output directory: `mkdir -p .dark-factory/reviews/qa-validation`
 3. Save to `.dark-factory/reviews/qa-validation/<timestamp>-<feature>-validation.md`
    where `<timestamp>` is `YYYY-MM-DDTHH-MM-SSZ` (UTC) and `<feature>` is
-   the feature slug from the QA runbook's `id` field (strip the `qa-` prefix)
+   the feature slug from the PRD
 	4. Commit:
 	   ```
 	   git add <prd-path> <qa-path>
-	   git commit -m "docs: QA runbook validation complete for <feature>"
+	   git commit -m "docs: verification validation complete for <feature>"
 	   ```
 5. Report: "Validation complete in N round(s). X non-semantic fixes
    auto-applied. Y semantic findings for user review. Report at `<path>`."
@@ -196,7 +197,7 @@ If the trigger condition is NOT met, proceed to Step 7.
 
 1. Present the sign-off package:
    - PRD path and current status
-   - QA runbook path
+   - the verification skill and the entries reviewed
    - Validation report path (`.dark-factory/reviews/qa-validation/<file>`)
    - Count of auto-applied fixes (from Step 4)
    - List of any pending semantic proposals (from Step 5), or "None" if clean
@@ -223,7 +224,7 @@ If the trigger condition is NOT met, proceed to Step 7.
    Hand back, in one block the playbook can read without the chat context:
 
    - the PRD path and its status
-   - the QA runbook path
+   - the verification skill and the entries reviewed
    - the validation report path
    - the resolved engineering-standards path, which defines the technical
      delivery expectations the plan must meet, e2e coverage included
@@ -239,10 +240,10 @@ If the trigger condition is NOT met, proceed to Step 7.
    If the feedback spans multiple categories, ask the user to confirm which
    routing they intend before proceeding.
    - **QA-only** ("this scenario is wrong", "missing a flow", assertion issue)
-     → update QA runbook → re-run `df-qa-validation` → return to
+     → update the feature-map entries → re-run `df-qa-validation` → return to
      sign-off
    - **PRD tweak** ("change this requirement", "you misunderstood X") →
-     update PRD → re-run `df-qa-runbook-gen` → re-run validation → return
+     update PRD → re-run `df-verify-coverage` → re-run validation → return
      to sign-off
    - **Major scope change** ("rethink the whole approach") → invoke
      `df-prd-interview` for a focused re-interview on the changed scope

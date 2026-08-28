@@ -25,7 +25,7 @@ These changes do not alter the meaning of any requirement or test case:
    removing rows for deleted TCs)
 7. **Spec guardian violations**: Rewriting steps/assertions that contain
    implementation details to use user-visible language (same rules as
-   `df-qa-runbook-gen/references/spec-guardian-rules.md`)
+   `df-verify-coverage/references/spec-guardian-rules.md`)
 
 ## Semantic (proposed for user review) — tag as `[PROPOSED]`
 

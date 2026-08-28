@@ -1,11 +1,11 @@
 ---
 name: df-dev-verify
-description: "Developer self-verification before code review: runs all tests and the QA runbook inline, logs failures, fixes them in a loop, then returns code-review-ready status. Runs when the df feature playbook reaches its dev-verify stage or when the operator invokes it explicitly — never on its own."
+description: "Developer self-verification before code review: runs all tests and drives the feature's committed verification recipes inline, logs failures, fixes them in a loop, then returns code-review-ready status. Runs when the df feature playbook reaches its dev-verify stage or when the operator invokes it explicitly — never on its own."
 ---
 
 # Developer Self-Verification
 
-Run all tests and the QA acceptance runbook against your implementation before
+Run all tests and drive the feature's committed verification recipes against your implementation before
 submitting for code review. Mirrors a developer testing their own work before
 opening a PR. Logs failures, fixes them inline with verification, and returns
 code-review-ready status when everything passes.
@@ -13,9 +13,9 @@ code-review-ready status when everything passes.
 ## Prerequisites
 
 - Feature branch checked out with implementation nominally complete
-- PRD (`docs/prd-<feature>.md`) and QA runbook (`docs/qa/qa-<feature>.md`) exist
+- PRD (`docs/prd-<feature>.md`) exists, and the coverage handoff from `df-verify-coverage` names the feature-map entries this change touches
 - agent-browser available (`agent-browser --version`)
-- Application running and accessible at the QA runbook's `base_url`
+- Application launchable through the project's verification skill for each medium touched
 
 ## Workflow
 
@@ -25,11 +25,13 @@ code-review-ready status when everything passes.
 Strip common prefixes (`feat/`, `feature/`, `fix/`, `chore/`). Use the
 remainder as the slug (e.g., `feat/user-auth` → `user-auth`).
 
-**Locate QA runbook:**
-1. Scan `docs/qa/` for `qa-<slug>.md`
-2. If no exact match: list candidate files and ask the user to confirm
-3. If no candidates found at all: warn the user ("No QA runbook found in
-   `docs/qa/` for slug `<slug>` — skipping QA phase") and skip Step 3
+**Locate the verification recipes:**
+1. Take the entry list from the coverage handoff. That is the authoritative set.
+2. No handoff in session: find the project's verification skill for each medium
+   the change touches and read the `features/` entries covering it.
+3. Nothing found at all: warn the user ("No verification recipes found for
+   slug `<slug>`, skipping the drive phase") and skip Step 3. Say it in the
+   report. A skipped drive is not a pass.
 
 **Discover test runner** by checking in order:
 1. `package.json` scripts: `test`, `test:unit`, `test:integration`, `test:e2e`
@@ -67,15 +69,15 @@ For each discovered test runner, execute the full suite. For each failure:
 Continue running all suites even after failures — collect everything before
 moving on.
 
-### Step 3: Run QA Runbook Inline
+### Step 3: Drive the verification recipes inline
 
-**Parse the QA runbook:**
-Read the runbook file. Extract:
-- YAML frontmatter: `base_url`, `timeout` (default 30000 if missing),
-  `startup_command` (optional — used if app is unreachable)
-- All test cases sorted by priority: P0 first, then P1, then P2
+**Read the recipes:**
+For each medium the change touches, read the project's verification skill and
+the `features/` entries from Step 1. The skill's Launch, Doctor, Drive,
+Evidence, and Cleanup sections own the mechanics. Do not restate or improvise
+around them; a Launch that does not work is drift to report, not to patch here.
 
-**Safety guard:** Check `base_url` against the allowed-host list
+**Safety guard:** Check the launch target against the allowed-host list
 (`localhost`, `127.0.0.1`, `::1`, `.local`, `.test`, `.dev`). If
 `base_url` looks production-like, stop immediately —
 ask the user for a non-production URL before continuing.
@@ -91,7 +93,7 @@ agent-browser snapshot -i
 If the snapshot shows an error page or the app is unreachable:
 1. Run `agent-browser close`
 2. Resolve startup command — in priority order:
-   a. `startup_command` from runbook frontmatter (if set)
+   a. the Launch command from the project's verification skill
    b. Auto-discover from repo:
       - Read `package.json` (if it exists): check `scripts` for keys
         `dev:all`, `dev`, `start`, `serve`, `preview` — use first match
@@ -102,7 +104,7 @@ If the snapshot shows an error page or the app is unreachable:
         as `make <target>`
    c. If no command found: log warning and skip to Step 4:
       `- [ ] [APP NOT RUNNING] Cannot reach <base_url> — no startup command
-      found in runbook or repo. Start the app and re-run df-dev-verify`
+      found in the verification skill or repo. Start the app and re-run df-dev-verify`
 3. Run the resolved command in the background:
    ```bash
    <startup_command> &
@@ -118,7 +120,7 @@ If the snapshot shows an error page or the app is unreachable:
    `- [ ] [APP NOT RUNNING] Cannot reach <base_url> after running
    '<startup_command>' — investigate and re-run df-dev-verify`
 
-**Execute each test case** using the same execution rules as df-qa-acceptance:
+**Drive each entry** using the same execution rules as df-acceptance:
 - Navigate to starting page, execute each step, run assertions
 - Use `agent-browser snapshot -i` for interactive elements; `agent-browser snapshot`
   (no `-i`) for non-interactive assertions
@@ -205,7 +207,7 @@ needed. Do not fix multiple unrelated failures in a single edit.
   Do not loop further on that item.
 
 **Convergence check after all items addressed (max 2 iterations):**
-Run the full test suite and the full QA runbook (Steps 2 and 3). If new
+Run the full test suite and drive every recipe again (Steps 2 and 3). If new
 failures appear (regressions introduced by fixes), add them to the issues doc
 and re-enter the fix loop for those new items only.
 
@@ -222,21 +224,26 @@ items `[!]`, record `convergence cap reached` next to them, and go to Step 5.
 
 **E2e test coverage gate (hard requirement, max 2 iterations):**
 
-After the convergence check passes, verify that automated e2e tests exist
-for every TC-xxx in the QA runbook. This is a hard gate — the branch cannot
-proceed to Step 5 without e2e coverage.
+After the convergence check passes, verify that automated e2e tests exist for
+every feature-map entry and sub-feature the change touches. This is a hard
+gate; the branch cannot proceed to Step 5 without e2e coverage.
 
-1. **Parse TC identifiers** from the QA runbook: collect all TC-xxx IDs
+A verification skill does not satisfy this gate and never will. The two layers
+prove different things: an automated e2e test is deterministic, runs in CI with
+no agent, and catches the regression later. Driving a recipe proves this change
+works now. The standard requires both, per `references/engineering-standards.md`.
+
+1. **Collect entry ids** from the coverage handoff or the `features/` map
 2. **Discover e2e test location** from project conventions:
    - Check for `e2e/`, `tests/e2e/`, `test/e2e/`, or `__tests__/e2e/` directories
    - Check `playwright.config.ts`, `cypress.config.js`, or similar config files
      to find the test directory
    - Check `package.json` for `test:e2e` script to infer framework and location
 3. **Scan e2e test files** for TC identifiers: search test names, descriptions,
-   and comments for `TC-xxx` patterns (e.g., `TC-001`, `TC-002`)
-4. **Compare**: for each TC-xxx in the runbook, confirm a matching reference
+   and comments for the entry ids (e.g., `login-flow`, `login-flow: sso`)
+4. **Compare**: for each entry id, confirm a matching reference
    exists in the e2e tests
-5. **If any TC-xxx is missing e2e coverage**:
+5. **If any entry id is missing e2e coverage**:
    - Append to `## Test Failures` in `.dark-factory/tmp/dev-verify-issues.md`:
      `- [ ] [COVERAGE] TC-<id>: <name> — no automated e2e test found`
    - Re-enter the fix loop to write the missing e2e tests
@@ -270,7 +277,7 @@ If no `[!]` items: proceed silently.
 ### Step 6: Return Code-Review-Ready Status
 
 Report that developer self-verification is complete and include the PRD path,
-QA runbook path, and relevant test commands/results. When running under
+the recipes driven, and relevant test commands/results. When running under
 the df feature playbook, stop here so the router can explicitly invoke
 `df-code-review`. If this skill was invoked standalone, tell the user the
 next stage is `df-code-review`.
@@ -279,7 +286,7 @@ next stage is `df-code-review`.
 
 - The issues doc at `.dark-factory/tmp/dev-verify-issues.md` is a working scratch
   file — it is not committed
-- Run QA inline (not by invoking df-qa-acceptance) to keep the fix loop
+- Drive the recipes inline (not by invoking df-acceptance) to keep the fix loop
   in a single context with all failures visible
 - `agent-browser close` must run at every exit point — after Step 3 success,
   after app-not-running bail-out, and after any unexpected error

@@ -6,10 +6,15 @@ generation and checked during multi-model validation.
 
 ## Scope
 
-These rules apply ONLY to browser automation test cases (TC-xxx).
-Programmatic test specifications (UT-xxx, IT-xxx, ET-xxx) are exempt because
-they are technical specifications that necessarily reference code modules,
-API endpoints, and data structures.
+These rules apply ONLY to the user-POV prose of a feature-map entry: what the
+feature is, how a user reaches it, and what observable end state proves it
+works. That prose is written from outside the implementation, so it must not
+leak internals.
+
+The entry's harness section (`Driving it with <harness>`) is exempt, and so are
+programmatic test specifications (UT-xxx, IT-xxx, ET-xxx), for the same reason.
+Both are technical specifications that necessarily reference code modules, API
+endpoints, selectors, and data structures.
 
 ## Forbidden Content
 

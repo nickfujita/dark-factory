@@ -43,7 +43,7 @@ The operator may invoke one second-opinion pass. It is a deliberately decorrelat
 
 Every lane runs under a dispatch and wall-clock budget. Budget exhaustion is a stop, not a flag.
 
-The stage skills the lanes name are live: `df-prd-interview`, `df-prd-challenge`, `df-design`, `df-qa-runbook-gen`, `df-qa-validation`, `df-implement`, `df-dev-verify`, `df-code-review`, `df-qa-acceptance`. Where a named skill is absent on a box, say so and apply the lane's discipline inline. Never invent a file.
+The stage skills the lanes name are live: `df-prd-interview`, `df-prd-challenge`, `df-design`, `df-verify-coverage`, `df-qa-validation`, `df-implement`, `df-dev-verify`, `df-code-review`, `df-acceptance`. Where a named skill is absent on a box, say so and apply the lane's discipline inline. Never invent a file.
 
 ## Playbook triggers
 
@@ -116,7 +116,7 @@ Name the kind of work, not the skill that did it.
 | `df-prd-challenge` | spec review |
 | `df-dev-verify` | dev verification |
 | `df-code-review` | code review |
-| `df-qa-acceptance` | QA acceptance |
+| `df-acceptance` | QA acceptance |
 | lanes, dispatch budgets, df file paths | a plain description, or nothing |
 
 Keep finding ids verbatim. `FIX A`, `C5`, `CR-001` still index the artifact that recorded them, and stripping them loses the only durable link.
@@ -141,7 +141,7 @@ df writes no config into a target repo and commits nothing there. What a repo ma
 
 Several media means several such skills, one per medium, sometimes behind a small index skill. Pick the one whose medium the change touches.
 
-A repo with no verification skill gets the full generic flow without pre-context. Proceed generically. Never require one, and never create one mid-run; that is the verification-skill generator's job and it is invoked deliberately.
+A repo with no verification skill gets the full generic flow without pre-context. Proceed generically, and never require one. Creating one is the verification-skill generator's job, invoked deliberately. Inside the feature spine, `df-verify-coverage` is that deliberate invocation point: it is the one stage allowed to call the generator, it says so in its reply, and it names the medium. Nowhere else creates a verification skill mid-run.
 
 ## External tools
 
