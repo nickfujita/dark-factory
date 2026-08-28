@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# -E matters: without errtrace bash does not inherit an ERR trap into shell
+# functions, so a tmux failure inside tm() would exit straight past the
+# transport guard below and leave the reviewers running with no prompt.
+set -Eeuo pipefail
 
 # Usage: run_claude_code_reviews_tmux.sh <prd-path> <qa-path> <base-ref> <output-dir>
 # Starts two interactive Claude Code sessions in tmux (quality + spec), sends
@@ -9,6 +12,14 @@ set -euo pipefail
 # over an empty, unstructured, or findings-free report is a FAILURE, not a
 # clean round. Environment override: CLAUDE_REVIEW_MIN_BODY_BYTES=400 (minimum
 # accepted report size when findings are claimed).
+#
+# Both reviewers run on this run's OWN tmux server, addressed by `-L <label>` on
+# every call (CLAUDE_REVIEW_TMUX_LABEL overrides it). Not the operator's. From
+# inside a pane $TMUX is set, tmux takes its socket path from it, and a plain
+# `tmux new-session` lands the reviewers on the operator's live server as
+# siblings of their working session, sharing one buffer namespace with every
+# other concurrent run. TMUX_TMPDIR cannot substitute: it only feeds the default
+# socket path, which is skipped whenever $TMUX supplies one.
 
 if [[ $# -lt 4 ]]; then
   echo "Usage: run_claude_code_reviews_tmux.sh <prd-path> <qa-path> <base-ref> <output-dir>" >&2
@@ -82,6 +93,13 @@ prd_rel="${prd_path#"$repo_root"/}"
 qa_rel="${qa_path#"$repo_root"/}"
 out_rel="${out_dir#"$repo_root"/}"
 session="${CLAUDE_REVIEW_TMUX_SESSION:-df-claude-code-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+
+# One tmux server per run, keyed on this script's pid so concurrent rounds
+# cannot collide. Every tmux call goes through tm(); a bare `tmux` would fall
+# back to the operator's server. The server exits once its last session is gone.
+tmux_label="${CLAUDE_REVIEW_TMUX_LABEL:-df-claude-code-$$}"
+tm() { tmux -L "$tmux_label" "$@"; }
+
 startup_delay="${CLAUDE_REVIEW_STARTUP_DELAY:-3}"
 timeout_seconds="${CLAUDE_REVIEW_TIMEOUT_SECONDS:-1800}"
 claude_command="${CLAUDE_REVIEW_COMMAND:-claude}"
@@ -197,17 +215,35 @@ spec_prompt="$(mktemp "${TMPDIR:-/tmp}/dark-factory-claude-spec-prompt.XXXXXX")"
 make_prompt quality "$quality_out" "$quality_done" "$quality_prompt"
 make_prompt spec "$spec_out" "$spec_done" "$spec_prompt"
 
-tmux new-session -d -s "$session" -n quality -c "$repo_root" "$suppress_bridge exec $claude_command"
-tmux new-window -t "$session" -n spec -c "$repo_root" "$suppress_bridge exec $claude_command"
+# Everything from the spawn to the last keystroke is the transport window. A
+# tmux error in here leaves two reviewer sessions running with no prompt in
+# them, and nothing would ever read or retire them. Disarmed once the wait loop
+# starts, because the loop's own failure paths keep the session on purpose.
+transport_failed() {
+  local rc=$?
+  trap - ERR
+  echo "Error: the tmux transport failed before the reviewers received their prompts (exit $rc)." >&2
+  tm kill-session -t "$session" 2>/dev/null || true
+  exit 1
+}
+trap transport_failed ERR
+
+# Both windows are named, never addressed by index: `base-index 1` in an
+# operator's ~/.tmux.conf shifts the first window to 1 and a `:0` target dies
+# with "can't find window: 0".
+tm new-session -d -s "$session" -n quality -c "$repo_root" "$suppress_bridge exec $claude_command"
+tm new-window -t "$session" -n spec -c "$repo_root" "$suppress_bridge exec $claude_command"
 sleep "$startup_delay"
 
-tmux load-buffer -b dark-factory-claude-quality "$quality_prompt"
-tmux paste-buffer -b dark-factory-claude-quality -t "$session:quality"
-tmux send-keys -t "$session:quality" Enter
+tm load-buffer -b dark-factory-claude-quality "$quality_prompt"
+tm paste-buffer -b dark-factory-claude-quality -t "$session:quality"
+tm send-keys -t "$session:quality" Enter
 
-tmux load-buffer -b dark-factory-claude-spec "$spec_prompt"
-tmux paste-buffer -b dark-factory-claude-spec -t "$session:spec"
-tmux send-keys -t "$session:spec" Enter
+tm load-buffer -b dark-factory-claude-spec "$spec_prompt"
+tm paste-buffer -b dark-factory-claude-spec -t "$session:spec"
+tm send-keys -t "$session:spec" Enter
+
+trap - ERR
 
 deadline=$((SECONDS + timeout_seconds))
 while (( SECONDS < deadline )); do
@@ -218,14 +254,16 @@ while (( SECONDS < deadline )); do
     read -r s_verdict s_reason <<<"$(validate_report "$spec_out" "## Findings — Claude Spec")"
     if [[ "$q_verdict" != "valid" || "$s_verdict" != "valid" ]]; then
       echo "Error: completion sentinel exists but a report is not a usable review (quality: ${q_reason}, spec: ${s_reason})." >&2
-      echo "tmux session still available for inspection: $session" >&2
+      echo "Reviewer session kept for inspection: tmux -L $tmux_label attach -t $session" >&2
       exit 1
     fi
+    # Both reports are on disk, so neither reviewer has anything left to say.
+    # Killing the session also retires this run's server.
+    tm kill-session -t "$session" 2>/dev/null || true
     echo "Claude code reviews written to: $out_dir"
-    echo "tmux session: $session"
     exit 0
   fi
-  if ! tmux has-session -t "$session" 2>/dev/null; then
+  if ! tm has-session -t "$session" 2>/dev/null; then
     echo "Error: tmux session ended before both completion sentinels were written: $session" >&2
     exit 1
   fi
@@ -233,5 +271,5 @@ while (( SECONDS < deadline )); do
 done
 
 echo "Error: timed out waiting for Claude completion sentinels in: $out_dir" >&2
-echo "tmux session still available for inspection: $session" >&2
+echo "Reviewer session kept for inspection: tmux -L $tmux_label attach -t $session" >&2
 exit 1

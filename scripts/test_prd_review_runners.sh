@@ -115,10 +115,18 @@ chmod +x "$BIN/codex"
 #
 # The tmux runner only needs: a session that "starts", buffer plumbing that
 # succeeds, and a sentinel appearing. The report content is staged by the test.
+#
+# This fake says NOTHING about the transport. Its default branch is `exit 0`, so
+# a wrong window target, a wrong server or a leaked session all pass here. That
+# is what let `-t <session>:0` ship and break under `base-index 1`. Those
+# properties belong to scripts/test_tmux_transport.sh, which drives a real tmux.
 
 cat >"$BIN/tmux" <<'FAKE'
 #!/usr/bin/env bash
-case "$1" in
+# The runners pin every call to their own server with `-L <label>`; drop it so
+# the subcommand is $1.
+[[ "${1:-}" == "-L" ]] && shift 2
+case "${1:-}" in
   new-session) [[ -n "${FAKE_SENTINEL:-}" ]] && printf 'done\n' >"$FAKE_SENTINEL"; exit 0 ;;
   has-session) exit 0 ;;
   -V) echo "tmux 3.4"; exit 0 ;;
