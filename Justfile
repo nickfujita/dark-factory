@@ -100,6 +100,12 @@ check-plugins:
 check-state:
 	bash scripts/test-df-state.sh
 
+# Leakage gate acceptance: the gate must catch a stage name in a product repo,
+# honour the router's exemptions, and stay silent in dark-factory itself.
+# Offline, git and coreutils only, about a second.
+check-leakage:
+	bash scripts/test-df-check-leakage.sh
+
 # Runner smoke tests: drives the df-prd-challenge review runners against fake codex/tmux/
 # claude binaries. Takes ~1 minute (it exercises real timeouts), so it is not
 # part of `just check`.
@@ -111,6 +117,14 @@ test-runners:
 # sessions, so like `test-runners` it is not part of `just check`.
 test-bridge-suppression:
 	bash scripts/test_bridge_suppression.sh
+
+# Drives the Claude PRD reviewer runner against a REAL tmux server, under both
+# base-index settings, with a fake reviewer. `test-runners` stubs tmux with a
+# script that exits 0 for everything, so it cannot catch a bad window target;
+# this can. Spawns throwaway tmux servers on private -L labels and takes ~40s,
+# so it is not part of `just check`.
+test-tmux-transport:
+	bash scripts/test_tmux_transport.sh
 
 # D30 shared-core parity: every file under codex-plugin/skills/*/references/ and
 # codex-plugin/skills/df/playbooks/ must be byte-identical to its skills/ counterpart.
@@ -180,4 +194,5 @@ check:
 	just check-plugins
 	just check-parity
 	just check-state
+	just check-leakage
 	just check-no-repo-scratch

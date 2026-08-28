@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# -E matters: without errtrace bash does not inherit an ERR trap into shell
+# functions, so a tmux failure inside tm() would exit 1 straight past the
+# transport guard below and skip the status file the caller contracts for.
+set -Eeuo pipefail
 
 # Usage: run_claude_prd_review_tmux.sh <prd-path> <output-path>
 # Starts an interactive Claude Code session in tmux, sends a PRD review prompt,
@@ -23,6 +26,17 @@ set -euo pipefail
 #   CLAUDE_REVIEW_MIN_BODY_BYTES=400     minimum report size when findings are claimed
 #   CLAUDE_REVIEW_MODE=discovery|verification
 #   CLAUDE_REVIEW_DELTA_FILE=<path>      remediation delta, required for verification
+#   CLAUDE_REVIEW_TMUX_LABEL=<label>     tmux server for the reviewer, one per run
+#
+# The reviewer runs on its OWN tmux server, addressed by `-L <label>` on every
+# call. Not the operator's. From inside a pane $TMUX is set, tmux takes its
+# socket path from it, and a plain `tmux new-session` lands the reviewer on the
+# operator's live server as a sibling of their working session. That shares one
+# buffer namespace across every concurrent run, so two rounds racing on the
+# fixed paste-buffer name can feed one reviewer the other's prompt. A per-run
+# label gives each run its own server, its own buffers and its own teardown.
+# TMUX_TMPDIR cannot do this: it only feeds the default socket path, which is
+# skipped whenever $TMUX supplies one.
 
 if [[ $# -lt 2 ]]; then
   echo "Usage: run_claude_prd_review_tmux.sh <prd-path> <output-path>" >&2
@@ -121,6 +135,14 @@ session="${CLAUDE_REVIEW_TMUX_SESSION:-df-claude-prd-$(date -u +%Y%m%dT%H%M%SZ)-
 startup_delay="${CLAUDE_REVIEW_STARTUP_DELAY:-3}"
 timeout_seconds="${CLAUDE_REVIEW_TIMEOUT_SECONDS:-1800}"
 claude_command="${CLAUDE_REVIEW_COMMAND:-claude}"
+
+# One tmux server per run. $$ is this script's pid, so concurrent rounds cannot
+# collide even when they start in the same second. Every tmux call in this file
+# goes through tm(); a bare `tmux` would silently fall back to the operator's
+# server. The server needs no explicit teardown: it exits once its last session
+# is gone.
+tmux_label="${CLAUDE_REVIEW_TMUX_LABEL:-df-claude-prd-$$}"
+tm() { tmux -L "$tmux_label" "$@"; }
 
 # This reviewer is a machine-driven session: its report is addressed to this
 # flow, not to a human. The Matrix phone bridge, if installed, cannot tell that
@@ -221,11 +243,34 @@ After writing $out_rel, run exactly:
 mkdir -p "$(dirname "$done_rel")" && printf 'done\n' > "$done_rel"
 PROMPT
 
-tmux new-session -d -s "$session" -c "$repo_root" "$suppress_bridge exec $claude_command"
+# Everything from the spawn to the last keystroke is the transport window. A
+# tmux error in here leaves a reviewer session running with no prompt in it and,
+# without this guard, no status file either — the caller cannot tell a transport
+# failure from a crash. Disarmed once the wait loop starts, because every
+# terminal state in the loop writes its own status and deliberately leaves the
+# session up for inspection.
+transport_failed() {
+  local rc=$?
+  trap - ERR
+  write_status "failed" "0" "tmux_transport_error"
+  echo "Error: the tmux transport failed before the reviewer received its prompt (exit $rc)." >&2
+  echo "STATE=failed"
+  tm kill-session -t "$session" 2>/dev/null || true
+  exit 3
+}
+trap transport_failed ERR
+
+# The window is named, never addressed by index. `base-index 1` in an operator's
+# ~/.tmux.conf makes the first window 1, so `-t "$session:0"` dies with
+# "can't find window: 0" and the reviewer never sees its prompt. A name is
+# immune to that setting, which is also why the code-review runner uses one.
+tm new-session -d -s "$session" -n review -c "$repo_root" "$suppress_bridge exec $claude_command"
 sleep "$startup_delay"
-tmux load-buffer -b dark-factory-claude-prd "$prompt_file"
-tmux paste-buffer -b dark-factory-claude-prd -t "$session:0"
-tmux send-keys -t "$session:0" Enter
+tm load-buffer -b dark-factory-claude-prd "$prompt_file"
+tm paste-buffer -b dark-factory-claude-prd -t "$session:review"
+tm send-keys -t "$session:review" Enter
+
+trap - ERR
 
 deadline=$((SECONDS + timeout_seconds))
 while (( SECONDS < deadline )); do
@@ -237,17 +282,20 @@ while (( SECONDS < deadline )); do
       write_status "failed" "0" "$reason"
       echo "Error: completion sentinel exists but the report is not a usable review ($reason): $out_path" >&2
       echo "STATE=failed"
-      echo "tmux session still available for inspection: $session" >&2
+      echo "Reviewer session kept for inspection: tmux -L $tmux_label attach -t $session" >&2
       exit 3
     fi
     write_status "complete" "$findings" "ok"
+    # The round is over and the report is on disk, so the reviewer has nothing
+    # left to say. Leaving it up parks an idle CLI nobody will ever read, one
+    # per round. Killing the last session also retires this run's server.
+    tm kill-session -t "$session" 2>/dev/null || true
     echo "Claude PRD review written to: $out_path"
     echo "STATE=complete"
     echo "FINDINGS=$findings"
-    echo "tmux session: $session"
     exit 0
   fi
-  if ! tmux has-session -t "$session" 2>/dev/null; then
+  if ! tm has-session -t "$session" 2>/dev/null; then
     write_status "failed" "0" "tmux_session_ended_before_sentinel"
     echo "Error: tmux session ended before completion sentinel was written: $session" >&2
     echo "STATE=failed"
@@ -259,5 +307,5 @@ done
 write_status "timeout" "0" "window_elapsed"
 echo "Error: timed out waiting for Claude completion sentinel: $done_path" >&2
 echo "STATE=timeout"
-echo "tmux session still available for inspection: $session" >&2
+echo "Reviewer session kept for inspection: tmux -L $tmux_label attach -t $session" >&2
 exit 4
