@@ -69,7 +69,7 @@ If launch or doctor cannot be made to pass, run the skill's Cleanup, mark every 
 
 **agent-browser is a hard requirement for a browser surface.** It ships its own plugin and its skill is a discovery stub, so never restate its documentation and never work from a cached copy. Ask the CLI with `agent-browser skills get core`. When a browser surface needs driving and agent-browser is absent, stop and say so. Do not substitute a fetch tool, a screenshot you cannot interact with, or a test that asserts on markup instead of the running app.
 
-Create the evidence directory the skill's Evidence section names. When it names none, fall back to `.claude/qa-screenshots/<feature-slug>/`.
+Create the evidence directory the skill's Evidence section names. When it names none, fall back to `<run-dir>/evidence/<feature-slug>/`, where `<run-dir>` is `bash scripts/df-state.sh path "<run-id>"`. That is the run's own directory in the agent's store, outside the repo, so evidence never dirties the project's tree.
 
 ### Step 3. Drive the entries
 
@@ -113,7 +113,7 @@ BLOCKED is not a soft pass. A blocked leg is unverified, and it stays unverified
 
 **Continue between legs.** Run every leg in the handoff before reporting. Do not stop at the first failure.
 
-**Failure capture.** Write failure artifacts where the Evidence section says, or to `.claude/qa-screenshots/<feature-slug>/` when it says nothing. Capture on failure only.
+**Failure capture.** Write failure artifacts where the Evidence section says, or to `<run-dir>/evidence/<feature-slug>/` when it says nothing. Capture on failure only.
 
 ### Step 3b. Error recovery
 

@@ -15,7 +15,8 @@ Principle names in this skill cite `../df/references/principles.md`.
 
 - The settled requirements. The PRD in the Standard and High-consequence lanes, the recorded finish predicate in a Quick-lane escalation.
 - The design from df-design, the synthesized sketch and its rationale. A recorded `df-design skipped: <reason>` counts as the design record.
-- The lane and its budgets, from the run state store under `.dark-factory/` in the target repo.
+- The lane and its budgets, from the run state store, which lives outside the
+  target repo (`bash scripts/df-state.sh path`).
 
 ## Skip rule
 
@@ -64,7 +65,8 @@ Every PR block carries a Budget line sourced from the run state, never invented.
 
 ## Write the file, then check it
 
-1. Unless the operator names a path, write the plan into the run's state directory under `.dark-factory/`.
+1. Unless the operator names a path, write the plan into the run's own state
+   directory, `bash scripts/df-state.sh path "<run-id>"`.
 2. Copy the skeleton from `references/plan-skeleton.md` and fill every placeholder. Keep every heading and block in the order shown. One H2 block per PR, `### Task <n>. <name>` headings inside it.
 3. The body is a how-to. Appendices hold explanation and record. Short declarative sentences. No long dashes. No mid-sentence colons. The technical-writing and unslop skills own the full rule set.
 4. Run the checker beside this skill, `node <this skill's directory>/scripts/check-plan.mjs <plan file>`, and fix every defect line it prints (the encode-lessons-in-structure principle). It enforces the skeleton's shape, the verification rule in every block, the punctuation bans, and the placeholder bans. The `D5 gate` line it prints for a plan over 8 tasks is a gate to route to the operator, not a defect to edit away.

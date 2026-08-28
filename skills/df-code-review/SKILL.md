@@ -72,9 +72,14 @@ must only ever be able to touch a throwaway.
 | `TOOLING_RETRY_LIMIT` | 1 | retries of a crashed reviewer run before the leg is declared blocked |
 | `DISCOVERY_TIER` | **unpinned — inherit from the orchestrator session** (no `model`, no `subagent_type` override) | in-session discovery reviewers |
 | `RECHECK_TIER` | `subagent_type: df-reviewer-recheck` (agent definition pins `model: opus`, `effort: high`) | delta-verification reviewers spawned fresh |
-| `REVIEW_ROOT` | `${TMPDIR:-/tmp}/dark-factory-review-<repo-key>-<run-id>` | all scratch output for one run |
-| `RUN_DIR_POINTER` | `.dark-factory/tmp/code-review-review-dir` | file recording `REVIEW_ROOT` |
-| `REPORT_DIR` | `.dark-factory/reviews/code-review/` | the final report |
+| `REVIEW_ROOT` | `<run-dir>/work/code-review` | all scratch output for one run |
+| `REPORT_DIR` | `<run-dir>/reviews/code-review/` | the final report |
+
+`<run-dir>` is this run's directory in the agent's own store, printed by
+`bash scripts/df-state.sh path "<run-id>"`. It sits outside the repo, so a run
+leaves the project's tree untouched and needs no `.gitignore` entry. Two
+concurrent runs are two run ids and two directories, so they cannot clobber
+each other.
 
 There are no round caps in this skill, because there are no rounds. The old
 10-round Claude phase and 3-round Codex phase are **deleted**. What bounds the
@@ -136,17 +141,17 @@ remainder as the slug (e.g., `feat/user-auth` → `user-auth`).
 2. Scan `docs/qa/` for `qa-<slug>.md`
 3. If no exact match: list candidate files and ask the user to confirm paths
 
-**Create a run-scoped scratch directory and cache the frozen diff.** Never write
-review output to a fixed shared path: concurrent review runs on the same machine
-will clobber each other and destroy a completed review.
+**Resolve this run's directory and cache the frozen diff.** Everything this
+skill produces lives under the run directory in the agent's own store, never in
+the repo under review. The run id scopes it, so concurrent reviews cannot
+clobber each other.
 ```bash
-mkdir -p .dark-factory/reviews/code-review .dark-factory/tmp
-repo_key="$(git rev-parse --show-toplevel 2>/dev/null | sha1sum | cut -c1-12)"
-run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
-review_dir="${TMPDIR:-/tmp}/dark-factory-review-${repo_key}-${run_id}"
-mkdir -p "$review_dir"
-printf '%s\n' "$review_dir" > .dark-factory/tmp/code-review-review-dir
+run_dir="$(bash scripts/df-state.sh path "<run-id>")"
+review_dir="$run_dir/work/code-review"
+report_dir="$run_dir/reviews/code-review"
+mkdir -p "$review_dir" "$report_dir"
 echo "REVIEW_ROOT=$review_dir"
+echo "REPORT_DIR=$report_dir"
 git diff "$base_ref" "$review_sha" > "$review_dir/branch-diff.txt"
 printf '%s\n' "$review_sha" > "$review_dir/review-sha.txt"
 ```
@@ -413,7 +418,8 @@ while acceptance exercises it.
 
 Assemble the full report from your running record and write it once to the
 reserved path. Number all findings globally (CR-001, CR-002, …). Do not commit
-the report; `.dark-factory/reviews/` is local working output.
+the report; `REPORT_DIR` is local working output in the run's own store
+directory, outside the repo.
 
 ```
 # Code Review: <Feature Name>
@@ -526,14 +532,13 @@ handoff from `df-verify-coverage`.
   synthesis)
 - The diff is captured once, against `REVIEW_SHA`, from committed state only —
   no working-tree noise
-- Scratch (diff cache, Codex outputs, stderr logs, delta files) goes to the
-  run-scoped `REVIEW_ROOT` under /tmp/, never under `.claude/`, so the
-  autonomous flow never trips a write-permission prompt; the generated report
-  lives in the gitignored `.dark-factory/reviews/` directory
-- **`REVIEW_ROOT` in your own context is authoritative.** The pointer file
-  `.dark-factory/tmp/code-review-review-dir` is a convenience for a session
-  that lost it, and a second run in the same checkout overwrites it. If the
-  pointer disagrees with the `REVIEW_ROOT` you created in Step 1, trust your
-  own and say so in the report.
+- Scratch (diff cache, Codex outputs, stderr logs, delta files) and the
+  finished report both live under this run's directory in the agent's own
+  store, never inside the repo, so a review leaves the project's tree untouched
+  and never trips a write-permission prompt
+- **`REVIEW_ROOT` is recoverable, not remembered.** A session that lost it
+  rebuilds the path from the run id with `df-state.sh path`. There is no
+  pointer file to go stale, and a second review in the same checkout is a
+  second run id with its own directory.
 - Run project tests before starting this skill (not its job to fix pre-existing
   failures). `df-dev-verify` owns that gate.
