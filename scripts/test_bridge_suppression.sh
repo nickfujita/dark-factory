@@ -6,8 +6,8 @@ set -uo pipefail
 #
 # Two things can break independently, so both are checked:
 #
-#   1. Wiring — every `tmux new-session`/`new-window` in the reviewer runners
-#      that starts Claude carries the assignment.
+#   1. Wiring — every `new-session`/`new-window` in the reviewer runners that
+#      starts Claude carries the assignment.
 #   2. Delivery — the assignment really lands in the spawned process's
 #      environment. This is the part that looks obviously fine and is not:
 #      exporting the variable before calling tmux does nothing once a tmux
@@ -39,16 +39,18 @@ fail() {
 check_wiring() {
   # check_wiring <label> <script>
   local label="$1" script="$2" line spawns=0 bare=0
+  # `tm` is the runners' wrapper that pins every tmux call to the run's own
+  # server, so spawns read as `tm new-session`; match both spellings.
   while IFS= read -r line; do
     # Only spawns that launch the reviewer command are in scope; tmux calls that
     # paste buffers or poll the session are not.
     [[ "$line" != *'$claude_command'* ]] && continue
     spawns=$((spawns + 1))
     [[ "$line" != *'$suppress_bridge'* ]] && bare=$((bare + 1))
-  done < <(grep -E 'tmux (new-session|new-window)' "$script")
+  done < <(grep -E '\b(tmux|tm) (new-session|new-window)' "$script")
 
   if [[ "$spawns" -eq 0 ]]; then
-    fail "$label: found a reviewer spawn to check" "no 'tmux new-session/new-window' running \$claude_command"
+    fail "$label: found a reviewer spawn to check" "no 'new-session/new-window' running \$claude_command"
     return
   fi
   if [[ "$bare" -ne 0 ]]; then
@@ -73,15 +75,25 @@ if ! command -v tmux >/dev/null 2>&1; then
   printf 'skip tmux delivery check (tmux not installed)\n'
 else
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/df-suppression.XXXXXX")"
+  # The probes run on their own tmux server, the way the runners do, so this
+  # test never adds sessions to the operator's. `tm` is that pin; a bare `tmux`
+  # would land on the operator's server because $TMUX names its socket.
+  probe_label="df-suppression-$$"
+  tm() { tmux -L "$probe_label" "$@"; }
   # Both probe sessions outlive their command by a couple of seconds, so clean
-  # up every one of them however this script exits.
+  # up every one of them however this script exits. Killing the last session
+  # retires the probe server; nothing here calls kill-server.
   probe_sessions=()
   cleanup() {
     rm -rf "$WORK"
     local s
     for s in ${probe_sessions[@]+"${probe_sessions[@]}"}; do
-      tmux kill-session -t "$s" 2>/dev/null
+      tm kill-session -t "$s" 2>/dev/null
     done
+    # A server that exits on its own unlinks its socket; one killed with its
+    # last session can leave the file behind.
+    tm list-sessions >/dev/null 2>&1 \
+      || rm -f "${TMUX_TMPDIR:-/tmp}/tmux-$(id -u)/$probe_label"
   }
   trap cleanup EXIT
 
@@ -100,7 +112,7 @@ PROBE
   # swapped for the probe — same quoting, same `sh -c`, same tmux server.
   claude_command="$WORK/fake-claude $WORK/probe.txt"
   suppress_bridge="$VAR=1"
-  tmux new-session -d -s "$probe_session" -c "$WORK" "$suppress_bridge exec $claude_command"
+  tm new-session -d -s "$probe_session" -c "$WORK" "$suppress_bridge exec $claude_command"
 
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     [[ -s "$WORK/probe.txt" ]] && break
@@ -120,7 +132,7 @@ PROBE
   rm -f "$WORK/probe.txt"
   probe_session="df-suppression-control-$$"
   probe_sessions+=("$probe_session")
-  CCMATRIX_SUPPRESS_SESSION=1 tmux new-session -d -s "$probe_session" -c "$WORK" "exec $claude_command"
+  CCMATRIX_SUPPRESS_SESSION=1 tm new-session -d -s "$probe_session" -c "$WORK" "exec $claude_command"
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     [[ -s "$WORK/probe.txt" ]] && break
     sleep 0.5
