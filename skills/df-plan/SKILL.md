@@ -16,6 +16,7 @@ Principle names in this skill cite `../df/references/principles.md`.
 
 - The settled requirements. The PRD in the Standard and High-consequence lanes, the recorded finish predicate in a Quick-lane escalation.
 - The design from df-design, the synthesized sketch and its rationale. A recorded `df-design skipped: <reason>` counts as the design record.
+- For a user-facing graphical UI change, `<run-dir>/work/prototype/approved-ui-prototype.md` from the prototype playbook. For other work, a recorded `prototype skipped: no user-facing visual change` counts as the prototype record.
 - The lane and its budgets, from the run state store, which lives outside the
   target repo (`bash scripts/df-state.sh path`).
 
@@ -25,7 +26,9 @@ When the change is one or two files with an obvious approach, skip the plan. Say
 
 ## Settle open questions before writing
 
-A question about layout, timing, behavior, or whether an API works gets a prototype, not a guess. Run `../df/playbooks/prototype.md` and keep the branch, the SHA, and the artifacts for Appendix A. Ask the operator only about a product or preference call no run can settle, and offer options when you ask (the never-block-on-the-human principle).
+Planning does not decide a visual UI question. If the work changes a user-facing graphical UI and the approved prototype record is missing, return to df-design. Do not draft the plan around prose or an unapproved screenshot.
+
+A non-visual question about timing, behavior, or whether an API works gets a prototype, not a guess. Run `../df/playbooks/prototype.md` and keep its evidence for Appendix A. Ask the operator only about a product or preference call no run can settle, and offer options when you ask (the never-block-on-the-human principle).
 
 ## Explore in subagents
 
@@ -88,7 +91,7 @@ Count the tasks. A plan with more than 8 tasks pauses for explicit operator sign
 
 The plan's executor is df-implement, task by task. Never hand the plan to any superpowers skill; the checker fails a plan that names one.
 
-- In the Standard lane, present the design and the plan together for one combined sign-off, per df-design's checkpoint rule. In High-consequence, the design was already checkpointed; present the plan.
+- In the Standard lane, present the technical design and the plan together for one combined sign-off. For a visual UI change, name the approved prototype and show how each user-visible task follows it. The visual direction is not reopened during planning. In High-consequence, the design was already checkpointed; present the plan.
 - Post the plan path and the checker's output, then stop. Execution starts on the operator's explicit go, and a plan over the D5 gate does not start without it.
 - Inside the feature playbook, return control to the playbook; its next steps are the QA runbook and then df-implement. Invoked standalone, run df-implement on the operator's go.
 

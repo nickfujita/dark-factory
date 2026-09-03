@@ -106,6 +106,11 @@ check-state:
 check-leakage:
 	bash scripts/test-df-check-leakage.sh
 
+# UI design gate: both harnesses route a new visual decision through a driven,
+# approved prototype before planning, then consume it in coverage and verification.
+check-ui-prototype-flow:
+	bash scripts/test-ui-prototype-flow.sh
+
 # Runner smoke tests: drives the df-prd-challenge review runners against fake codex/tmux/
 # claude binaries. Takes ~1 minute (it exercises real timeouts), so it is not
 # part of `just check`.
@@ -195,4 +200,5 @@ check:
 	just check-parity
 	just check-state
 	just check-leakage
+	just check-ui-prototype-flow
 	just check-no-repo-scratch

@@ -93,7 +93,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ## Appendix A. Prototype evidence
 
-<Each open question a prototype answered, with the branch, the SHA, and the artifact links. Each question that stays unproven. Or the explicit note that nothing was prototyped.>
+<For an approved visual prototype, record the approval file, selected variant, material states, tested viewports, and screenshot paths. For a code prototype, record the branch, SHA, and evidence. Name each question that stays unproven. Otherwise write the explicit note that nothing was prototyped.>
 
 ## Appendix B. Alternatives rejected
 
