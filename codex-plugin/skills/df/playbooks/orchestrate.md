@@ -15,7 +15,7 @@ Open a todo list with the steps below copied in verbatim. A step you skip stays 
 ## Roles
 
 - **Coordinator (this session).** Frames, authors briefs, drains the inbox, owns the operator report, makes judgment calls. It never authors or edits code; conflicted merges and code changes are always dispatches. Mechanically pushing a verified unit's branch and opening its PR is bookkeeping the coordinator may do itself. State reads and writes go through `scripts/df-state.sh` at drain points, one command in and one line out, to conserve context. The script lands in a parallel wave of this port. It never spawns, waits, or wakes anything.
-- **Worker / verifier.** Local native Codex subagents (or `codex exec` workers), background by default, roles resolved through `references/model-policy.md`. Prefer fewer, broader workers. One writer per worktree or branch, per the separate-before-serializing-shared-state principle. A unit's verifier runs on the other model family through the cross-model transport named in the df model policy, reading from a disposable worktree snapshot.
+- **Worker / verifier.** Local native Codex subagents, background by default, roles resolved through `references/model-policy.md`. Prefer fewer, broader workers. One writer per worktree or branch, per the separate-before-serializing-shared-state principle. A unit's verifier runs on the other model family through the cross-model transport named in the df model policy, reading from a disposable worktree snapshot.
 
 Depth stays at coordinator and worker. In-flight children cap at 3. That cap makes a sub-coordinator layer pure ceremony at this scale. A program that genuinely exceeds what one coordinator's drains can manage exceeds the subscription; rescope it instead of adding a layer.
 

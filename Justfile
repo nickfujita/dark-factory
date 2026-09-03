@@ -106,6 +106,11 @@ check-state:
 check-leakage:
 	bash scripts/test-df-check-leakage.sh
 
+# Claude-only durable Codex worker transport: state, resume, bounded provider
+# retry, and a sandbox mode that cannot change silently between turns.
+check-claude-codex-transport:
+	bash scripts/test-df-codex-exec.sh
+
 # UI design gate: both harnesses route a new visual decision through a driven,
 # approved prototype before planning, then consume it in coverage and verification.
 check-ui-prototype-flow:
@@ -200,5 +205,6 @@ check:
 	just check-parity
 	just check-state
 	just check-leakage
+	just check-claude-codex-transport
 	just check-ui-prototype-flow
 	just check-no-repo-scratch

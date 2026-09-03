@@ -63,6 +63,20 @@ for s in df-state.sh df-check-leakage.sh; do
     || note "$s is not executable in both plugin roots"
 done
 
+# The resumable Codex worker is a Claude-to-Codex adapter. It ships from the
+# Claude plugin root and must never become a nested Codex execution mode.
+[[ -x scripts/df-codex-exec.sh ]] \
+  || note "Claude-only scripts/df-codex-exec.sh is missing or not executable"
+[[ -f skills/df/references/codex-background-workers.md ]] \
+  || note "Claude-only Codex worker reference is missing"
+[[ ! -e codex-plugin/scripts/df-codex-exec.sh ]] \
+  || note "Claude-only df-codex-exec.sh leaked into the Codex plugin"
+[[ ! -e codex-plugin/skills/df/references/codex-background-workers.md ]] \
+  || note "Claude-only Codex worker reference leaked into the Codex plugin"
+if grep -R -Fq 'scripts/df-codex-exec.sh' codex-plugin/skills 2>/dev/null; then
+  note "the Codex-native skill tree references the Claude-only Codex worker transport"
+fi
+
 # Root-relative reference docs the skills name must ship in BOTH roots.
 # Byte-identical copies; the repo root is canonical.
 for ref in run-state-schema.md engineering-standards.md; do

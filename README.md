@@ -272,6 +272,11 @@ Claude source of truth and `codex-plugin/skills/` is the Codex-native tree. Shar
 reference files are held byte-identical by `just check-parity`, with a short
 allowlist for the files that carry sanctioned harness differences.
 
+When Claude Code deliberately assigns a background unit to Codex,
+`scripts/df-codex-exec.sh` provides the durable cross-harness transport. It
+ships only in the Claude plugin root. Codex-native orchestration uses Codex
+subagent and worktree threads and never calls that wrapper.
+
 **tmux**, when Codex is the driver. Secondary Claude reviews run as interactive
 Claude Code sessions inside tmux. The Codex flow does not use `claude -p`,
 `--print`, SDK mode, or stdout piping.
@@ -360,6 +365,7 @@ dark-factory/
     sync-from-global.sh       # global skill dirs back into the repo
     df-state.sh               # run-state store, atomic pre-dispatch reservation
     df-codex-review.sh        # cross-model review wrapper with a sandbox contract
+    df-codex-exec.sh          # Claude-only durable Codex background worker
     df-session-hook.sh        # SessionStart reminder, names the resolved root
     check-plugin-manifests.sh # holds the four plugin manifests in agreement
     run-df-evals.sh           # df-eval scenario runner
@@ -471,9 +477,8 @@ just check
 
 Validates shell syntax, the skills manifest, skill reference directories, agent
 definitions, bundled Python helpers, the plugin manifests, cross-tree parity,
-and the run-state store (37 assertions over concurrent reservation, stale-lock
-reclaim, nested budgets, idempotent completion and resume). It is offline and
-takes a few seconds.
+the Claude-only Codex transport boundary, and the run-state store. It is offline
+and takes a few seconds.
 
 `just check-plugins` is the packaging gate. Four manifests carry the version,
 and both harnesses read the manifest rather than the git tag, so a version that
