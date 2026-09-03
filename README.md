@@ -11,7 +11,7 @@ an executed acceptance runbook.
 the shape: an explicitly invoked router, lanes, playbooks copied verbatim into
 the todo list, single-pass review by diverse reviewers with a lead who
 adjudicates, and the principle set underneath all of it. This repo carries that
-to two other harnesses and adds three things of its own.
+to two other harnesses and adds four things of its own.
 
 - **Improvements taken from [Superpowers](https://github.com/obra/superpowers)**,
   which this framework used to depend on and no longer does. The per-task review
@@ -23,6 +23,10 @@ to two other harnesses and adds three things of its own.
 - **Multi-model review as a first-class mechanism.** One Claude reviewer and one
   Codex reviewer read the same prompt, and a lead adjudicates. Agreement across
   model families is the signal worth paying for.
+- **Native GitHub stacks for real dependencies.** Independent PRs still branch
+  from `main`. A dependent branch chain registers as a native stack when the
+  repository supports the public preview, with a plain-chain fallback when it
+  does not.
 
 Per-file provenance, naming the base file and what changed, is in
 [`skills/df/references/vendor-manifest.md`](./skills/df/references/vendor-manifest.md).
@@ -252,7 +256,10 @@ growing, and a loop that feeds on its own output terminates rather than
 extending.
 
 **Delivery is small PRs behind a feature flag**, typically three to seven,
-merging as each goes green with a visible vertical slice first. Verified but
+merging as each goes green with a visible vertical slice first. Independent PRs
+branch from `main`. Only a branch-on-branch dependency becomes a native GitHub
+stack. `scripts/df-stack.sh` registers existing PRs through the REST API and
+falls back to the plain chain when the preview is unavailable. Verified but
 unlanded work counts as zero. The flag-flip PR is last and triggers the full
 acceptance runbook plus one integrated review pass over the chain.
 
@@ -302,6 +309,14 @@ On a box where Chromium cannot use its sandbox, put
 will not do: it has to work for non-interactive shells.
 
 **just**, for the commands below.
+
+**GitHub CLI**, for PR publication and native stack registration. Native stacks
+use `gh api` with the versioned REST endpoints. Dark Factory does not install or
+invoke the `gh-stack` extension. When `gh api` or the repository preview is
+unavailable, the existing plain dependent PR chain remains the delivery path.
+GitHub announced the public preview on July 30, 2026, and the API remains
+subject to change. Recheck the pinned `2026-03-10` API version when the feature
+reaches general availability. See [About stacked pull requests](https://docs.github.com/en/pull-requests/get-started/about-stacked-prs), [the REST endpoints](https://docs.github.com/en/rest/pulls/stacks), and [the public-preview announcement](https://github.blog/changelog/2026-07-30-stacked-pull-requests-are-now-in-public-preview/).
 
 Superpowers is no longer a prerequisite. Earlier versions of this framework
 required it as the implementation engine. The practices worth keeping were
@@ -360,6 +375,7 @@ dark-factory/
     sync-from-global.sh       # global skill dirs back into the repo
     df-state.sh               # run-state store, atomic pre-dispatch reservation
     df-codex-review.sh        # cross-model review wrapper with a sandbox contract
+    df-stack.sh               # REST-only native stack registration with fallback
     df-session-hook.sh        # SessionStart reminder, names the resolved root
     check-plugin-manifests.sh # holds the four plugin manifests in agreement
     run-df-evals.sh           # df-eval scenario runner
@@ -471,8 +487,7 @@ just check
 
 Validates shell syntax, the skills manifest, skill reference directories, agent
 definitions, bundled Python helpers, the plugin manifests, cross-tree parity,
-and the run-state store (37 assertions over concurrent reservation, stale-lock
-reclaim, nested budgets, idempotent completion and resume). It is offline and
+native stack routing and fallback, and the run-state store. It is offline and
 takes a few seconds.
 
 `just check-plugins` is the packaging gate. Four manifests carry the version,

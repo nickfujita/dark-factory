@@ -106,6 +106,11 @@ check-state:
 check-leakage:
 	bash scripts/test-df-check-leakage.sh
 
+# Native stacked-PR acceptance: capability fallback, dependency routing,
+# REST-only registration, and the no-history-rewrite/no-merge boundary.
+check-stack:
+	bash scripts/test-df-stack.sh
+
 # UI design gate: both harnesses route a new visual decision through a driven,
 # approved prototype before planning, then consume it in coverage and verification.
 check-ui-prototype-flow:
@@ -200,5 +205,6 @@ check:
 	just check-parity
 	just check-state
 	just check-leakage
+	just check-stack
 	just check-ui-prototype-flow
 	just check-no-repo-scratch

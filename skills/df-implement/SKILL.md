@@ -83,7 +83,8 @@ CONTEXT     file pointers; interfaces and decisions from earlier tasks the brief
 ACCEPTANCE  checkable criteria, one per line
 VERIFY      exact commands, plus known gotchas
 TIMEBOX     rough cap on runtime; on expiry, return partial findings and stop
-FORBIDDEN   no subagents, no rebase, no force-push, no fixes outside scope,
+FORBIDDEN   no subagents, no rebase, no force-push, no gh stack commands,
+            no fixes outside scope,
             plus task-specific bans
 REPORT      the report file path and the status contract
 ```

@@ -92,7 +92,9 @@ Always pause for irreversible writes:
 - messages to anyone other than the operator
 - credential changes
 
-Merging a PR and force-pushing are not pause items. They are never done at all. The operator merges every PR.
+Merging a PR or stack and force-pushing are not pause items. They are never done at all. The operator merges every PR.
+
+Native GitHub stacks represent real PR dependencies only. Independent PRs branch from main and stay outside a stack. The PR-opening playbook owns capability detection, REST-only registration, and the plain-chain fallback. Native stacks never relax review or CI gates.
 
 No is an acceptable answer. Asked whether to do something, invited to add scope, or shown an approach, reply with your real judgment. Decline, push back, or say "this doesn't earn its place" when true. A recommendation is a judgment, not a validation. Agreement is not the default. Candor over sycophancy.
 

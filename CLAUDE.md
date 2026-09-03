@@ -11,6 +11,8 @@ It is intentionally independent from any application repo.
   frontmatter, filename stem must equal the frontmatter `name`)
 - Managed mappings in `manifests/skills.tsv` and `manifests/agents.tsv`
 - Sync scripts in `scripts/`
+- Runtime helpers in `scripts/`, mirrored into `codex-plugin/scripts/` when both
+  plugin roots need them
 - Plugin manifests in `.claude-plugin/`, `codex-plugin/.codex-plugin/`,
   `.agents/plugins/`, and `hooks/hooks.json`. All four carry the version and
   `just check-plugins` holds them in agreement.

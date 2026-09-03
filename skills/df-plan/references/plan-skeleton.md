@@ -39,6 +39,8 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 **Depends on.** <PR id, or None.>
 
+**Branch.** <Independent from main. Or: Dependent on PR-id.>
+
 **Budget.** <From the run state. Remaining dispatches and wall clock, and this PR's expected draw. Or the no-run-state note.>
 
 **You see.**

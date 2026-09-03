@@ -8,7 +8,7 @@ import process from "node:process";
 const RULE =
 	"Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.";
 const TASK_CAP = 8;
-const PR_BLOCKS = ["Depends on.", "Budget.", "You see.", "Verify, unit.", "Verify, live.", "Verify, perf."];
+const PR_BLOCKS = ["Depends on.", "Branch.", "Budget.", "You see.", "Verify, unit.", "Verify, live.", "Verify, perf."];
 const TASK_BLOCKS = ["Files.", "Interfaces.", "Steps."];
 const HEADER_FIELDS = ["Goal.", "Spec.", "Design.", "Lane."];
 const PERF_ITEMS = ["Metric.", "Probe.", "Baseline.", "Rule."];
@@ -170,6 +170,19 @@ for (const pr of prSections) {
 
 	const depends = block("Depends on.");
 	if (depends && depends.rest === "") fail(depends.n, `${pr.title}: Depends on names nothing`);
+	const branch = block("Branch.");
+	if (depends && branch) {
+		if (depends.rest === "None." && branch.rest !== "Independent from main.") {
+			fail(branch.n, `${pr.title}: an independent PR must say "Branch. Independent from main."`);
+		} else if (depends.rest !== "None.") {
+			const dependency = depends.rest.match(/^(PR-[A-Za-z0-9._-]+)\.$/);
+			if (!dependency) {
+				fail(depends.n, `${pr.title}: Depends on must be "None." or one PR id`);
+			} else if (branch.rest !== `Dependent on ${dependency[1]}.`) {
+				fail(branch.n, `${pr.title}: Branch must say "Dependent on ${dependency[1]}."`);
+			}
+		}
+	}
 
 	const budget = block("Budget.");
 	if (budget && budget.rest === "" && budget.lines.every((l) => l.text.trim() === "")) {
