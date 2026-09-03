@@ -273,7 +273,7 @@ reference files are held byte-identical by `just check-parity`, with a short
 allowlist for the files that carry sanctioned harness differences.
 
 When Claude Code deliberately assigns a background unit to Codex,
-`scripts/df-codex-exec.sh` provides the durable cross-harness transport. It
+`scripts/df-codex-exec.sh` provides the durable Claude-to-Codex transport. It
 ships only in the Claude plugin root. Codex-native orchestration uses Codex
 subagent and worktree threads and never calls that wrapper.
 
