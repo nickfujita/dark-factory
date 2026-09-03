@@ -62,12 +62,14 @@ runs until something external stops it. The v2 design treats that as the
 problem to solve. Autonomy inside a run is high. The boundaries are deliberate,
 and they are where the human stays.
 
-Four things are still human by design:
+Five things are still human by design:
 
 - entering the mode, because a casual question should never start a pipeline
 - confirming the lane, because ceremony has to be proportional to consequence
 - the technical design checkpoint, because the PRD says what to build and how
   to build it still benefits from judgment
+- the visual design checkpoint for graphical UI changes, because a driven mock
+  catches hierarchy and interaction mistakes before the plan turns them into work
 - merging, because the operator merges every PR and the agent never does
 
 The framework is built so you can remove yourself from steps as trust builds,
@@ -172,11 +174,16 @@ bounded loops and bypasses, and each loop label names its bound.
 ```mermaid
 flowchart TD
   ENTRY["feature playbook entry"] --> PRDI["df-prd-interview (lite Standard, full High-consequence)"]
-  ENTRY -.->|Quick lane, df records the finish predicate, no PRD, challenge, or runbook| IMPL
+  ENTRY -.->|Quick lane, no new visual design| IMPL
+  ENTRY -.->|Quick lane, new visual design| PROTO
   PRDI --> PRDC["df-prd-challenge"]
   PRDC -.->|hardened loop High-consequence, dispatch budget, delta-only recheck| PRDC
   PRDC -->|single pass in Standard| DESIGN["df-design"]
-  DESIGN --> PLAN["df-plan (skippable for small changes)"]
+  DESIGN --> UI{"graphical UI change?"}
+  UI -->|yes| PROTO["prototype playbook, driven mock"]
+  PROTO --> APPROVE["operator approves visual direction"]
+  APPROVE --> PLAN["df-plan (skippable for small changes)"]
+  UI -->|no, skip recorded| PLAN
   PLAN --> QAGEN["df-verify-coverage"]
   QAGEN --> QAVAL["df-qa-validation"]
 

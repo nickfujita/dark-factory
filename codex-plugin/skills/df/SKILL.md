@@ -21,6 +21,8 @@ Classify the ask into a lane before any work. Propose the lane, get the operator
 
 **Quick.** For a bug fix, small UI change, or config change with named files or a named surface and one acceptance target. Record a finish predicate up front. That predicate is the acceptance. The lane skips the PRD interview, the challenge round, and the QA runbook. Review is one reviewer, single pass, lead adjudication. Verify on the matching surface. Delivery is one PR. The TDD escape hatch ("prefer no new test over a bad test", plus the closest executable check) applies to feature work only, never to a reproduced defect.
 
+A Quick-lane change that chooses a new visual design still runs `playbooks/prototype.md` and pauses for operator approval before implementation. A pixel-for-pixel restoration of an already approved design does not. Quick removes ceremony, not the visual decision.
+
 **Standard.** For a typical feature whose requirements fit a small PRD. The lane includes:
 
 - a lite PRD interview
@@ -54,6 +56,7 @@ Match the task to a playbook, open its file, and copy its steps into the todo li
 | A reported defect to reproduce, root-cause, and fix with runtime evidence. | `playbooks/bug-fix.md` | Ported |
 | A measured slowness to trace and improve against a baseline. | `playbooks/perf-issue.md` | Ported |
 | A behavior-preserving change to structure or shape. Rename, extract, inline, dedupe, move. | `playbooks/refactoring.md` | Ported |
+| A throwaway visual or behavioral experiment that settles a design choice before production work. | `playbooks/prototype.md` | Ported |
 | New or changed behavior. Routes into the artifact spine. PRD, challenge, design, plan, implement, verify, review, acceptance. | `playbooks/feature.md` | Ported |
 
 ## Playbooks into todos

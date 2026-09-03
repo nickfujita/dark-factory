@@ -15,6 +15,7 @@ to df-code-review when everything passes.
 
 - Feature branch checked out with implementation nominally complete
 - PRD (`docs/prd-<feature>.md`) exists, and the coverage handoff from `df-verify-coverage` names the feature-map entries this change touches
+- For a user-facing graphical UI change, `<run-dir>/work/prototype/approved-ui-prototype.md` exists
 - agent-browser available (`agent-browser --version`)
 - Application launchable through the project's verification skill for each medium touched
 
@@ -149,6 +150,8 @@ not a step assertion failure), check the session:
 If restart fails, mark all remaining TCs as
 `- [ ] TC-<id>: <name> — NOT RUN: browser session lost after TC-<prev-id>`
 in `## QA Failures` and proceed to Step 4.
+
+**Compare an approved visual prototype.** If `<run-dir>/work/prototype/approved-ui-prototype.md` exists, read it before closing the browser. Drive the implementation through every material state named in the record at each tested viewport. Capture fresh implementation screenshots beside the dev-verification evidence. Compare hierarchy, copy, density, responsive behavior, and interactions against the approved prototype. Pixel equality is required only when the approval record says so. An unexplained difference is a QA failure. Record it in `## QA Failures`; do not redefine the approved design during verification.
 
 **Always close the browser when done** (success, failure, or interruption):
 

@@ -27,6 +27,7 @@ invoke the owner.
 
 - A PRD with Status Hardened, Approved, or Approved with open items
 - A PRD that passed its quality gate, so its acceptance criteria are testable
+- For a user-facing graphical UI change, the approved prototype record from df-design
 
 ## Workflow
 
@@ -124,6 +125,8 @@ A requirement with none of the three is a gap. Close it by invoking
 `maintain-verification-skill` for a missing recipe, by naming the programmatic
 test the plan will carry, or by writing the UNTESTABLE line with a real reason.
 Leaving it silent is not an option.
+
+For a user-facing graphical UI change, read the approved prototype record. Every material state and interaction in that record that implements a PRD requirement must appear in the matching feature-map recipe. The prototype clarifies presentation; it does not create a requirement that the PRD does not contain.
 
 **Reverse.** Every map entry this feature adds or changes traces back to a
 requirement. One that does not is scope creep. Drop it, or get the requirement

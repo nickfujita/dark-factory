@@ -19,9 +19,10 @@ Open a todo list with one entry per phase before starting. The list shows phase 
 
 1. Ground
 2. Sketch
-3. Agree
-4. Implement
-5. Scrap
+3. Mock UI
+4. Agree
+5. Implement
+6. Scrap
 
 ## Phase A: Ground the problem
 
@@ -43,13 +44,24 @@ Compare viable candidates on interface depth. Prefer the design that hides more 
 
 You synthesize. Pick a base candidate, graft what the others did better, reject the rest with reasons, and record the choice in the rationale's "Synthesis decision" section.
 
-## Phase C: Agree, lane-aware
+## Phase C: Mock user-facing UI
+
+Classify whether the settled requirements change a user-facing graphical UI. A change to layout, interaction, visual hierarchy, density, responsive behavior, or user-facing copy arrangement counts. A pixel-for-pixel restoration of an already approved design does not.
+
+For a qualifying UI change, run `../df/playbooks/prototype.md` after the technical sketch and before df-plan. The prototype is visual design, not production implementation. Ground it in the current running product and its design system. Drive every material state and interaction, capture the viewports that matter, and give the operator a viewable artifact.
+
+Stop for explicit operator approval. Store the approved artifact record at `<run-dir>/work/prototype/approved-ui-prototype.md` as the prototype playbook specifies. Do not start df-plan until that record exists. If the operator changes the direction, revise the prototype and drive it again. Treat the approved mock as an input to the plan and to later visual verification.
+
+For non-UI work, record `prototype skipped: no user-facing visual change` and continue. Do not create a mock to add ceremony to backend work.
+
+## Phase D: Agree, lane-aware
 
 The checkpoint follows the lane. It is not opt-in.
 
-- **Standard.** No separate pause here. The synthesized design ships with the plan, and the operator signs off on both together at the df-plan sign-off. Surface the design with the plan and get one combined sign-off.
-- **High-consequence.** Explicit checkpoint. Surface the synthesized design and pause for operator sign-off before any implementation.
-- **Quick escalation.** Surface the sketch in the thread and continue. The recorded finish predicate stays the acceptance.
+- **Standard, no visual UI change.** No separate pause here. The synthesized design ships with the plan, and the operator signs off on both together at the df-plan sign-off.
+- **Standard, visual UI change.** Phase C is an earlier mandatory checkpoint. The operator approves the visual direction before planning. Surface the technical design with the later plan for their combined sign-off.
+- **High-consequence.** Explicit checkpoint. Surface the synthesized technical design and, when Phase C applies, the driven prototype. Pause for operator sign-off before planning.
+- **Quick escalation.** Surface the sketch in the thread. When Phase C applies, get visual approval before continuing. The recorded finish predicate stays the acceptance.
 
 There is no one-way ratchet onto the heavier path. When grounding or the sketch shows the ask is smaller than the lane assumed, say so and propose de-escalation. The operator confirms lane changes in both directions. Nothing escalates itself silently, and review findings never change the lane.
 
@@ -57,13 +69,13 @@ The synthesis can ship as its own commit in any lane. That is the scaffold-first
 
 If the operator pushes back on the shape, at a checkpoint or after the fact, treat that as Phase A evidence. Re-ground and re-run Phase B before writing more code.
 
-## Phase D: Implement against the sketch
+## Phase E: Implement against the sketch
 
 Replace `not implemented` bodies with code, pseudocode with logic. The synthesized sketch is the contract.
 
 Deviations from the sketch are signal worth surfacing, not friction to absorb silently. If a function needs a parameter the sketch didn't anticipate, ask whether the sketch was wrong, the requirement was missed, or the implementation is overreaching. Surface it; don't bolt it on.
 
-## Phase E: Scrap when the architecture is wrong
+## Phase F: Scrap when the architecture is wrong
 
 If implementation keeps producing friction the sketch can't absorb, throw the sketch out. Don't bolt fixes onto a wrong design, per the redesign-from-first-principles and fix-root-causes principles.
 
@@ -74,7 +86,7 @@ The signal is a *pattern*, not single instances. Tells:
 - Types that need escape hatches (`any`, casts, optional fields always set in practice) to compile.
 - The "we need a lock" reflex when the sketch said the state wasn't shared.
 - Callers having to know the abstraction's internal rules to use it.
-- Two or more independent Phase D deviations of the same shape across the implementation. Surfacing deviations is Phase D's job; a repeated pattern of them is Phase E's trigger.
+- Two or more independent Phase E deviations of the same shape across the implementation. Surfacing deviations is Phase E's job; a repeated pattern of them is Phase F's trigger.
 
 Use judgment. A few edge cases don't condemn an architecture. Some problems are legitimately complex; complexity in the data is not complexity in the design. The rewrite signal is repeated friction of the same shape, not single hard cases.
 
