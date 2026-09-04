@@ -53,9 +53,9 @@ for pair in \
     || note "version drift: $where has '$got', $claude_plugin has '$v_claude_plugin'"
 done
 
-# Both plugin roots need the run-state accessor, and the two roots do not nest,
-# so the Codex root carries a copy. Byte-identical or it is drift.
-for s in df-state.sh df-check-leakage.sh; do
+# Both plugin roots need these runtime helpers, and the two roots do not nest,
+# so the Codex root carries copies. Byte-identical or it is drift.
+for s in df-state.sh df-check-leakage.sh df-stack.sh; do
   if ! cmp -s "scripts/$s" "codex-plugin/scripts/$s"; then
     note "codex-plugin/scripts/$s differs from scripts/$s"
   fi

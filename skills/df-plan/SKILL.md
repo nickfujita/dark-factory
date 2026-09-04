@@ -36,7 +36,7 @@ Spawn read-only explorers with the Agent tool, in the background, on the menial 
 
 ## Slice into PRs
 
-One PR is one change with its own evidence (the sequence-verifiable-units principle). A Standard or High-consequence feature ships as several small PRs behind the feature flag, typically three to seven, merging as each goes green. Independent PRs come first and branch from main. A branch-on-branch chain is only for PRs that genuinely depend on each other.
+One PR is one change with its own evidence (the sequence-verifiable-units principle). A Standard or High-consequence feature ships as several small PRs behind the feature flag, typically three to seven, merging as each goes green. Set `Depends on. None.` and `Branch. Independent from main.` for every independent PR. Do not stack independent work merely because it belongs to the feature. Set `Depends on. PR-<id>.` and `Branch. Dependent on PR-<id>.` only when the upper PR cannot work without that lower PR. The plan checker enforces that pairing. The PR-opening playbook registers a genuine branch chain as a native GitHub stack when the repository supports it. Its capability fallback preserves the plain chain.
 
 **Vertical slice first.** Order the PRs so a user-visible slice lands early, in the first PR or two. A plan whose visible surface is all at the end is misordered; reorder it before writing any verification. The **You see** block makes this checkable. When the early PRs' You see boxes name only internal state, either the ordering is wrong or the slice is missing.
 
@@ -71,7 +71,7 @@ Every PR block carries a Budget line sourced from the run state, never invented.
 
 1. Unless the operator names a path, write the plan into the run's own state
    directory, `bash scripts/df-state.sh path "<run-id>"`.
-2. Copy the skeleton from `references/plan-skeleton.md` and fill every placeholder. Keep every heading and block in the order shown. One H2 block per PR, `### Task <n>. <name>` headings inside it.
+2. Copy the skeleton from `references/plan-skeleton.md` and fill every placeholder. Keep every heading and block in the order shown. One H2 block per PR, `### Task <n>. <name>` headings inside it. For each PR, pair `Depends on.` with the exact matching `Branch.` value.
 3. The body is a how-to. Appendices hold explanation and record. Short declarative sentences. No long dashes. No mid-sentence colons. The technical-writing and unslop skills own the full rule set.
 4. Run the checker beside this skill, `node <this skill's directory>/scripts/check-plan.mjs <plan file>`, and fix every defect line it prints (the encode-lessons-in-structure principle). It enforces the skeleton's shape, the verification rule in every block, the punctuation bans, and the placeholder bans. The `D5 gate` line it prints for a plan over 8 tasks is a gate to route to the operator, not a defect to edit away.
 

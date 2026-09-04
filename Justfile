@@ -106,6 +106,11 @@ check-state:
 check-leakage:
 	bash scripts/test-df-check-leakage.sh
 
+# Native stacked-PR acceptance: capability fallback, dependency routing,
+# REST-only registration, and the no-history-rewrite/no-merge boundary.
+check-stack:
+	bash scripts/test-df-stack.sh
+
 # Claude-only durable Codex worker transport: state, resume, bounded provider
 # retry, and a sandbox mode that cannot change silently between turns.
 check-claude-codex-transport:
@@ -205,6 +210,7 @@ check:
 	just check-parity
 	just check-state
 	just check-leakage
+	just check-stack
 	just check-claude-codex-transport
 	just check-ui-prototype-flow
 	just check-no-repo-scratch

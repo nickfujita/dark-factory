@@ -74,9 +74,9 @@ Size the brief to the unit. A one-command unit gets the template collapsed to a 
 
 ## Branch discipline
 
-Plain git and gh, no stacking tool. Branch from main for independent units. A branch chain exists only when PRs genuinely depend on each other, with the chain order named in each chained PR's description.
+Branch from the repository's default branch, normally `main`, for independent units. Never stack independent PRs. A branch chain exists only when PRs genuinely depend on each other. Name its bottom-to-top order in every chained PR's description. After the plain chain exists, follow `playbooks/df-open-pr.md` to register or extend the native GitHub stack through `scripts/df-stack.sh`. If capability detection returns its fallback status, keep the plain chain and report the reason.
 
-- Workers never rebase and never force-push. Anything rebase-shaped is reported upward and dispatched deliberately.
+- Workers never rebase and never force-push. Do not run any `gh stack` command. Anything rebase-shaped is reported upward and dispatched deliberately.
 - One writer per worktree or branch, with the holder recorded in the standing orders.
 - PR closes and retargets are coordinator decisions, dispatched with briefs like any other unit. Closing a base PR orphans every chain above it.
 - Babysitters follow `playbooks/babysit.md`, one per chain, and report conflicts upward rather than rebasing.

@@ -38,11 +38,11 @@ forbid() { # file regex description
 [ -f "$PLAYBOOK" ] || { fail "playbook missing at $PLAYBOOK"; exit 1; }
 [ -f "$ROUTER" ] || { fail "router skill missing at $ROUTER"; exit 1; }
 
-require "$PLAYBOOK" "Never merge, in any lane" \
-  "df-open-pr forbids merging in every lane"
+require "$PLAYBOOK" "Never merge a PR or a stack, in any lane" \
+  "df-open-pr forbids merging PRs and stacks in every lane"
 require "$PLAYBOOK" "The operator merges every PR" \
   "df-open-pr names the operator as the only merger"
-require "$ROUTER" "Merging a PR and force-pushing are not pause items" \
+require "$ROUTER" "Merging a PR or stack and force-pushing are not pause items" \
   "the router excludes merge and force-push from the pause list"
 require "$ROUTER" "They are never done at all" \
   "the router states the never-do plainly"

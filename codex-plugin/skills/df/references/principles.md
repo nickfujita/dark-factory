@@ -78,7 +78,7 @@ Applies when debugging. "Trace every problem to its root cause and fix it there.
 
 ### Sequence work into verifiable units
 
-Applies to multi-step work and to how commits and PRs stack. "Order work as a sequence of small units, each ending in a state you can check, and don't advance until the current one is green." "Never batch the edits and verify once at the end." The canonical delivery shape is "the failing test first, then the fix on top", so a reviewer watches it go red, then green.
+Applies to multi-step work and to how commits and PRs form a sequence. "Order work as a sequence of small units, each ending in a state you can check, and don't advance until the current one is green." "Never batch the edits and verify once at the end." The canonical delivery shape is "the failing test first, then the fix on top", so a reviewer watches it go red, then green. Sequence does not imply dependency. Branch independent PRs from main. Use a native GitHub stack only when one PR depends on another.
 
 ## Delegation
 
