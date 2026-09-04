@@ -2,7 +2,7 @@
 
 > df-implement executes this plan task by task. Never hand it to any other execution skill.
 
-This plan has 21 delivery units across Dark Factory, Spellbook, and Spellguard. PR-DF-P0 carries the planning record. PR-SG-2 is the first user-facing slice. Three linear dependency chains qualify for native stack registration.
+This plan has 20 delivery units across Dark Factory, Spellbook, and Spellguard. PR-DF-P0 carries the planning record. PR-SG-2 is the first user-facing slice. Three linear dependency chains qualify for native stack registration.
 
 **Goal.** Commit a restart-safe Dark Factory verification lifecycle and the first honest Spellguard catalog-to-recipe migration.
 **Spec.** `/home/dev/dark-factory/docs/prd-verification-system.md`
@@ -1301,3 +1301,16 @@ Nothing was prototyped. The work changes agent instructions, schemas, scripts, a
 - PR-SG-6 must not provision cloud infrastructure during this run. Its live proof stops at the local wizard and records a missing prerequisite as BLOCKED.
 - Hosted MCP entitlement and production advertisement may stay BLOCKED. Offline parity cannot clear those axes.
 - Generated inventory is not complete product coverage. Missing feature-medium pairs remain unassessed.
+
+## Appendix D. Requirement trace
+
+- REQ-001 and NEG-001 map to Tasks 2 and 3.
+- REQ-002 maps to Tasks 13 through 16.
+- REQ-003 and NEG-002 map to Tasks 13 through 16 and 18 through 23.
+- REQ-004, NEG-004, and NEG-008 map to Tasks 2, 11, and 12.
+- REQ-005 and NEG-005 map to Tasks 8, 17, and 18 through 23.
+- REQ-006 and NEG-006 map to Tasks 4 through 9.
+- REQ-007, NEG-003, and NEG-007 map to Tasks 12 through 23.
+- REQ-008 maps to Task 2.
+- REQ-009 and NEG-009 map to every task's Budget and verification blocks.
+- REQ-010 maps to Tasks 18 through 23 and the single-owner cumulative migration record.
