@@ -69,7 +69,7 @@ Invoke each stage skill explicitly and pass artifact paths forward. Never rely o
 
 ## Subagents
 
-Spawn native Codex subagents, or fresh `codex exec` processes where a runner script drives the work. Defaults for every spawn:
+Spawn native Codex subagents. Defaults for every spawn:
 
 - run in the background
 - file pointers, not inlined context

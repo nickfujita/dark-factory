@@ -80,6 +80,13 @@ You own every subagent's work. Review the diff and write your own summary. Do no
 
 Read-only delegates get a read-only instruction plus sandboxing where available. An independent reviewer reads from a disposable worktree snapshot created for the review and deleted after, never from the live tree. A degraded sandbox must only ever touch a throwaway.
 
+A Claude coordinator may deliberately assign a program unit to Codex through
+`scripts/df-codex-exec.sh`. This is a Claude-to-Codex compatibility boundary,
+not another default execution mode. Use it only for cross-family execution or
+durable multi-turn continuity, and follow
+`references/codex-background-workers.md`. A Codex coordinator uses native Codex
+subagents and worktree threads instead.
+
 ## Autonomy
 
 Just do it. Reversible work proceeds without asking.
