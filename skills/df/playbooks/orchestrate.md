@@ -16,6 +16,7 @@ Open a todo list with the steps below copied in verbatim. A step you skip stays 
 
 - **Coordinator (this session).** Frames, authors briefs, drains the inbox, owns the operator report, makes judgment calls. It never authors or edits code; conflicted merges and code changes are always dispatches. Mechanically pushing a verified unit's branch and opening its PR is bookkeeping the coordinator may do itself. State reads and writes go through `scripts/df-state.sh` at drain points, one command in and one line out, to conserve context. The script lands in a parallel wave of this port. It never spawns, waits, or wakes anything.
 - **Worker / verifier.** Local subagents through the Agent tool, background by default, roles resolved through `references/model-policy.md`. Prefer fewer, broader workers. One writer per worktree or branch, per the separate-before-serializing-shared-state principle. A unit's verifier runs on the other model family through the cross-model transport named in the df model policy, reading from a disposable worktree snapshot.
+- **Codex worker (Claude coordinator only).** When a unit is deliberately assigned to the Codex model family, use `scripts/df-codex-exec.sh` under `references/codex-background-workers.md`. It gives the Claude coordinator a durable, resumable Codex thread. It is not a general worker default and does not exist in the Codex plugin.
 
 Depth stays at coordinator and worker. In-flight children cap at 3. That cap makes a sub-coordinator layer pure ceremony at this scale. A program that genuinely exceeds what one coordinator's drains can manage exceeds the subscription; rescope it instead of adding a layer.
 
@@ -91,6 +92,7 @@ A unit is not done until its output is externalized the moment it lands, never b
 ## Liveness and failure
 
 - Never resume an agent to check on it; a resume restarts an idle agent. Probe read-only: dispositions, dispatches, gh, pushed branches. A delegate past its expected runtime with no side effect (commits, pushes, check deltas) is stuck. Stand it down and replace it with a fresh dispatch and consolidated scope.
+- For a Claude-to-Codex worker, `status` is the read-only probe. Resume the recorded thread only to deliver a real next unit or to continue a turn whose wrapper was interrupted.
 - A silent death gets a synthetic disposition row (unit, failure mode, last evidence, options). Replan on evidence as it arrives; never wait for full quiescence.
 - Retry by mode: budget-hit, respawn with smaller scope; transient tool error, retry once. Two retries, then abandon the unit, record it, and replan around it.
 - A zombie that returns hours late reconciles against the current store before anything is accepted; the world moved while it slept. Salvage unique findings through a fresh dispatch, never a blind merge.
