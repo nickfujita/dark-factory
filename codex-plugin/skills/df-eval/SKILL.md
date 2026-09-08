@@ -42,7 +42,7 @@ Rules that hold for every scenario, both kinds:
 - No comparative multi-candidate arena runs by default. A scenario runs one candidate against pass criteria. A comparative run happens only on an explicit operator request, and then one judge scores both sets in a single pass on one scale, blind to which set each came from.
 - A scenario that cannot run yet prints `SKIP:` with the named missing dependency and exits 0. A stub that pretends to pass is worse than no scenario.
 
-Scope order: dark-factory skills first, then verify-spellguard and the scribe skills. The target is the smallest harness that would have caught this week's two drift incidents.
+Evaluate Dark Factory skills in this repository. Evaluate a consuming project's skills only when the operator places that project in scope, using its own fixtures and external run evidence. Do not embed project names, incidents, or evaluation priorities in this shared skill.
 
 ## The retro
 
