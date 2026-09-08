@@ -7,9 +7,9 @@ project supplies its own verification assets and runtime prerequisites.
 
 ### Resolve and freeze delegation policy
 
-At run initialization, Dark Factory resolves every role the selected playbook
-can dispatch. The result is stored with the external run, including the source
-of each value.
+At run initialization, Dark Factory resolves every responsibility for the
+selected harness across all supported lanes. The external role plan stores
+one row per responsibility and lane, including the source of each value.
 
 ```console
 $ node scripts/df-role.mjs prepare-run \
@@ -27,7 +27,8 @@ dispatch.
 ```console
 $ node scripts/df-role.mjs resolve \
     --run example-run \
-    --responsibility design_runners
+    --responsibility design_runners \
+    --lane standard
 KIND=named-agent
 AGENT=terra_xhigh
 SOURCE=shipped
@@ -63,6 +64,7 @@ chat list and never discovers a replacement.
 $ node scripts/df-selection.mjs materialize \
     --ref example-run:sha256:<digest> \
     --repo-root <project-root> \
+    --consumer qa-validation \
     --format paths
 ```
 
@@ -169,6 +171,10 @@ layered config shapes and verifies every named agent definition. A pinned
 native effort stays inside a named-agent definition; callers do not rebuild a
 model/effort pair.
 
+The role plan has no singular lane field. Preparation freezes the full
+responsibility-by-lane matrix for its harness. Resolution and preflight require
+an explicit lane and reject a missing matrix row before reservation.
+
 The frozen plan prevents restart-time configuration drift. Availability is
 still checked immediately before reservation because an agent definition can
 disappear after initialization. Missing agents stop before `df-state reserve`.
@@ -261,6 +267,14 @@ sealed recipe. It writes new evidence under
 records remain historical and unchanged. This separates the reusable recipe,
 the frozen per-run proof set, and what one execution observed.
 
+The CLI maps `seal --run --draft --repo-root` to `sealSelection` and
+`inspect --ref --repo-root` to `openSelection`. The command
+`materialize --ref --repo-root --consumer --format` calls
+`materializeSelection`. Its consumer is exactly `qa-validation`, `dev-verify`,
+`code-review`, or `acceptance`. JSON format emits the returned entry array;
+paths format emits those entries' recipe identities. Neither format rediscovers
+recipes. The input reference is `ref` in every API.
+
 ### Project-owned catalog and migration checks
 
 Dark Factory consumes project-declared inputs without owning their storage or
@@ -298,7 +312,7 @@ synthetic repositories and caller-supplied check results.
 - `df-qa-validation` accepts PRD plus `SelectionRef`; its inline and fresh Codex
   reviews receive all selected recipes.
 - `df-dev-verify` refuses missing selections and drives each selected medium's
-  base skill. Browser-specific logic exists only in the dashboard skill.
+  base skill. Tool-specific logic exists only in the project-declared skill.
 - `df-code-review` includes the selection digest in its report and compares the
   PRD, diff, and selected recipes. It no longer discovers a slug-named runbook.
 - `df-acceptance` uses the same reference, expands entry points, and writes one
@@ -362,7 +376,7 @@ wrapper exists only to pass the same arguments onward.
   changing the measured procedure mid-run.
 - We accept a frozen role plan plus pre-dispatch availability checks in exchange
   for stable restarts without silent fallback.
-- We accept up to one small feature file per catalog-feature/medium pair in
+- We accept up to one small feature file per stable feature-identity/medium pair in
   exchange for unambiguous ownership and conflict-free recipe fan-out.
 - Project-owned catalog projections may support reproducible validation without
   creating a second canonical catalog inside Dark Factory.

@@ -260,7 +260,8 @@ Behavior:
 1. Coverage reports state what is currently proven without presenting catalog
    redirects, automated-test presence, or documentation presence as manual
    verification coverage.
-2. Missing coverage is visible by catalog feature and supported medium.
+2. Missing coverage is visible by stable feature identity and declared medium.
+   Reports include catalog identity only when a catalog is configured.
 3. Each new or modified user-visible feature increases coverage or records why
    the applicable recipe cannot yet be added.
 4. Initial migration prioritizes scenarios already present in legacy QA
@@ -484,7 +485,7 @@ Acceptance:
 | REQ-006 | A user route uses an undeclared medium. | The handoff blocks until the project declares a matching skill and route. |
 | REQ-006 | Automated tests pass but a live recipe fails. | The unit remains unverified and is not handed off as ready. |
 | REQ-007 | A recipe file exists but has never been driven successfully. | It is not presented as passing acceptance evidence. |
-| REQ-007 | A catalog feature has not been assessed on one medium. | The report shows the feature-medium pair as uncovered rather than assuming not present. |
+| REQ-007 | A feature has not been assessed on one medium, with or without a catalog. | The report shows the feature-medium pair as uncovered rather than assuming not present. |
 | REQ-008 | An override file contains an unknown field. | Resolution fails and identifies the source file and field. |
 | REQ-008 | A project override conflicts with a machine override. | The project value wins and provenance is reportable. |
 | REQ-009 | The managed GitHub credential is unavailable. | Local non-mutating work continues; mutation-dependent units record the blocker and restart command without alternate credentials. |

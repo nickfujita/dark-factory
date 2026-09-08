@@ -122,8 +122,8 @@ rg -n 'project|medium|run' \
 - [ ] Write the failing role-policy test with these cases.
 
 ```text
-shipped policy resolves all Claude and Codex responsibilities
-missing mapping reports the exact responsibility
+shipped policy resolves every responsibility and lane pair for each harness
+missing mapping reports the exact responsibility and lane before reservation
 machine override wins over shipped
 project override wins over machine
 unknown field reports its source path and field
@@ -157,7 +157,7 @@ root and codex-plugin policy, script, and docs mirrors match
 }
 ```
 
-- [ ] Make `prepare-run` write `work/role-plan.json` beneath the external run directory with the policy digest, provenance, harness, lane, and every resolution. Use an atomic temporary-file rename.
+- [ ] Make `prepare-run` write `work/role-plan.json` beneath the external run directory with the policy digest, harness, and every responsibility-by-lane resolution with provenance. Freeze all supported lanes for the selected harness, with no singular lane field. Require an explicit lane on resolve and preflight. Use an atomic temporary-file rename.
 - [ ] Make `resolve` read only the frozen plan. Make `preflight` verify named-agent definitions before any reservation.
 - [ ] Run `bash scripts/test-df-role-policy.sh`. Expect PASS.
 - [ ] Run `just check-role-policy && just check-parity && just check-plugins && just check-shell`. Expect PASS.
@@ -165,7 +165,7 @@ root and codex-plugin policy, script, and docs mirrors match
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] `scripts/test-df-role-policy.sh` gains all seven cases above. Run `bash scripts/test-df-role-policy.sh`.
+- [ ] `scripts/test-df-role-policy.sh` gains all eight cases above. Run `bash scripts/test-df-role-policy.sh`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -261,8 +261,8 @@ node scripts/df-role.mjs preflight \
 
 **Interfaces.**
 
-- Consumes. `sealSelection({runId, draftPath, repoRoot}): SelectionRef` and `materializeSelection({selectionRef, repoRoot}): VerificationSelection`.
-- Produces. CLI commands `seal --run --draft --repo-root`, `inspect --ref`, and `materialize --ref --repo-root --format`.
+- Consumes. `sealSelection({runId, draftPath, repoRoot}): SelectionRef`, `openSelection({ref, repoRoot}): VerificationSelection`, and `materializeSelection({ref, repoRoot, consumer}): readonly SelectionEntry[]`. The consumer is exactly `qa-validation`, `dev-verify`, `code-review`, or `acceptance`.
+- Produces. CLI commands `seal --run --draft --repo-root`, `inspect --ref --repo-root`, and `materialize --ref --repo-root --consumer --format`. JSON format emits the validated entry array. Paths format emits its recipe identities.
 
 **Steps.**
 
@@ -290,20 +290,25 @@ root and codex-plugin files match
   "kind": "user-facing",
   "runId": "string",
   "featureSlug": "string",
-  "prd": {"path": "string", "sha256": "64 lowercase hex"},
-  "catalogLink": "null or a committed project link with path and sha256",
+  "prdPath": "string",
+  "prdSha256": "64 lowercase hex",
+  "catalogLink": null,
   "entries": [{
     "id": "string",
     "medium": "project-declared identifier",
-    "skill": {"path": "string", "sha256": "64 lowercase hex"},
-    "recipe": {"path": "string", "subFeature": "string or null", "sha256": "64 lowercase hex"},
+    "skillPath": "string",
+    "skillSha256": "64 lowercase hex",
+    "recipePath": "string",
+    "subFeature": null,
+    "recipeSha256": "64 lowercase hex",
     "requirementIds": ["REQ-000"],
     "negativeRequirementIds": ["NEG-000"]
   }]
 }
 ```
 
-- [ ] Canonicalize object keys and entries before hashing. Write `verification-selections/sha256.json` beneath the external run directory through an atomic rename.
+- [ ] For a configured catalog, replace `catalogLink: null` with an object containing `path` and `sha256`, as defined in the design. For a selected sub-feature, replace `subFeature: null` with its string identifier. The `no-user-route` union member keeps schemaVersion, runId, featureSlug, prdPath, and prdSha256, sets kind to `no-user-route`, requires reason, has an empty entries array, and has no catalogLink field.
+- [ ] Canonicalize object keys and entries before hashing. Use the computed digest as the JSON filename beneath `verification-selections/` in the external run directory. Write through an atomic rename.
 - [ ] Reject path traversal, absolute repository paths, digest mismatch, invalid media, unsealed input, and any discovery fallback.
 - [ ] Run `bash scripts/test-df-selection.sh && just check-parity && just check-plugins && just check-shell`. Expect PASS.
 - [ ] Commit with `git commit -m "feat(df): seal plural verification selections"`.
@@ -343,7 +348,7 @@ root and codex-plugin files match
 
 **Interfaces.**
 
-- Consumes. `SelectionRef` and `df-selection.mjs materialize --ref string --repo-root string --format json`.
+- Consumes. `SelectionRef` and `df-selection.mjs materialize --ref string --repo-root string --consumer qa-validation --format json`.
 - Produces. `run_codex_qa_validation.sh PRD_PATH SELECTION_REF REPO_ROOT OUTPUT_DIR` and a report header containing the selection digest.
 
 **Steps.**
@@ -396,7 +401,7 @@ usage: run_codex_qa_validation.sh PRD_PATH SELECTION_REF REPO_ROOT OUTPUT_DIR
 
 **Interfaces.**
 
-- Consumes. `SelectionRef` and the read-only materialization command from PR-DF-B1.
+- Consumes. `SelectionRef` and `df-selection.mjs materialize --ref string --repo-root string --consumer code-review --format json` from PR-DF-B1.
 - Produces. A code-review input bundle and report header with the immutable selection digest and all recipe identities.
 
 **Steps.**
@@ -441,7 +446,7 @@ usage: run_codex_qa_validation.sh PRD_PATH SELECTION_REF REPO_ROOT OUTPUT_DIR
 
 **Interfaces.**
 
-- Consumes. One `SelectionRef` with one or more exact medium entries.
+- Consumes. One `SelectionRef` through `df-selection.mjs materialize --ref string --repo-root string --consumer dev-verify --format json`, returning the selected entries.
 - Produces. One developer-verification result per entry with recipe identity, medium, driven user route, terminal status, and evidence path.
 
 **Steps.**
@@ -535,7 +540,7 @@ usage: run_codex_qa_validation.sh PRD_PATH SELECTION_REF REPO_ROOT OUTPUT_DIR
 
 **Interfaces.**
 
-- Consumes. One `SelectionRef` and the read-only selection materializer.
+- Consumes. One `SelectionRef` through `df-selection.mjs materialize --ref string --repo-root string --consumer acceptance --format json`, returning the selected entries.
 - Produces. Files under `acceptance/SELECTION_DIGEST/` with one terminal PASS, FAIL, or BLOCKED verdict per selection entry.
 
 **Steps.**
