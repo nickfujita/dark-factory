@@ -59,6 +59,10 @@ Execute every task without pausing to check in between tasks. Progress summaries
 
 Five things stop you, and only these: an irreversible or destructive operation; a security-sensitive action; a side effect outside the worktree, such as a merge, a push to a shared branch, or a publish; budget exhaustion; and a plan so broken that every path forward is a guess.
 
+## PR boundary
+
+Execute only the current eligible PR's tasks. Before dispatching work for a dependent PR, check the predecessor-readiness gate in `../df/playbooks/df-open-pr.md`. A completed task ledger is not a completed PR. At the current PR's boundary, return to the feature playbook for verification, review, and final PR CI. Resume dependent implementation only after the gate passes. Independent PRs do not inherit this dependency hold.
+
 ## The task loop
 
 Background spawns return on their own. Never poll with short sleeps. Drive a long wait with a bounded polling loop, an explicit poll interval and a hard overall cap, and do local bookkeeping while workers run.

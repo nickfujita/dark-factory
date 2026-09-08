@@ -38,6 +38,8 @@ Spawn read-only explorers with the Agent tool, in the background, on the menial 
 
 One PR is one change with its own evidence (the sequence-verifiable-units principle). A Standard or High-consequence feature ships as several small PRs behind the feature flag, typically three to seven, merging as each goes green. Set `Depends on. None.` and `Branch. Independent from main.` for every independent PR. Do not stack independent work merely because it belongs to the feature. Set `Depends on. PR-<id>.` and `Branch. Dependent on PR-<id>.` only when the upper PR cannot work without that lower PR. The plan checker enforces that pairing. The PR-opening playbook registers a genuine branch chain as a native GitHub stack when the repository supports it. Its capability fallback preserves the plain chain.
 
+**Execution order.** Plan the full scope, but schedule each PR's implementation, verification, review, and final CI before dependent implementation starts. Apply the predecessor-readiness gate in `../df/playbooks/df-open-pr.md`. Human review or merge may remain pending. Independent PRs can proceed in parallel.
+
 **Vertical slice first.** Order the PRs so a user-visible slice lands early, in the first PR or two. A plan whose visible surface is all at the end is misordered; reorder it before writing any verification. The **You see** block makes this checkable. When the early PRs' You see boxes name only internal state, either the ordering is wrong or the slice is missing.
 
 ## Slice PRs into tasks
