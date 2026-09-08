@@ -16,7 +16,7 @@
 3. Plan the fix from the trace. If it crosses a function boundary, sketch the design in the thread before delegating. Run df-design when the shape is genuinely contested. Delegate implementation to a subagent in the implementation-delegate role from `references/model-policy.md`, with a specific scope. Review the diff yourself. Capture a post-fix trace with the same capture recipe as the baseline. Verify each attempt before trying the next, per the sequence-work-into-verifiable-units principle in `references/principles.md`.
 4. Parse and compare the trace artifacts with a deterministic script, such as a diff of the extracted numbers or an import into a queryable table. "Inconclusive" or wrong-surface is not a pass. Flag it.
 5. Cite the measurement in the PR.
-6. Run **Opening a PR**, the `playbooks/df-open-pr.md` playbook. It owns the finish: commit shaping, the Why / Scope / Tradeoffs / Blast Radius / Verification description, the worktree cleanup guard, and the never-merge and never-draft rules.
+6. Run **Opening a PR**, the `playbooks/df-open-pr.md` playbook. It owns the finish: commit shaping, the Why / Scope / Tradeoffs / Blast Radius / Verification description, the worktree cleanup guard, and the draft-until-locally-complete, CI-watcher, and never-merge rules.
 
 For sustained improvement against a metric rather than a one-off fix, the hillclimb playbook applies. It is operator-invoked by name.
 
