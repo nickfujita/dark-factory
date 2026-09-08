@@ -1,4 +1,7 @@
-# Cross-repository verification system design
+# Project-independent verification lifecycle design
+
+This is a proposed interface design, not implemented behavior. The consuming
+project supplies its own verification assets and runtime prerequisites.
 
 ## Usage first
 
@@ -10,9 +13,9 @@ of each value.
 
 ```console
 $ node scripts/df-role.mjs prepare-run \
-    --run weekend-verification-2026-09-04 \
+    --run example-run \
     --harness codex \
-    --repo-root /home/dev/dark-factory
+    --repo-root <workflow-repo>
 ROLE_PLAN=<run-dir>/work/role-plan.json
 STATUS=ready
 ```
@@ -23,7 +26,7 @@ dispatch.
 
 ```console
 $ node scripts/df-role.mjs resolve \
-    --run weekend-verification-2026-09-04 \
+    --run example-run \
     --responsibility design_runners
 KIND=named-agent
 AGENT=terra_xhigh
@@ -45,10 +48,10 @@ then seals it in the external run directory.
 
 ```console
 $ node scripts/df-selection.mjs seal \
-    --run weekend-verification-2026-09-04 \
+    --run example-run \
     --draft <run-dir>/work/coverage-selection.json \
-    --repo-root /home/dev/spellguard
-SELECTION_REF=weekend-verification-2026-09-04:sha256:<digest>
+    --repo-root <project-root>
+SELECTION_REF=example-run:sha256:<digest>
 ENTRIES=7
 STATUS=sealed
 ```
@@ -58,8 +61,8 @@ chat list and never discovers a replacement.
 
 ```console
 $ node scripts/df-selection.mjs materialize \
-    --ref weekend-verification-2026-09-04:sha256:<digest> \
-    --repo-root /home/dev/spellguard \
+    --ref example-run:sha256:<digest> \
+    --repo-root <project-root> \
     --format paths
 ```
 
@@ -67,31 +70,17 @@ If a PRD, skill, recipe, sub-feature, medium, or requirement mapping changes,
 materialization fails with the changed field. Coverage must seal a new
 selection and the affected stages rerun.
 
-### Check Spellguard verification coverage
+### Discover project verification inputs
 
-Spellguard keeps one index skill and one base skill per medium. A recipe file
-owns one catalog feature on one medium. Missing files remain visibly unassessed;
-the checker does not manufacture them.
+The project supplies its base skills, stable recipe identities, declared media,
+and optional catalog-provenance check. Dark Factory reads those declarations;
+it does not assume a package manager, command name, catalog layout, product
+schema, or fixed number of media.
 
-```console
-$ pnpm verification:check
-catalog_revision=<spellbook sha>
-product_source_revision=<spellguard sha>
-covered=<n>
-not_present=<n>
-deferred=<n>
-blocked=<n>
-unassessed=<n>
-```
-
-The first runbook migration produces an inventory and mapping report. A
-procedural feature-QA file is removable only when every unique scenario maps to
-a committed recipe or explicit disposition.
-
-```console
-$ pnpm verification:migration-report --base origin/main
-$ pnpm verification:no-new-runbooks --base origin/main
-```
+Synthetic fixtures cover projects with one medium, multiple media, and no
+catalog. A missing recipe stays unassessed. Project-owned migration checks
+report whether unique legacy scenarios remain unmapped. Neither a catalog entry
+nor an existing recipe proves that a live drive passed.
 
 ## Shape
 
@@ -191,7 +180,7 @@ The selection is canonical JSON stored once at
 Coverage is the only writer; every later stage is a read-only consumer.
 
 ```ts
-type Medium = "dashboard" | "cli-tui" | "cli-agent" | "mcp";
+type Medium = string; // Validated against the project-declared identifier set.
 type RecipeIdentity = string & { readonly recipeIdentity: unique symbol };
 type SelectionDigest = string & { readonly selectionDigest: unique symbol };
 
@@ -215,8 +204,7 @@ type VerificationSelection =
       featureSlug: string;
       prdPath: string;
       prdSha256: string;
-      catalogLinkPath: string;
-      catalogLinkSha256: string;
+      catalogLink: Readonly<{ path: string; sha256: string }> | null;
       entries: readonly [SelectionEntry, ...SelectionEntry[]];
     }>
   | Readonly<{
@@ -273,115 +261,35 @@ sealed recipe. It writes new evidence under
 records remain historical and unchanged. This separates the reusable recipe,
 the frozen per-run proof set, and what one execution observed.
 
-### Spellbook link and Spellguard project assets
+### Project-owned catalog and migration checks
 
-The index skill owns a small generated projection, not a second product catalog.
+Dark Factory consumes project-declared inputs without owning their storage or
+implementation. A catalog link is optional. When present, its project-owned
+checker resolves catalog and product revisions in their respective repositories
+and reports provenance. The selection hashes the committed link so later stages
+cannot silently switch it. A null link explicitly means no catalog is configured.
 
-```ts
-type CatalogLink = Readonly<{
-  schemaVersion: 1;
-  spellbook: {
-    repository: "Spellguard/spellbook";
-    catalogRevision: string;
-  };
-  spellguard: {
-    repository: "Spellguard/spellguard-internal";
-    productSourceRevision: string;
-  };
-  snapshotSha256: string;
-}>;
+The consuming project owns these responsibilities:
 
-type FeatureMediumDisposition =
-  | { kind: "covered" }
-  | { kind: "not-present"; reason: string }
-  | { kind: "deferred"; reason: string }
-  | { kind: "blocked"; prerequisite: string };
-```
+- Canonical feature identity and product descriptions.
+- Catalog projection, revision resolution, freshness, and redirect checks.
+- Base skill per declared medium, including launch, diagnosis, driving, evidence,
+  readiness deadlines, and authorized cleanup.
+- Per-feature recipes and separate coverage dispositions.
+- Legacy scenario classification, migration mappings, and retirement checks.
 
-```text
-.agents/skills/verify-spellguard/
-  SKILL.md
-  references/catalog-link.json
-  references/catalog-snapshot.json
-  references/coverage-report.md
-  scripts/check.mjs
-  scripts/report.mjs
-  scripts/migration-report.mjs
-  scripts/no-new-runbooks.mjs
+The generic disposition contract separates a recipe eligible to be driven from
+`not-present`, `deferred`, and `blocked`. Missing assessments remain unassessed.
+A live PASS, FAIL, or BLOCKED result is a different record.
 
-.agents/skills/verify-spellguard-dashboard/
-  SKILL.md
-  features/README.md
-  features/<CATALOG-ID>.md
+Dark Factory refuses a current-coverage claim when a configured project check
+reports stale or divergent provenance. An unmapped legacy scenario prevents
+retirement of that scenario, not unrelated recipe authoring. Historical evidence
+and operational procedures remain outside procedural feature-QA retirement.
 
-.agents/skills/verify-spellguard-cli-tui/
-  SKILL.md
-  features/README.md
-  features/<CATALOG-ID>.md
-
-.agents/skills/verify-spellguard-cli-agent/
-  SKILL.md
-  features/README.md
-  features/<CATALOG-ID>.md
-
-.agents/skills/verify-spellguard-mcp/
-  SKILL.md
-  features/README.md
-  features/<CATALOG-ID>.md
-```
-
-Each catalog-feature/medium pair has at most one file. Covered files contain the
-four required recipe sections. An assessed non-covered file carries one of
-`not-present`, `deferred`, or `blocked` with its reason and has no fake driving
-instructions. A missing file is derived as `unassessed`, never silently
-converted to another disposition.
-
-Each medium skill owns Launch, Doctor, Drive, Evidence, and Cleanup plus a
-90-second deadline per readiness signal. Dashboard uses the real browser
-surface. CLI TUI uses real TTY isolation. CLI agent uses explicit structured
-output and proves it never enters TUI. MCP keeps offline catalog parity and
-hosted-client effects as distinct recipes.
-
-`catalog-snapshot.json` is generated from the exact Spellbook catalog revision
-and contains only stable IDs, active/retired state, and redirect targets needed
-for validation. It omits product descriptions. The checker reads
-`data/source-pin.json` at the catalog revision and requires it to equal the
-link's product-source revision. Ancestry is checked only between Spellguard
-commits. Later user-facing Spellguard source changes make the report stale.
-
-The report cross-joins the generated snapshot with the four media, scans the
-per-medium feature files, and reports covered, not-present, deferred, blocked,
-and unassessed separately. Recipe authors write disjoint `<CATALOG-ID>.md`
-files. One coordinator regenerates the shared snapshot, report, and indexes.
-
-### Runbook migration
-
-The migration generator inventories files and extracts stable scenario anchors;
-it does not decide which documents are procedural feature QA. An authored
-classification maps each source to `procedural-feature-qa`, `historical-evidence`,
-`operational`, or `release`. Only the first class enters recipe migration.
-
-```ts
-type RunbookClass =
-  | "procedural-feature-qa"
-  | "historical-evidence"
-  | "operational"
-  | "release";
-
-type MigratedScenario = Readonly<{
-  sourcePath: string;
-  anchor: string;
-  classification: RunbookClass;
-  recipeIdentity: RecipeIdentity | null;
-  disposition: Exclude<FeatureMediumDisposition, { kind: "covered" }> | null;
-}>;
-```
-
-Deletion validation fails when a removed procedural file has a scenario with
-neither a recipe identity nor an explicit disposition. The no-new-runbook check
-compares the branch to its base and rejects new procedural feature-QA documents.
-It does not reject operational, release, or historical evidence. The local
-check lands first; CI wiring requires separate operator approval.
+No product-specific catalog schema, check command, folder convention, deployment,
+or migration inventory ships as part of this design. Test these boundaries with
+synthetic repositories and caller-supplied check results.
 
 ### Lifecycle consumers
 
@@ -409,10 +317,7 @@ check lands first; CI wiring requires separate operator approval.
 | `references/verification-selection.schema.json` | Versioned selection wire contract |
 | `df-verify-coverage` | Sole selection writer |
 | QA validation, dev verification, code review, acceptance | Read-only selection consumers |
-| Spellbook | Canonical product catalog and source provenance |
-| Spellguard index skill | Catalog projection, aggregate validation, and reports |
-| Four Spellguard medium skills | Surface lifecycle and per-medium feature files |
-| Migration classifier | Runbook category and scenario mappings |
+| Consuming project | Optional catalog, provenance checks, media, skills, recipes, and migration mappings |
 | Dark Factory plan/open-PR stages | Real dependency graph and optional native stack registration |
 
 ## Interface depth
@@ -421,9 +326,8 @@ Callers provide one responsibility or one `SelectionRef`. They do not coordinate
 config precedence, agent-definition lookup, canonical JSON, state paths, recipe
 hashes, catalog checkouts, or evidence locations. `df-role.mjs` is deep because
 it completes resolution and preflight. `df-selection.mjs` is deep because it
-owns the full immutable-selection invariant. Spellguard's index skill is deep
-because it joins catalog provenance and four independent medium maps behind one
-check/report interface.
+owns the full immutable-selection invariant. Project-owned checkers keep their
+catalog and migration representations behind declared inputs.
 
 The design avoids temporal decomposition: selection load, validation, hashing,
 and sealing remain one module because they protect one representation. It avoids
@@ -442,8 +346,7 @@ one selection.
 Two Candidate B ideas were grafted into the base. First, resolved roles freeze
 once per run, with an availability recheck before each reservation. This keeps
 resume behavior stable without hiding a deleted agent definition. Second,
-Spellguard coverage ownership stays federated as one feature file per medium
-and catalog ID. The aggregate checker alone performs the cross-medium join,
+Project recipe ownership stays separate per medium and stable feature identity. The aggregate checker alone performs the cross-medium join,
 which removes shared authoring files from the later fan-out.
 
 The candidates were screened against the design red flags. The chosen modules
@@ -461,8 +364,8 @@ wrapper exists only to pass the same arguments onward.
   for stable restarts without silent fallback.
 - We accept up to one small feature file per catalog-feature/medium pair in
   exchange for unambiguous ownership and conflict-free recipe fan-out.
-- We accept a generated minimal catalog snapshot in Spellguard in exchange for
-  reproducible validation without making Spellguard a second catalog owner.
+- Project-owned catalog projections may support reproducible validation without
+  creating a second canonical catalog inside Dark Factory.
 - We accept external evidence for new runs while preserving existing committed
   historical evidence unchanged.
 
@@ -483,8 +386,8 @@ wrapper exists only to pass the same arguments onward.
 
 - Existing committed acceptance evidence remains historical, but the exact
   migration note that freezes its policy must land with the acceptance change.
-- The Spellbook source-pin reconciliation must complete before any broad
-  current-coverage claim.
+- A configured project provenance check must succeed before a current-coverage
+  claim. Dark Factory does not repair the project's source history.
 - CI wiring for the no-new-runbook check remains out of scope until separately
   approved.
 - Native stack registration can fail its capability probe. The ordinary PR

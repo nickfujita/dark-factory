@@ -1,5 +1,11 @@
 # dark-factory
 
+@AGENTS.md
+
+Follow `AGENTS.md` for the project-independence boundary, shared-tree policy,
+and git rules. These apply to documentation, examples, plans, and PR bodies as
+well as runtime code.
+
 This repo contains workflow assets only (skills, plans, automation scripts).
 It is intentionally independent from any application repo.
 
@@ -62,8 +68,8 @@ Use `--profile` with files based on `profiles/default.env.example` when paths di
 
 ## Git Workflow
 
-Pushing directly to `main` is allowed in this repo. This is a
-workflow/planning repo, not application code.
+Use a feature branch and a pull request. Never push directly to main or merge
+pull requests. Follow the draft and final-CI rules in `AGENTS.md`.
 
 ## Constraints
 
