@@ -545,8 +545,23 @@ That skill belongs to the project, not to df. It stays useful if df is never
 used again, and `create-verification-skill` generates one by adopting the
 verification work a repo already has rather than duplicating it.
 
-A repo with no verification skill gets the full generic flow. One is never
-required.
+In the feature workflow, a touched user-facing medium needs a proved base and
+committed recipes. Internal-only work may use programmatic proof without a
+verification skill.
+
+The verification operations have distinct owners:
+
+| Operation | Owner |
+| --- | --- |
+| Create and prove a missing medium base | `create-verification-skill` |
+| Author planned recipes from approved requirements | `create-verification-skill`, planned-recipe operation |
+| Audit implemented behavior against source and the running app | `maintain-verification-skill` |
+| Map requirements to committed proof plans | `df-verify-coverage` |
+| Execute completed implementation's required checks before review | `df-dev-verify` |
+
+Planned coverage is not acceptance. Developer verification uses the project's
+launch, driver, and cleanup instructions for each medium, including authorized
+disposable remote environments. Missing required evidence blocks readiness.
 
 ## Provenance
 

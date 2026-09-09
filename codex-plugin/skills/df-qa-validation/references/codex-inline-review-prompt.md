@@ -1,7 +1,10 @@
 # Codex QA Validation Review Prompt
 
-Review the PRD and QA runbook pair together. Produce findings that identify
-gaps between the two documents.
+Review the PRD and frozen verification-input snapshot together. Produce findings that identify
+gaps between approved requirements and the planned proof. The snapshot carries
+the coverage handoff and verbatim base, index, and feature-map contents. It is
+temporary input, not a new maintained procedure. Planned sub-features have no
+live result yet. Preserve the distinction from implemented sub-features.
 
 ## Output Format
 
@@ -12,7 +15,7 @@ gaps between the two documents.
 **Category:** [Coverage | Consistency | Testability | Completeness]
 **Requirement:** [Which REQ-xxx, NEG-xxx, or TC-xxx this relates to]
 **Issue:** [2-3 sentences explaining the problem]
-**Suggestion:** [Concrete fix — specify whether the PRD or QA runbook should change]
+**Suggestion:** [Concrete fix — specify whether the PRD or project recipe should change]
 ```
 
 Severity levels:
@@ -24,8 +27,8 @@ Severity levels:
 ## Validation Axes
 
 **Coverage:**
-- Does every REQ-xxx have at least one TC? Flag any uncovered requirements.
-- Does every NEG-xxx have at least one TC? Flag any uncovered negative requirements.
+- Does every REQ have a recipe or justified programmatic proof plan? Flag gaps.
+- Does every NEG have a concrete proof plan? Flag gaps in negative coverage.
 - Does every TC trace to a valid REQ-xxx or NEG-xxx? Flag orphan TCs as scope creep.
 - Does the coverage matrix match the actual test cases? Flag mismatches.
 
@@ -37,8 +40,10 @@ Severity levels:
 
 **Testability:**
 - Are preconditions realistic and achievable in a test environment?
-- Are test steps specific enough to be automated by agent-browser?
-- Do assertions use concrete, observable UI criteria (not internal state)?
+- Are steps specific enough for the declared medium and its driver?
+- Do assertions prove the public contract of that medium? Public CLI flags,
+  API errors, and MCP schemas are valid user-facing criteria. Internal-only
+  requirements may use meaningful programmatic tests without UI recipes.
 - Are there ambiguous steps like "verify it works" without specific checks?
 
 **Completeness:**
@@ -50,6 +55,6 @@ Severity levels:
 ## Rules
 
 - Do NOT suggest new requirements or features — only identify gaps in existing coverage.
-- Do NOT comment on implementation approach — focus on the PRD/QA pair relationship.
+- Do NOT comment on implementation approach — focus on the PRD/verification-plan relationship.
 - Reference specific REQ-xxx, NEG-xxx, and TC-xxx identifiers in every finding.
 - End with a summary: "X Critical, Y High, Z Medium, W Low findings."

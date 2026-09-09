@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: run_codex_qa_validation.sh <prd-path> <qa-path> <output-path>
-# Runs a fresh Codex CLI review of a PRD+QA runbook pair and writes findings to
-# the output path. Designed for the QA runbook validation stage — produces
+# Usage: run_codex_qa_validation.sh <prd-path> <review-input-path> <output-path>
+# Runs a fresh Codex CLI review of a PRD+verification review input pair and writes findings to
+# the output path. Designed for the verification review input validation stage — produces
 # structured findings compatible with the synthesis step.
 # Codex reads the files internally — nothing is inlined into the prompt.
 #
@@ -12,7 +12,7 @@ set -euo pipefail
 # Environment override: CODEX_MIN_BODY_BYTES=400 (minimum accepted body when
 # findings are claimed).
 #
-# Sandbox policy (D26): prefer --sandbox read-only on the live tree. When the
+# Sandbox policy (D26): prefer --sandbox read-only on a frozen snapshot. When the
 # read-only sandbox is unavailable (bwrap network namespaces unsupported, e.g.
 # unprivileged VMs), NEVER run full access on the live tree — point codex at a
 # disposable snapshot (temp git worktree, or cp -a copy for non-git trees),
@@ -20,7 +20,7 @@ set -euo pipefail
 # actually ran.
 
 if [[ $# -lt 3 ]]; then
-  echo "Usage: run_codex_qa_validation.sh <prd-path> <qa-path> <output-path>" >&2
+  echo "Usage: run_codex_qa_validation.sh <prd-path> <review-input-path> <output-path>" >&2
   exit 1
 fi
 
@@ -53,7 +53,7 @@ if [[ ! -f "$prd_path" ]]; then
 fi
 
 if [[ ! -f "$qa_path" ]]; then
-  echo "Error: QA runbook file not found at $qa_path" >&2
+  echo "Error: verification review input file not found at $qa_path" >&2
   exit 1
 fi
 
@@ -73,7 +73,7 @@ fi
 # sandbox is unavailable, review a disposable snapshot instead: a degraded
 # sandbox can then only touch a throwaway copy.
 sandbox_mode="read-only"
-sandbox_note="read-only sandbox on the live tree"
+sandbox_note="read-only sandbox on a frozen snapshot"
 review_tree="$repo_root"
 snapshot_dir=""
 snapshot_kind=""
@@ -89,31 +89,32 @@ cleanup_snapshot() {
 trap cleanup_snapshot EXIT
 
 if ! unshare --net true 2>/dev/null; then
-  snapshot_dir="$(mktemp -d "${TMPDIR:-/tmp}/df-review-snapshot.XXXXXX")"
-  if git -C "$repo_root" rev-parse --git-dir >/dev/null 2>&1 \
-     && git -C "$repo_root" worktree add --detach "$snapshot_dir/tree" HEAD >/dev/null 2>&1; then
-    snapshot_kind="worktree"
-  else
-    snapshot_kind="copy"
-    mkdir -p "$snapshot_dir/tree"
-    cp -a "$repo_root/." "$snapshot_dir/tree/"
-  fi
-  # The PRD and QA runbook under review may be uncommitted; overlay the live
-  # copies so the snapshot reviews the current documents, not HEAD's.
-  mkdir -p "$snapshot_dir/tree/$(dirname "$prd_rel")" "$snapshot_dir/tree/$(dirname "$qa_rel")"
-  cp -f "$prd_path" "$snapshot_dir/tree/$prd_rel"
-  cp -f "$qa_path" "$snapshot_dir/tree/$qa_rel"
-  review_tree="$snapshot_dir/tree"
   sandbox_mode="danger-full-access"
-  sandbox_note="sandbox degraded to danger-full-access on a disposable $snapshot_kind snapshot (unshare --net unavailable); the live tree is not exposed"
 fi
+
+# Freeze both documents in every mode. A run-state input may be outside the
+# repository and cannot be read via its basename in the live checkout.
+snapshot_dir="$(mktemp -d "${TMPDIR:-/tmp}/df-review-snapshot.XXXXXX")"
+if git -C "$repo_root" rev-parse --git-dir >/dev/null 2>&1 \
+   && git -C "$repo_root" worktree add --detach "$snapshot_dir/tree" HEAD >/dev/null 2>&1; then
+  snapshot_kind="worktree"
+else
+  snapshot_kind="copy"
+  mkdir -p "$snapshot_dir/tree"
+  cp -a "$repo_root/." "$snapshot_dir/tree/"
+fi
+mkdir -p "$snapshot_dir/tree/$(dirname "$prd_rel")" "$snapshot_dir/tree/$(dirname "$qa_rel")"
+cp -f "$prd_path" "$snapshot_dir/tree/$prd_rel"
+cp -f "$qa_path" "$snapshot_dir/tree/$qa_rel"
+review_tree="$snapshot_dir/tree"
+sandbox_note="$sandbox_mode on a disposable $snapshot_kind snapshot"
 
 # Write file header to output
 {
-  echo "# Codex QA Runbook Validation Review"
+  echo "# Codex Verification Input Validation Review"
   echo
   echo "- PRD: \`$prd_rel\`"
-  echo "- QA Runbook: \`$qa_rel\`"
+  echo "- Verification Input: \`$qa_rel\`"
   echo "- Generated (UTC): \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`"
   echo "- Reviewer: Codex CLI (fresh process)"
   echo "- Sandbox: $sandbox_note"
@@ -158,20 +159,22 @@ validate_body() {
 }
 
 # Codex has read-only sandbox access to the review tree. Tell it where to find
-# the PRD and QA runbook — no content inlined. stdin is closed: a reviewer
+# the PRD and verification review input — no content inlined. stdin is closed: a reviewer
 # that blocks on stdin produces a header and no findings, then reports success.
 codex_exit=0
 codex exec \
   --sandbox "$sandbox_mode" \
   --config model_reasoning_effort=xhigh \
   -C "$review_tree" \
-  "You are an independent reviewer examining a QA runbook against its source PRD
-(Product Requirements Document). Your goal is to find gaps where the QA
-runbook does not adequately validate the PRD's requirements.
+  "You are an independent reviewer examining a verification review input against its source PRD
+(Product Requirements Document). The input contains a coverage handoff and
+verbatim project-owned base skills, feature maps, and programmatic proof plans.
+Review the intended proof against the approved requirements, not whether a
+planned feature has already been implemented or accepted.
 
 First, read these files:
 - PRD: $prd_rel
-- QA runbook: $qa_rel
+- verification review input: $qa_rel
 
 Review both documents together and produce findings in this exact format:
 
@@ -181,22 +184,22 @@ Review both documents together and produce findings in this exact format:
 **Category:** [Coverage | Consistency | Testability | Completeness]
 **Requirement:** [Which REQ-xxx, NEG-xxx, or TC-xxx this relates to]
 **Issue:** [2-3 sentences explaining the problem]
-**Suggestion:** [Concrete fix — specify whether the PRD or QA runbook should change]
+**Suggestion:** [Concrete fix — specify whether the PRD or verification review input should change]
 
 ---
 
 Severity levels:
 - **Critical**: Requirement completely untested or QA contradicts PRD
 - **High**: Significant coverage gap that will likely miss real defects
-- **Medium**: Improvement that would strengthen the QA runbook
+- **Medium**: Improvement that would strengthen the verification review input
 - **Low**: Minor suggestion or style issue
 
 Focus areas:
-- **Coverage**: PRD requirements that have no corresponding QA test case
+- **Coverage**: PRD requirements without a recipe or justified programmatic proof plan
 - **Consistency**: QA steps or acceptance criteria that contradict the PRD
 - **Testability**: Test cases with vague or unmeasurable pass/fail criteria
 - **Completeness**: Missing edge cases, error paths, or non-functional checks
-  mentioned in the PRD but absent from the QA runbook
+  mentioned in the PRD but absent from the verification review input
 
 IF YOU HAVE NO FINDINGS: output the '## Findings — Codex CLI' header followed
 by a line containing exactly:
@@ -207,7 +210,11 @@ Never return an empty document. Never stop to ask a question — you are running
 non-interactively with no stdin.
 
 Do NOT suggest implementation approaches or architectural decisions.
-Do NOT add new test cases — only identify gaps in existing coverage." \
+Do NOT add requirements or edit recipes. Identify gaps in the supplied plan.
+A planned recipe is not a live PASS. Use each declared medium's public contract;
+do not require browser steps for CLI, TUI, MCP, API, or internal-only behavior.
+Requirement IDs are not catalog IDs. Programmatic-only proof is valid for
+internal requirements. A matching test ID is not evidence of meaningful assertions." \
   <"/dev/null" \
   >"$body_path" \
   2>"$stderr_log" \

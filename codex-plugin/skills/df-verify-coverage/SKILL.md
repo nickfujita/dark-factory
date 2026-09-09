@@ -15,9 +15,12 @@ will drive.
 
 ## What this skill does not own
 
-Creating a project verification skill belongs to `create-verification-skill`.
-Keeping one honest belongs to `maintain-verification-skill`. This stage invokes
-them and never restates their steps. It writes no `features/` entry itself.
+Creating a base and authoring planned recipes belong to
+`create-verification-skill`, through its distinct operations. Auditing
+implemented behavior belongs to `maintain-verification-skill`. This stage
+routes to the owner and never restates its steps. It writes no `features/`
+entry itself. A coverage verdict proves that the verification plan is complete,
+not that future behavior already passed a live run.
 Catching yourself explaining how to shape a Launch section or a feature file
 means the work belongs to one of those two skills. Delete the explanation and
 invoke the owner.
@@ -81,8 +84,10 @@ Default to hybrid when uncertain. It forces the wider search.
 **Medium.** Which user-facing media does this feature touch? Web UI, CLI or
 TUI, API, MCP, desktop, or none. A feature can touch several and most hybrid
 features do. Media decide which verification skills are in scope for step 3,
-because a repo gets one verification skill per medium. Answer with the media
-this feature actually reaches a user through, not every medium the repo has.
+because a repo gets one verification skill per medium. Read and honor the
+project's declared medium ownership before classifying. Supporting HTTP probes
+are not automatically another user-facing medium. Answer with the media this
+feature actually reaches a user through, not every medium the repo has.
 
 "none" is a real answer. A migration, credential plumbing, or an internal
 refactor touches no user-facing medium. Record that and go straight to step 4.
@@ -91,15 +96,17 @@ refactor touches no user-facing medium. Record that and go straight to step 4.
 
 A project's verification skills live in the repo's own skill directory, usually
 `.agents/skills/verify-*/` or `.claude/skills/verify-*/`, one per medium,
-sometimes behind a small index skill. For each medium from step 2, find the
-skill whose medium matches and read its `features/` map.
+sometimes behind a small index skill. Resolve discovery symlinks to canonical
+sources. Distinct skills claiming the same medium are an ownership collision;
+stop until an owner and migration are agreed. For each medium from step 2,
+read the canonical base, its retained proof, and its `features/` map.
 
 | What you find | What to do |
 |---|---|
-| No verification skill for a medium this feature touches | Invoke `create-verification-skill`. Name the medium in the reply. |
-| A skill whose `features/` map has no entry covering this feature | Invoke `maintain-verification-skill` to add the entry. |
-| An entry that describes behavior this feature changes | Invoke `maintain-verification-skill` to correct it. A stale entry silently redirects the proof. |
-| An entry that already covers this feature and still matches | Nothing. Record it. |
+| No verification skill, or an unproven base, for a touched medium | Invoke `create-verification-skill` in base-creation operation. Name the medium. An unexecuted base remains blocked. |
+| A proved base whose map lacks the planned behavior | Invoke `create-verification-skill` in planned-recipe operation with the approved requirements. |
+| An entry whose behavior this feature intentionally changes | Invoke `create-verification-skill` in planned-recipe operation. Preserve unaffected cases and label changed behavior pending live verification. |
+| An entry that already covers the intended requirements | Record it and its planned or previously exercised status; neither is a new acceptance result. |
 | No user-facing medium | No map entry is needed. Record "no user-facing medium" with the reason. |
 
 Never write a map entry yourself and never invent an entry id to make coverage
@@ -121,7 +128,7 @@ mandatory.
 - `UNTESTABLE: <reason>`, written in that exact form
 
 A requirement with none of the three is a gap. Close it by invoking
-`maintain-verification-skill` for a missing recipe, by naming the programmatic
+`create-verification-skill` in planned-recipe operation for a missing recipe, by naming the programmatic
 test the plan will carry, or by writing the UNTESTABLE line with a real reason.
 Leaving it silent is not an option.
 
@@ -135,7 +142,7 @@ Coverage status per requirement:
 
 | Status | Meaning |
 |---|---|
-| `Covered (recipe)` | a committed feature-map entry proves it |
+| `Covered (recipe)` | a committed recipe specifies the proof; execution is pending |
 | `Covered (programmatic)` | UT, IT, or ET only, no recipe |
 | `Covered (both)` | a recipe and programmatic tests |
 | `UNTESTABLE: <reason>` | cannot be proven, with the reason |
@@ -144,28 +151,27 @@ A backend requirement covered only by programmatic tests is
 `Covered (programmatic)` and that is acceptable. It is not UNTESTABLE. Do not
 manufacture a UI surface to reach `Covered (both)`.
 
-Negative requirements are P0. A NEG-xxx with no proof blocks the verdict.
+For every user-facing requirement, map each applicable medium to a recipe.
+Programmatic tests alone cannot stand in for that user path. Carry the required
+automated E2E test plan for each changed user-facing entry as well, per
+`../../references/engineering-standards.md`. This is planned coverage, not a
+claim that an unimplemented test exists or passes.
+
+Negative requirements are P0. A NEG-xxx without a proof plan blocks the verdict.
+Record an inability to prove it, but do not silently exempt a negative requirement.
 
 ### 5. Spec guardian check
 
-Read `references/spec-guardian-rules.md` in this skill's own directory. Its
-Scope section names the retired runbook's browser test cases. The forbidden and
-allowed content lists are what carry over. The scope that applies is the one
-named here.
+Read `references/spec-guardian-rules.md` in this skill's own directory.
+Apply its medium-aware boundary to the opening description, sub-features, and
+user-POV navigation prose of changed entries. The driving section can name
+technical handles. Public command flags, protocol messages, and HTTP contracts
+are user-visible behavior when that is the declared medium.
 
-The scope is the user-POV prose of the feature-map entries this run added or
-changed, meaning each entry's "How to get to it" section. The harness recipe
-section is exempt for the same reason programmatic test specs were exempt. It
-necessarily names selectors, commands, and endpoints.
-
-Scan for the forbidden content the rules list. Code identifiers, internal API
-routes, database references, internal architecture, HTTP details, and
-infrastructure or configuration names.
-
-A violation is drift in the map, so the fix belongs to
-`maintain-verification-skill` and not to an edit from this stage. Route it there
-with the offending line quoted. A requirement that cannot be described in
-user-visible language at all is `UNTESTABLE: <reason>` in step 4.
+Route a planned recipe correction to `create-verification-skill` with the
+offending line and approved requirement. Do not invoke a whole-map live audit
+to correct planning prose. Internal behavior that has programmatic proof is
+`Covered (programmatic)`, not UNTESTABLE merely because it has no UI wording.
 
 If step 3 or step 5 changed the map, re-run step 4 over the changed entries
 only, once. Whatever still fails after that re-run goes into the verdict as a
@@ -195,11 +201,14 @@ Media: <medium>[, <medium>...] | none
 Verdict: covered | covered with exemptions | blocked
 
 Verification skills:
-- <medium> -> <skill-dir> (created | maintained | unchanged | none needed)
+- <medium> -> <skill-dir> (created | planned-recipes-authored | unchanged | none needed)
 
 Entries to drive:
 - <skill-dir>/features/<file>.md#<sub-feature> -> REQ-001, REQ-004
 - <skill-dir>/features/<file>.md -> NEG-002
+
+Automated coverage plan:
+- <entry>#<sub-feature> -> ET, test path or planned case and meaningful assertion
 
 Programmatic only:
 - REQ-003 -> IT, what it will assert
@@ -214,7 +223,9 @@ Open items carried from the PRD:
 "Entries to drive" is the handoff `df-acceptance` executes. One line per entry,
 the entry path and the requirements that entry proves, sub-feature after a `#`
 when the entry is driven at sub-feature granularity. Keep the paths repo
-relative so a later stage can open them without the chat context.
+relative so a later stage can open them without the chat context. For mixed
+planned and implemented files, name the sub-feature IDs and their status in the
+handoff; a file-level status must not hide the distinction.
 
 An empty entry list is legal only when Media is none. Omit a section that has
 no rows, except Verdict, Media, and "Entries to drive", which are always

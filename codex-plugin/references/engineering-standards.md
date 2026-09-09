@@ -1,65 +1,58 @@
-# Engineering Standards
+# Engineering standards
 
-Project-agnostic engineering standards that apply to every feature delivered
-through the df artifact spine. These standards are read alongside the PRD and
-the feature's verification recipes during design so technical delivery
-expectations are planned for from the start.
+These project-independent standards govern automated evidence for changed
+behavior. They complement agent-driven verification recipes.
 
-## E2e Test Requirement
+## Automated coverage of user-facing behavior
 
-Every feature-map entry and sub-feature describing user-visible behavior
-must have a corresponding automated end-to-end test. The mapping is 1:1. If
-the map lists eight sub-features for a feature, the e2e suite covers each of
-those scenarios.
+Every changed user-facing feature-map entry and sub-feature needs automated
+end-to-end coverage through the appropriate public interface. Each behavior
+needs an assertion; this does not require one separate test file or test
+function per sub-feature. A combined case can cover several obligations.
 
-**This layer is not optional and the verification skill does not replace it.**
-The two prove different things. Automated tests are deterministic, run in CI
-with no agent involved, and gate every PR. A verification skill is driven by an
-agent against the running app and proves the real user path end to end. A
-feature needs both. A feature-map entry with no automated test is an untested
-feature that happens to be documented, and an automated suite with no
-verification recipe is a green build nobody has driven.
+Automated tests run without an LLM and catch future regressions. Driving the
+committed recipe establishes the current user-path result. Neither layer
+substitutes for the other.
 
-**Test identification:** Each e2e test must reference its feature-map entry id
-in the test name or description so coverage can be verified by scanning test
-files (e.g., `test("login-flow: user can log in", ...)` or
-`describe("login-flow - happy path", ...)`).
+Use feature-map IDs in names or descriptions to locate tests, then inspect
+their setup, actions, and assertions. A matching comment, skipped case, exit-zero
+no-op, or assertion of unrelated behavior does not prove coverage. Record the
+case path, what it asserts, and its actual passing execution.
 
-## CI-Runnable Tests
+## Internal-only behavior
 
-All e2e tests must be runnable in CI without any LLM or AI agent dependency.
-Tests must use deterministic assertions — no flaky checks that depend on
-AI-generated content or non-deterministic outputs.
+Requirements with no user-facing medium may use unit, integration, or protocol
+tests that exercise the actual contract. Do not create a fake UI recipe or
+demand browser E2E coverage for internal code. A programmatic-only requirement
+is not UNTESTABLE when its meaningful assertions can run.
 
-Tests must:
-- Run headlessly (no display required)
-- Complete within reasonable timeouts (configured per project)
-- Produce clear pass/fail output
-- Not require manual intervention or approval steps
+## Plan and execute at the appropriate time
 
-## Use the Project's Existing Test Framework
+During planning, name each proof obligation and the test that will assert it.
+Planned tests and recipes are not execution evidence. Commit automated tests
+with the implementation, not as a later follow-up.
 
-Do not introduce a new e2e framework. Discover and use whatever the project
-already has:
+Use the project's existing runners. Review-ready verification runs the complete
+required scope once implementation is complete. Resolve wrapper scripts and
+aliases so the same suite is not needlessly repeated. During repairs, run the
+failed check first, then recheck affected behavior in a bounded batch. Changes
+to shared code can require the full scope again.
 
-1. Check `package.json` for test dependencies (Playwright, Cypress, etc.)
-2. Check for existing config files (`playwright.config.ts`, `cypress.config.js`, etc.)
-3. Check for an existing `e2e/`, `tests/e2e/`, or `test/` directory with e2e tests
-4. Follow the project's existing patterns for test file naming, directory
-   structure, and assertion style
+Read and satisfy documented service prerequisites before running. Tests must
+have deterministic assertions, bounded execution, and retained pass/fail output.
+A missing service is BLOCKED, not a failed product assertion.
 
-If no e2e framework exists in the project, flag this during brainstorming so
-framework selection becomes an explicit planning task.
+## Readiness
 
-## Tests Committed Alongside Feature Code
+`df-dev-verify` checks coverage before running and again before handoff,
+including the path where existing tests pass without repairs. Required coverage
+needs both inspected assertions and passing execution evidence.
 
-E2e tests are part of the feature deliverable, not a follow-up task. They
-must be:
+A missing framework, unrun or skipped required case, failed assertion, or
+unavailable environment is not ready. Do not silently weaken the requirement.
+An exception needs explicit operator approval naming the missing evidence and
+risk. Report readiness with approved exemptions separately from full PASS.
 
-- Written during implementation (not deferred to a later PR)
-- Committed on the same feature branch as the feature code
-- Passing before the branch moves to code review (`df-code-review`)
-
-The `df-dev-verify` skill enforces this as a hard gate. The branch cannot
-proceed to code review without passing e2e test coverage for every
-feature-map entry the change touches.
+Do not change CI configuration or introduce a new framework without the
+authority required by the project. Record framework selection during planning
+when none exists.

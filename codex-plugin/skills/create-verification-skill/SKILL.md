@@ -1,18 +1,36 @@
 ---
 name: create-verification-skill
-description: "Generate a project-local verification skill that drives the target app the way a user does, any language, framework, or platform. One skill per user-facing medium when a repo has several. Use for $create-verification-skill, \"make a verification skill for this repo\", or when a project has no scripted way to prove UI, CLI, or service behavior."
+description: "Create a project-local verification skill or author planned feature recipes under an existing medium owner. One skill per user-facing medium when a repo has several. Use for $create-verification-skill, \"make a verification skill for this repo\", or when a project has no scripted way to prove UI, CLI, or service behavior."
 ---
 
 # Create a verification skill
 
 Every serious project needs a scripted way to drive the real app and prove behavior: launch it, exercise a feature the way a user would, and capture evidence. This skill generates that as a project-local skill tailored to the repo, written into the target repo's own skill directory. Use `.agents/skills/verify-<app>/` when the repo already has that convention, else `.claude/skills/verify-<app>/`. You write the generator's output for the next agent, not for a human. It will be read cold, mid-task, by an agent that has never seen the app.
 
+## Choose the operation
+
+- **Create a base.** Establish a missing medium's launch, doctor, drive,
+  evidence, and cleanup contract. Follow steps 0 through 6, including live proof.
+- **Author planned recipes.** Given approved requirements for new or changed
+  behavior, extend the existing medium's feature map through the planning
+  procedure below. Do not run a full maintenance audit to write future behavior.
+
+This skill owns initial creation and planned recipe authoring.
+`maintain-verification-skill` owns source-and-live audits of implemented
+behavior. Neither operation may change product behavior to make a recipe pass.
+
 ## 0. Inventory what the repo already has
 
 Never generate over the top of existing work. A repo that has been worked on
 for a while usually has pieces of this already: a dev-stack skill, an e2e
 harness, a sandbox or workbench helper, a provisioning script. List the repo's
-own skill directories and its scripts before writing anything.
+own skill directories and its scripts before writing anything. Read declared
+project ownership rules or registries and inspect in-flight work. Resolve
+symlinks to their canonical source so discovery aliases are not mistaken for
+different owners. Follow the project's approved medium names; a new provider,
+feature, deployment profile, or test environment is not a new medium.
+If two candidates own the same medium, report the collision and consolidate
+under an agreed owner before generating. Do not choose arbitrarily.
 
 For each thing you find, decide one of three, and say which in the handover:
 
@@ -42,7 +60,7 @@ If the checkout doesn't build or start as-is, fix that first (or report it preci
 
 ## 2. Generate the skill
 
-Write `SKILL.md` in the chosen skill directory. The YAML frontmatter carries `name: verify-<app>` and a `description` that names the app, the surface, and when to reach for it. Without frontmatter the skill never registers. The body has these sections, each grounded in what the interview actually found, no placeholders left:
+Write `SKILL.md` in the chosen skill directory. The YAML frontmatter `name` must equal the chosen directory name, such as `verify-<app>-<medium>` for a medium owner or `verify-<app>` for its routing index. Use a `description` that names the app, the surface, and when to reach for it. Without frontmatter the skill never registers. The body has these sections, each grounded in what the interview actually found, no placeholders left:
 
 - **Launch.** The exact command that starts the app for verification, and how to tell it's ready (a log line, a port answering, a prompt). Include teardown. For a short-lived CLI or TUI there is no server to keep alive. Launch then means build the binary (or install deps) once, then start each drive in its own isolated PTY or tmux session.
 - **Doctor.** One read-only check that answers "is this instance worth driving?" Process up, right version or build, port owned by us, auth valid. An agent runs this first whenever anything looks off.
@@ -55,9 +73,51 @@ Write `SKILL.md` in the chosen skill directory. The YAML frontmatter carries `na
 
 Create `features/README.md` in the skill directory plus one file per user-facing feature you can identify (aim for the top 3 to 5 to start, from routes, commands, menus, or docs). Follow the shape in [`references/feature-map-example/`](references/feature-map-example/), with a README index and one file per feature. Each file answers, from the user's point of view, what the feature is, how to reach it, how to drive it with the harness, and what observable end state proves it works. The four H2s are `Sub-features`, `How to get to it (user POV)`, `Driving it with <harness>`, and `Gotchas`. When the project keeps a product catalog, each feature file carries a `Catalog IDs:` line directly under its opening paragraph naming the catalog entries it covers, so review scoping and acceptance can key on them. Name the catalog and where it lives in the skill body; that pointer belongs to the project, not to df. The map is the repo's maintained verification source. A proof that drives one convenient entry point is incomplete when the map lists others.
 
+## Author planned recipes under an existing base
+
+Use this operation when a planning or validation stage supplies approved
+requirements. Inventory owners as in step 0, then read the selected base and
+affected entries. A usable base needs retained proof of its launch, doctor,
+drive, evidence, and cleanup contract. Missing or unproven bases return to base
+creation; coverage cannot call them ready because their files exist.
+
+Author only the requested entries or sub-features, using step 3's feature-map
+format. Derive expected behavior from the approved requirements, not from what
+the unfinished implementation happens to do. Ground reusable mechanics in the
+base and source. Mark proposed controls, commands, or selectors as planned
+rather than inventing a claim that they already work. A concrete user action,
+observable result, and plan to establish its drive handle are still required.
+
+Mark new or changed behavior `Status: planned; live verification pending`.
+For a file containing both implemented and planned behavior, put this status
+beside each affected sub-feature ID, not across the whole file. List the
+implemented IDs separately so later audits can select them without guessing.
+Preserve unrelated cases, negative requirements, catalog links, and historical
+evidence. An unchanged accepted sub-feature does not lose its evidence merely
+because the same file gains a planned sub-feature. Keep feature-specific
+permissions, fixtures, and deployment needs out of the shared base contract.
+
+Keep requirement mappings separate from catalog mappings. REQ and NEG IDs are
+not catalog IDs. Omit `Catalog IDs:` when no real catalog mapping is supplied
+or found; do not invent one. Record the approved requirement IDs as requirement
+mappings instead. A successful expected denial is a passing negative case,
+not a BLOCKED verification run.
+
+Do not launch the future feature, run all existing recipes, or claim acceptance
+during this operation. Missing future implementation is not a product
+regression. It remains pending until the implemented recipe is driven.
+A base behavior change is separate work and needs proof against an existing
+feature and the affected new flow before the base can be accepted.
+
+Return the owner, changed paths and requirement mappings, pending drive details,
+and planned status to the caller. These recipes are committed with the feature's
+planning work, not shipped as an independent accepted-behavior PR. Do not create
+a second QA runbook. If the operation was invoked standalone, report the
+planned artifact and remaining verification; do not report a proved base.
+
 ## 4. How df finds it
 
-Nothing to register. The skill is a skill: the harness loads it from the repo's
+No Dark Factory registration is required. Honor any project-owned registry and discovery links. The skill is a skill: the harness loads it from the repo's
 own skill directory and its frontmatter `description` is what makes an agent
 reach for it. That is the whole discovery mechanism, so the description has to
 earn it. Name the app, name the medium, and name the moment ("use before
@@ -77,7 +137,7 @@ Two consequences worth stating in the handover:
 
 ## 5. Prove the generated skill before handing it over
 
-Run its own instructions end to end once: launch, doctor, drive ONE mapped feature (one is enough, the map exists so later runs can cover the rest), capture evidence, clean up. After cleanup, confirm the evidence still exists at the named location. A cleanup that eats the proof fails this step. Fix what fails, and run the generated cleanup after every failed iteration too, so broken attempts don't strand processes and ports. A generated skill that was never executed is a draft, not a deliverable.
+For base creation, run its own instructions end to end once: launch, doctor, drive ONE mapped feature (one is enough, the map exists so later runs can cover the rest), capture evidence, clean up. After cleanup, confirm the evidence still exists at the named location. A cleanup that eats the proof fails this step. Fix what fails, and run the generated cleanup after every failed iteration too, so broken attempts don't strand processes and ports. A generated skill that was never executed is a draft, not a deliverable.
 
 ## 6. Offer the maintenance loop
 
