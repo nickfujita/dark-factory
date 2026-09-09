@@ -59,13 +59,22 @@ passed from the previous step.
 4. If multiple matches, list them and ask which pair to validate
 
 **Validate:**
-- Both files exist
+- The PRD and every named feature-map file exist
 - PRD status is "Approved" or "Approved with open items" — the latter carries a
   "Known open items — read first" section whose items are known-unresolved, not
   validation findings
 - Each feature-map entry traces to a requirement in the correct PRD
 
-Read both documents fully into context.
+Read the PRD and every named entry fully into context. Read each owning base
+and feature-map index for its medium contract. A `Media: none` handoff may
+have no entries; review its programmatic proof plan instead.
+
+Prepare `<run-dir>/work/qa-review-input.md` as a temporary read-only snapshot.
+Include the coverage block, all named entry paths and sub-feature statuses, and
+verbatim contents of each selected base, index, and feature file. Include the
+programmatic proof plan. This is reviewer input, not a new maintained runbook.
+Do not commit it or use it as the source for later acceptance. Rebuild it after
+any approved input change so both reviewers see the same frozen documents.
 
 ### Step 2: Launch Parallel Reviews (Round 1)
 
@@ -104,7 +113,7 @@ out_path="$run_dir/work/codex-qa-validation-review.md"
 mkdir -p "$run_dir/work"
 bash "$script_path" \
   "<prd-path>" \
-  "<qa-path>" \
+  "$run_dir/work/qa-review-input.md" \
   "$out_path"
 echo "OUTPUT_PATH=$out_path"
 ```
@@ -140,7 +149,7 @@ After both reviews complete:
 ### Step 4: Auto-Apply Non-Semantic Fixes
 
 For each finding tagged `[AUTO-FIX]`:
-1. Apply the fix directly to the PRD, or to the feature-map entry through `maintain-verification-skill`, as appropriate
+1. Apply the fix directly to the PRD, or to the feature-map entry through `create-verification-skill` in planned-recipe operation, as appropriate. Preserve its pending-live-verification status; this review is not an acceptance run
 2. Record the change in an "Auto-Applied Fixes" section for the validation
    report
 
@@ -189,9 +198,11 @@ If the trigger condition is NOT met, proceed to Step 7.
 3. Save to `<run-dir>/reviews/qa-validation/<timestamp>-<feature>-validation.md`
    where `<timestamp>` is `YYYY-MM-DDTHH-MM-SSZ` (UTC) and `<feature>` is
    the feature slug from the PRD
-	4. Commit:
+	4. Commit only approved changes to the PRD and project-owned recipes. If
+   no source changed, make no commit. Never stage the temporary review input.
+   Commit:
 	   ```
-	   git add <prd-path> <qa-path>
+	   git add -- <prd-path> <explicit-changed-feature-map-paths>
 	   git commit -m "docs: verification validation complete for <feature>"
 	   ```
 5. Report: "Validation complete in N round(s). X non-semantic fixes

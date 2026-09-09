@@ -47,7 +47,12 @@ Treat the list as closed.
 
 **Read each named entry.** A feature file carries four H2 sections. `Sub-features` lists the behaviors. `How to get to it (user POV)` lists every user entry point. `Driving it with <harness>` carries a `Preconditions:` line and the labeled bullets that pair each user action with an exact command and an observable result. `Gotchas` lists the traps. Read `Gotchas` before driving, not after failing.
 
-**Environment safety.** Only drive local, dev, or test targets (`localhost`, `127.0.0.1`, `::1`, `.local`, `.test`, `.dev`). If a verification skill's Launch section points at a production-like host, stop and ask for a non-production target.
+**Environment safety.** Verify the exact target, source build, fixture
+ownership, and non-production authorization through the project's verification
+contract before driving. Hostname suffixes alone prove neither safety nor
+ownership. An explicitly authorized disposable remote target is valid when
+that identity can be checked. Stop on production or an unidentified target;
+never substitute privileged credentials to get past a missing managed credential.
 
 **Feature slug.** Take it from the handoff block. It only names the output files.
 

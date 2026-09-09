@@ -1,96 +1,46 @@
-# Spec Guardian Rules
+# User-facing proof boundaries
 
-The QA runbook must describe what the USER sees and does. It must never
-reference internal implementation details. These rules are enforced during
-generation and checked during multi-model validation.
+Apply these rules to a feature recipe's opening description, sub-features, and
+"How to get to it" prose. Those sections describe the user's contract, not the
+implementation. The "Driving it with <harness>" section and programmatic test
+specifications may name selectors, commands, endpoints, and technical fixtures.
 
-## Scope
+## Decide what the user actually sees
 
-These rules apply ONLY to the user-POV prose of a feature-map entry: what the
-feature is, how a user reaches it, and what observable end state proves it
-works. That prose is written from outside the implementation, so it must not
-leak internals.
+The declared medium determines what is public. Do not apply browser-only rules
+to a terminal, protocol, library, or service consumer.
 
-The entry's harness section (`Driving it with <harness>`) is exempt, and so are
-programmatic test specifications (UT-xxx, IT-xxx, ET-xxx), for the same reason.
-Both are technical specifications that necessarily reference code modules, API
-endpoints, selectors, and data structures.
+- Browser users see labels, navigation, displayed results, and public URLs.
+  React state setters and hidden internal routes are not user actions.
+- CLI and TUI users see commands, flags, prompts, keyboard actions, output,
+  files, exit codes, and documented environment settings.
+- API and MCP consumers see the documented transport, request and response
+  schemas, tool names, authentication requirements, errors, and status codes.
+- Library consumers see public signatures, return values, and exceptions.
+  An internal module symbol is not public merely because a test imports it.
 
-## Forbidden Content
+For example, a documented CLI format flag or an API's authorization error may
+belong in user-POV prose. A database table name does not belong there unless the
+product actually exposes that table as its supported user interface.
 
-The following must NOT appear in any test case:
+## Keep implementation out of user-POV assertions
 
-1. **Code identifiers**: class names, function names, variable names,
-   module paths (e.g., `UserService`, `handleSubmit`, `src/components/`)
+Do not prove public behavior by asserting a private method call, database
+mutation, cache entry, queue dispatch, or internal UI state. State the observable
+contract instead. Test IDs may help locate a visible control in the driving
+section; they are not the behavior the user is verifying.
 
-2. **API endpoints**: URL paths that are not user-visible
-   (e.g., `/api/v1/users`, `POST /auth/login`)
+Setup and supporting observations may inspect internals where authorized.
+Keep them distinct from acceptance through the chosen medium. For a browser
+action, a successful API request cannot substitute for operating the UI.
 
-3. **Database references**: table names, column names, SQL
-   (e.g., `users table`, `org_id column`, `SELECT * FROM`)
+## Handle a violation
 
-4. **Internal architecture**: references to queues, caches, workers,
-   middleware, hooks, state management internals
-   (e.g., `Redis cache`, `background worker`, `useEffect hook`)
+Route planned recipe edits to `create-verification-skill` in planned-recipe
+operation. Route drift in already-implemented recipes to
+`maintain-verification-skill`. Preserve the intended requirement.
 
-5. **HTTP details**: status codes, headers, request/response bodies
-   (e.g., "returns 200", "Authorization header", "JSON response")
-
-6. **Test framework internals**: test IDs used as primary identifiers
-   (data-testid is allowed only as a parenthetical hint, not as the
-   primary way to identify an element)
-
-7. **Infrastructure and configuration**: environment variable names
-   (`NEXT_PUBLIC_API_URL`), config file paths (`config/database.yml`),
-   service names (Redis, S3, Kafka), deployment targets, CI/CD references
-   (e.g., `set DATABASE_URL`, `deploy to staging`, `runs in Docker`)
-
-## Allowed Content
-
-- UI element labels ("Add to Cart" button, "Email" field)
-- Visible text on the page
-- User-facing URLs (the URL bar content, not API routes). URLs like
-  `/products/new` or `/users/123/edit` are allowed if they appear in the
-  browser's address bar.
-- Page titles and headings
-- Error messages as displayed to the user
-- data-testid hints in parentheses as supplementary info
-
-## Self-Correction Process
-
-If any test case violates these rules:
-1. Identify the violation
-2. Rewrite the step or assertion using only user-visible language
-3. If the requirement can only be tested through internal inspection
-   (e.g., "data must be encrypted at rest"), flag it as UNTESTABLE
-   in the coverage matrix
-
-## Examples
-
-**Category 1 — Code identifiers:**
-Bad: `Check that UserService.create() was called`
-Good: `VERIFY text "Welcome, Jane" visible in element matching "header greeting"`
-
-**Category 2 — API endpoints:**
-Bad: `Call POST /api/users with payload {...}`
-Good: `Click "Create Account"`
-
-**Category 3 — Database references:**
-Bad: `Verify the users table has a new row`
-Good: `VERIFY text "Account created" visible in element matching "success banner"`
-
-**Category 4 — Internal architecture:**
-Bad: `Wait for the background job to complete`
-Good: `Wait for element matching "processing complete" notification to appear`
-
-**Category 5 — HTTP details:**
-Bad: `VERIFY response status is 200`
-Good: `VERIFY text "Profile updated" visible in element matching "success notification"`
-
-**Category 6 — Test framework internals:**
-Bad: `Click element with data-testid="submit-btn"`
-Good: `Click "Submit" (data-testid: "submit-btn")`
-
-**Category 7 — Infrastructure and configuration:**
-Bad: `Set STRIPE_API_KEY to test key before proceeding`
-Good: `Navigate to the payment page` (precondition: test payment provider configured)
+A requirement with no user-facing medium may still be proved by unit,
+integration, or protocol tests. Label it programmatic-only. Use UNTESTABLE only
+when there is no defensible proof, with the concrete reason. Lack of browser
+wording is not lack of testability.

@@ -121,6 +121,10 @@ check-claude-codex-transport:
 check-ui-prototype-flow:
 	bash scripts/test-ui-prototype-flow.sh
 
+# Frozen multi-entry QA review input, both adapters, fake reviewer only.
+check-qa-review-input:
+	bash scripts/test-qa-review-input.sh
+
 # Runner smoke tests: drives the df-prd-challenge review runners against fake codex/tmux/
 # claude binaries. Takes ~1 minute (it exercises real timeouts), so it is not
 # part of `just check`.
@@ -213,4 +217,5 @@ check:
 	just check-stack
 	just check-claude-codex-transport
 	just check-ui-prototype-flow
+	just check-qa-review-input
 	just check-no-repo-scratch

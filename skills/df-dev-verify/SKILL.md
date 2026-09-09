@@ -1,309 +1,168 @@
 ---
 name: df-dev-verify
-description: "Developer self-verification before code review: runs all tests and drives the feature's committed verification recipes inline, logs failures, fixes them in a loop, then chains to df-code-review. Runs when the df feature playbook reaches its dev-verify stage or when the operator invokes it explicitly — never on its own."
+description: "Verify completed implementation through project-owned tests and medium-specific recipes, then return evidence-backed code-review readiness. Runs at the feature playbook's verification stage or when explicitly invoked."
 disable-model-invocation: true
 ---
 
-# Developer Self-Verification
+# Developer self-verification
 
-Run all tests and drive the feature's committed verification recipes against your implementation before
-submitting for code review. Mirrors a developer testing their own work before
-opening a PR. Logs failures, fixes them inline with verification, and chains
-to df-code-review when everything passes.
+Verify the completed implementation before code review. Tests and committed
+user-path recipes are complementary. This stage owns execution results and a
+bounded product-fix loop, not recipe authoring or application lifecycle commands.
 
-## Prerequisites
+## Inputs and readiness
 
-- Feature branch checked out with implementation nominally complete
-- PRD (`docs/prd-<feature>.md`) exists, and the coverage handoff from `df-verify-coverage` names the feature-map entries this change touches
-- For a user-facing graphical UI change, `<run-dir>/work/prototype/approved-ui-prototype.md` exists
-- agent-browser available (`agent-browser --version`)
-- Application launchable through the project's verification skill for each medium touched
+- Implementation is nominally complete on a feature branch.
+- Read the approved PRD and the coverage handoff from `df-verify-coverage`.
+  Use its slug, media, recipe paths, sub-features, and programmatic proof plan.
+- If the handoff is unavailable, reconstruct it through `df-verify-coverage`
+  before driving. Do not guess entries from a branch name.
+- For a user-facing graphical UI change,
+  `<run-dir>/work/prototype/approved-ui-prototype.md` must exist.
+- Read the project verification skill and named recipes for each medium.
+  Only that medium's declared tools are prerequisites. A CLI, TUI, MCP, API,
+  or internal-only change does not require a browser.
+- Read `../../references/engineering-standards.md` from this skill's directory.
+  Resolve the approved automated test scope and its prerequisites before running.
 
-## Workflow
+Create `<run-dir>/work/dev-verify-issues.md` in external run state, where
+`<run-dir>` is `bash scripts/df-state.sh path "<run-id>"`. Record the source
+revision, coverage input, required checks, evidence paths, and outstanding items.
+Each check has one status: NOT RUN, BLOCKED, FAIL, or PASS. A required check
+starts NOT RUN. Neither a warning nor an empty failure list makes it PASS.
 
-### Step 1: Resolve Inputs
+A blocked coverage verdict stops this stage. A missing required recipe,
+unproven base skill, missing test runner, or unavailable prerequisite is BLOCKED.
+Do not skip the obligation or announce verification complete. An empty recipe
+list is valid only with `Media: none` and its recorded programmatic proof plan.
+A planned recipe is executable here once implemented, but its planning status
+is not evidence that it passed.
 
-**Derive feature slug from branch name:**
-Strip common prefixes (`feat/`, `feature/`, `fix/`, `chore/`). Use the
-remainder as the slug (e.g., `feat/user-auth` → `user-auth`).
+## 1. Check the automated coverage plan
 
-**Locate the verification recipes:**
-1. Take the entry list from the coverage handoff. That is the authoritative set.
-2. No handoff in session: find the project's verification skill for each medium
-   the change touches and read the `features/` entries covering it.
-3. Nothing found at all: warn the user ("No verification recipes found for
-   slug `<slug>`, skipping the drive phase") and skip Step 3. Say it in the
-   report. A skipped drive is not a pass.
+This gate runs on every path, including when all existing tests already pass.
 
-**Discover test runner** by checking in order:
-1. `package.json` scripts: `test`, `test:unit`, `test:integration`, `test:e2e`
-2. `Makefile` targets: `test`, `test-unit`, `test-integration`, `test-e2e`
-3. `pytest.ini`, `pyproject.toml`, or `setup.cfg` in the repo root (Python)
-4. If multiple runners found, record all of them — run each one
-5. If none found: warn the user and skip the test phase (do not block)
+For each changed user-facing entry and sub-feature, locate its automated E2E
+case. Read the setup, actions, and assertions. The case must exercise the
+specified behavior through the appropriate public interface and fail when that
+behavior is wrong. An ID in a name, comment, or skipped test is only a locator,
+not coverage. One executable test may cover several obligations if each has a
+meaningful assertion.
 
-**Initialize issues doc:**
+For internal-only requirements, inspect the planned unit, integration, or
+protocol tests instead. Do not invent a browser recipe or require a UI E2E test
+for a change with no user-facing medium.
 
-```bash
-run_dir="$(bash scripts/df-state.sh path "<run-id>")"
-mkdir -p "$run_dir/work"
-```
+Record each obligation's test path, case name, assertion, and eventual run
+result. Missing coverage is unresolved even when all existing suites are green.
+Add missing tests within the approved implementation scope. If that needs a new
+framework, infrastructure, or authority, stop with the named gap.
+Carry explicit operator-approved exemptions with their reasons. Do not invent
+an exemption or treat a planning `UNTESTABLE` label as permission to ship.
 
-Create `<run-dir>/work/dev-verify-issues.md`, where `<run-dir>` is
-`bash scripts/df-state.sh path "<run-id>"`. It lives in the agent's own store,
-not in the repo being verified:
+## 2. Run the required automated checks
 
-```markdown
-# Dev Verify Issues: <feature>
-**Date:** <YYYY-MM-DD>
-**Branch:** <branch>
+Use the project's documented review-ready commands and the approved plan.
+Inspect package scripts, Makefiles, and language-specific runners if needed.
+Resolve aliases and aggregate scripts so the same suite is not run twice under
+different names. Read prerequisites first and verify the required services.
 
-## Test Failures
+Run the complete required review-ready test scope once implementation is
+complete, not after each small commit. Collect independent failures without
+continuing destructive checks against an unhealthy or shared target. Record
+commands, actual exit results, selected source revision, and skipped cases.
+A missing service is an environment blocker, not a product test failure.
+An unavailable runner or skipped required case leaves its obligation BLOCKED.
 
-## QA Failures
+## 3. Drive the committed recipes
 
-## Resolved
-```
+The project skill's Launch, Doctor, Drive, Evidence, and Cleanup sections own
+all mechanics. Do not replace them with browser boilerplate, auto-discovered
+startup commands, arbitrary sleeps, alternate flags, or internal state changes.
+Honor named sessions and process ownership. Never close a default shared session.
 
-### Step 2: Run All Tests
+Before any mutation, verify the exact target, build, fixture ownership, and
+non-production authorization through the project contract. A hostname suffix
+does not prove safety. An explicitly authorized disposable remote environment
+is valid when its identity and ownership can be checked. A production or
+unidentified target stops the drive. Missing managed credentials do not authorize
+a substitute credential.
 
-For each discovered test runner, execute the full suite. For each failure:
-- Append to `## Test Failures` in `<run-dir>/work/dev-verify-issues.md`
-- Format: `- [ ] \`<suite> > <test name>\` — <failure message> — \`<file:line>\``
+For each named medium and entry:
 
-Continue running all suites even after failures — collect everything before
-moving on.
+1. Follow its documented launch or attachment procedure and readiness signal.
+2. Run Doctor before driving, on each fresh short-lived session, and after an
+   unexpected failure. Do not restart an adopted instance without owner approval.
+3. Drive each in-scope sub-feature and user entry point. Use the medium's actual
+   interaction contract, including its waits, retry safety, and assertions.
+   Browser recipes require browser interaction; terminal recipes require the
+   terminal; MCP recipes require the MCP transport. Supporting HTTP or database
+   observations never substitute for the required user path.
+4. Capture the action and resulting state, including required side effects,
+   with the source revision and entry identifier. PASS requires every named
+   observable result. A product mismatch is FAIL. Missing prerequisites or a
+   lost driver are BLOCKED. Neither is a partial PASS.
+5. On failure, preserve evidence and stop dependent actions. Follow the
+   project's recovery policy before another independent entry. Never blindly
+   retry a mutation with unknown outcome.
+6. Always run the project's Cleanup for owned resources on success, failure,
+   or interruption. Preserve adopted instances and prove evidence survives.
+   Cleanup failure remains unresolved.
 
-### Step 3: Drive the verification recipes inline
+A broken Launch or inaccurate recipe is skill drift. Report it to
+`maintain-verification-skill` for implemented behavior; do not patch around it
+inside this stage or change expected behavior to match a product bug. Re-run
+affected checks after a reviewed repair. This stage may fix product code and
+tests within the approved task, but it does not own verification-skill edits.
 
-**Read the recipes:**
-For each medium the change touches, read the project's verification skill and
-the `features/` entries from Step 1. The skill's Launch, Doctor, Drive,
-Evidence, and Cleanup sections own the mechanics. Do not restate or improvise
-around them; a Launch that does not work is drift to report, not to patch here.
+**Compare an approved visual prototype.** For graphical UI work, read the
+approved prototype record and drive every material requirement-backed state at
+its recorded viewports. Retain fresh screenshots and compare hierarchy, copy,
+density, responsive behavior, and interactions. Pixel equality is required only
+when the approval record says so. An unexplained difference is a QA failure.
+Do not redefine the approved design during verification.
 
-**Safety guard:** Check the launch target against the allowed-host list
-(`localhost`, `127.0.0.1`, `::1`, `.local`, `.test`, `.dev`). If
-`base_url` looks production-like, stop immediately —
-ask the user for a non-production URL before continuing.
+## 4. Fix and recheck
 
-**Verify app is running:**
+Address failures within the authorized implementation scope. Prioritize safety
+and user-path defects. Re-run the specific failing test or recipe after each
+fix, not the full suite after every edit.
 
-```bash
-agent-browser open <base_url>
-agent-browser wait --load networkidle --timeout <timeout>
-agent-browser snapshot -i
-```
+A fix is proven only by running a meaningful check that would fail if the fix
+were wrong. A code citation, a plausible explanation, or an exit-zero no-op is
+not proof. Keep its evidence with the item. After three unsuccessful attempts
+on one item, stop that item and report it unresolved.
 
-If the snapshot shows an error page or the app is unreachable:
-1. Run `agent-browser close`
-2. Resolve startup command — in priority order:
-   a. the Launch command from the project's verification skill
-   b. Auto-discover from repo:
-      - Read `package.json` (if it exists): check `scripts` for keys
-        `dev:all`, `dev`, `start`, `serve`, `preview` — use first match
-        as `npm run <key>` (or `pnpm run <key>` / `yarn <key>` based on
-        lockfile: `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, else npm)
-      - If no match in `package.json`, read `Makefile` (if it exists):
-        check for targets `dev`, `run`, `serve`, `start` — use first match
-        as `make <target>`
-   c. If no command found: log warning and skip to Step 4:
-      `- [ ] [APP NOT RUNNING] Cannot reach <base_url> — no startup command
-      found in the verification skill or repo. Start the app and re-run df-dev-verify`
-3. Run the resolved command in the background:
-   ```bash
-   <startup_command> &
-   ```
-4. Wait 15 seconds, then retry the health check:
-   ```bash
-   agent-browser open <base_url>
-   agent-browser wait --load networkidle --timeout <timeout>
-   agent-browser snapshot -i
-   ```
-5. If now reachable: continue with test case execution.
-6. If still unreachable: log warning and skip to Step 4:
-   `- [ ] [APP NOT RUNNING] Cannot reach <base_url> after running
-   '<startup_command>' — investigate and re-run df-dev-verify`
+After the repair batch, re-run the required checks invalidated by the changes,
+including affected adjacent behavior. A shared change that invalidates the full
+scope requires that full scope again. Preserve evidence for genuinely unaffected
+checks with its revision and an explicit applicability assessment.
 
-**Drive each entry** using the same execution rules as df-acceptance:
-- Navigate to starting page, execute each step, run assertions
-- Use `agent-browser snapshot -i` for interactive elements; `agent-browser snapshot`
-  (no `-i`) for non-interactive assertions
-- Wait with `agent-browser wait --load networkidle --timeout <timeout>` after
-  every navigation or interaction; fall back to `agent-browser wait 2000` if
-  networkidle times out (log a warning)
-- Re-snapshot after every interaction that changes the page
-- On step failure within a TC: mark the TC FAIL, skip remaining steps in that TC,
-  continue to next TC
-- Single retry for interaction failures (`click`/`fill`/`select`): wait 2s,
-  re-snapshot, retry once. Never retry assertion failures.
+At most two repair-and-recheck rounds are allowed. New failures after the second
+round, a missing prerequisite, or a need for broader authority stops progression.
+Do not lower an assertion, drop a recipe, or start a third round to reach green.
 
-For each TC failure:
-- Append to `## QA Failures` in `<run-dir>/work/dev-verify-issues.md`
-- Format: `- [ ] TC-<id>: <name> — Step <N> failed — expected <X>, got <Y>`
+## 5. Final gate and handoff
 
-**Browser session loss during execution:** If any `agent-browser` command
-returns a hard error (e.g., the browser process is no longer reachable,
-not a step assertion failure), check the session:
-`agent-browser get url`. If the check fails, run `agent-browser close`
-(may fail), then attempt `agent-browser open <base_url>` once to restart.
-If restart fails, mark all remaining TCs as
-`- [ ] TC-<id>: <name> — NOT RUN: browser session lost after TC-<prev-id>`
-in `## QA Failures` and proceed to Step 4.
+Always revisit the automated coverage obligations from step 1 after fixes.
+Coverage needs both inspected assertions and passing execution evidence.
+Reconcile every required automated check, user-path leg, visual comparison,
+and cleanup obligation against the final source revision.
 
-**Compare an approved visual prototype.** If `<run-dir>/work/prototype/approved-ui-prototype.md` exists, read it before closing the browser. Drive the implementation through every material state named in the record at each tested viewport. Capture fresh implementation screenshots beside the dev-verification evidence. Compare hierarchy, copy, density, responsive behavior, and interactions against the approved prototype. Pixel equality is required only when the approval record says so. An unexplained difference is a QA failure. Record it in `## QA Failures`; do not redefine the approved design during verification.
+Return exactly one result:
 
-**Always close the browser when done** (success, failure, or interruption):
+- **code-review-ready.** Every required obligation has valid PASS evidence and
+  no open failures, blockers, or unrun checks remain.
+- **code-review-ready with approved exemptions.** All non-exempt obligations
+  pass, and each exception was explicitly approved with the exact missing
+  evidence and risk stated. This is not a full verification PASS.
+- **not ready.** Any required obligation is FAIL, BLOCKED, NOT RUN, missing
+  evidence, or invalidated by later changes. Name the remaining work and stop.
 
-```bash
-agent-browser close
-```
+Do not use an empty issues list, a lack of `[!]` markers, or a missing recipe
+as a success condition. No silent handoff follows a not-ready result.
+Approval to investigate or continue implementation is not a waiver of a gate.
 
-### Step 4: Fix Loop
-
-If `<run-dir>/work/dev-verify-issues.md` has no unchecked items (`- [ ]`) in
-`## Test Failures` or `## QA Failures`, skip directly to Step 5.
-
-For each unchecked item, work through failures one at a time:
-
-Prioritise in this order: P0 QA failures first, then P1/P2 QA failures,
-then test failures.
-
-**The evidence standard for every fix claim.** This skill exists to produce
-evidence, so a claim that a fix works is only as good as the rung it reached on
-the `blast-radius` proof ladder (`skills/blast-radius/SKILL.md` § "How sure are
-you"):
-
-| Rung | What it is | Counts as proven? |
-|---|---|---|
-| 1 | You said so | No |
-| 2 | You pointed at the line — a real `file:line`, or the library's own source | No |
-| 3 | You showed the bad case cannot happen — you walked the failure step by step and it does not reach | No |
-| 4 | **You ran it** — a test or script that calls the real code and fails loud if you are wrong | **Yes** |
-| 5 | You reproduced it in the running app | Yes, and better |
-
-**Below rung 4 is unproven.** Mark it `[!]` and say so; do not round it up to
-resolved. Rung 4 is usually one small script or one focused test invocation
-against the exact code you changed, and this skill already has the runners to
-get there. Move an item to `## Resolved` only when you have run something that
-would have failed had the fix been wrong, and record what you ran alongside the
-one-line description.
-
-The same standard applies to a fix's blast radius, not only to the failure it
-targeted. A fix that resolves its own item and breaks something adjacent has
-not been proven; the convergence check below is what catches that, and its cap
-is why the check has to be honest.
-
-**a. Apply fix**
-Read the failure details and locate the relevant code. Apply the minimal fix
-needed. Do not fix multiple unrelated failures in a single edit.
-
-**b. Re-run the specific failing check**
-- For a test failure: run only the specific test (not the full suite)
-  e.g., `npm test -- --testNamePattern "failing test name"` or
-  `pytest tests/path/test.py::test_name -v`
-- For a QA TC failure: open agent-browser, navigate to the relevant page,
-  re-execute only that TC's steps and assertions, then close browser
-
-**c. Mark result**
-- If passes: move item from its section to `## Resolved` with `[x]` and one-line
-  description of the fix
-  e.g., `- [x] \`suite > test\` — fixed: added null check in getUserById`
-- If still fails after 3 attempts: mark with `[!]` in place
-  e.g., `- [!] TC-003: checkout flow — 3 attempts, not converging`
-  Do not loop further on that item.
-
-**Convergence check after all items addressed (max 2 iterations):**
-Run the full test suite and drive every recipe again (Steps 2 and 3). If new
-failures appear (regressions introduced by fixes), add them to the issues doc
-and re-enter the fix loop for those new items only.
-
-**This loop runs at most twice.** Iteration 1 is the check after the first fix
-pass; iteration 2 is the check after fixing whatever iteration 1 surfaced. If
-iteration 2 still surfaces new failures, **stop and surface to the operator**
-with the evidence: the failures, what each fix changed, and which rung of the
-proof ladder each claim reached. Do not start a third iteration.
-
-A third iteration is not a longer path to green; it is the signal that fixes
-are producing regressions faster than they resolve failures, and that is a
-question about the change, not a question about the loop. Mark the outstanding
-items `[!]`, record `convergence cap reached` next to them, and go to Step 5.
-
-**E2e test coverage gate (hard requirement, max 2 iterations):**
-
-After the convergence check passes, verify that automated e2e tests exist for
-every feature-map entry and sub-feature the change touches. This is a hard
-gate; the branch cannot proceed to Step 5 without e2e coverage.
-
-A verification skill does not satisfy this gate and never will. The two layers
-prove different things: an automated e2e test is deterministic, runs in CI with
-no agent, and catches the regression later. Driving a recipe proves this change
-works now. The standard requires both, per `references/engineering-standards.md`.
-
-1. **Collect entry ids** from the coverage handoff or the `features/` map
-2. **Discover e2e test location** from project conventions:
-   - Check for `e2e/`, `tests/e2e/`, `test/e2e/`, or `__tests__/e2e/` directories
-   - Check `playwright.config.ts`, `cypress.config.js`, or similar config files
-     to find the test directory
-   - Check `package.json` for `test:e2e` script to infer framework and location
-3. **Scan e2e test files** for TC identifiers: search test names, descriptions,
-   and comments for the entry ids (e.g., `login-flow`, `login-flow: sso`)
-4. **Compare**: for each entry id, confirm a matching reference
-   exists in the e2e tests
-5. **If any entry id is missing e2e coverage**:
-   - Append to `## Test Failures` in `<run-dir>/work/dev-verify-issues.md`:
-     `- [ ] [COVERAGE] TC-<id>: <name> — no automated e2e test found`
-   - Re-enter the fix loop to write the missing e2e tests
-   - After writing tests, re-run the e2e suite to confirm they pass — writing a
-     test is rung 2, running it is rung 4, and only rung 4 closes a coverage item
-   - Re-check coverage (repeat from step 1 of this gate)
-
-**This gate runs at most twice.** Iteration 1 is the first coverage scan;
-iteration 2 is the re-check after writing the missing tests. If iteration 2
-still finds an uncovered TC, **stop and surface to the operator**: list every
-TC still without a running e2e test, say what was written and what it did when
-run, and let them decide. Do not start a third iteration, and do not delete or
-weaken a TC to close the gap. An uncovered TC is a real hole in the acceptance
-evidence, and the operator is the one who gets to accept it.
-
-### Step 5: Check for Unresolved Items
-
-Scan `<run-dir>/work/dev-verify-issues.md` for items marked `[!]`.
-
-Items hitting either outer cap — `convergence cap reached`, or a TC still
-uncovered after the coverage gate's second iteration — are `[!]` items too.
-A cap is a stop that surfaces, never a silent pass.
-
-If any `[!]` items exist:
-- Present them to the user with failure details
-- Ask: proceed to df-code-review anyway, or stop to investigate?
-- Treat any affirmative response as proceed; any other response as stop
-
-If no `[!]` items: proceed silently.
-
-### Step 6: Chain to df-code-review
-
-Trigger `df-code-review`.
-
-## Notes
-
-- The issues doc at `<run-dir>/work/dev-verify-issues.md` is a working scratch
-  file — it is not committed
-- Drive the recipes inline (not by chaining to df-acceptance) to keep the fix loop
-  in a single context with all failures visible
-- `agent-browser close` must run at every exit point — after Step 3 success,
-  after app-not-running bail-out, and after any unexpected error
-- **Evidence, not assertion.** Every fix claim is scored against the
-  `blast-radius` proof ladder (`skills/blast-radius/SKILL.md`). Below "you ran
-  it" is unproven, and unproven items stay `[!]` rather than moving to
-  `## Resolved`.
-- **Both outer loops are capped at 2.** The convergence re-run and the e2e
-  coverage gate each get two iterations. Hitting a cap surfaces to the operator
-  with the evidence; it never loops a third time and never lowers the bar to
-  reach green.
-- This skill verifies the developer's own work before review, not after. The
-  multi-model code review in df-code-review is a second opinion on
-  already-verified work.
-- **Safety guard**: only run QA against local/dev/test hosts (`localhost`,
-  `127.0.0.1`, `::1`, `.local`, `.test`, `.dev`). If `base_url` looks
-  production-like, stop and ask for a non-production URL.
+Report the PRD, source revision, recipes driven, automated commands and results,
+evidence location, exemptions, and remaining work. The feature playbook owns the
+next invocation of `df-code-review`. Standalone, name that next stage and stop.
