@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "responsibilities": [
+    "session_router",
+    "orchestrator",
+    "menial_scoped_investigation",
+    "implementation_delegate",
+    "judgment_delegate",
+    "investigation_synthesizer",
+    "design_runners",
+    "discovery_reviewers",
+    "recheck_leaf_reviewers",
+    "eval_graders",
+    "persona_reviewers_cli",
+    "cross_model_review",
+    "discovery_context",
+    "escalation"
+  ],
+  "lanes": [
+    "quick",
+    "standard",
+    "high-consequence"
+  ],
+  "overridePrecedence": [
+    "shipped",
+    "machine",
+    "project"
+  ],
+  "allowedProjectKeys": [
+    "schemaVersion",
+    "roles"
+  ],
+  "dispatchConstraints": {
+    "nonFloorPinnedTargets": "cap-at-session",
+    "namedAgentFloors": [
+      "df-reviewer-recheck"
+    ]
+  },
+  "roles": {
+    "claude": {
+      "session_router": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "orchestrator": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "menial_scoped_investigation": {
+        "quick": { "kind": "native-model", "model": "sonnet" },
+        "standard": { "kind": "native-model", "model": "sonnet" },
+        "high-consequence": { "kind": "native-model", "model": "sonnet" }
+      },
+      "implementation_delegate": {
+        "quick": { "kind": "native-model", "model": "opus" },
+        "standard": { "kind": "native-model", "model": "opus" },
+        "high-consequence": { "kind": "native-model", "model": "opus" }
+      },
+      "judgment_delegate": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "investigation_synthesizer": {
+        "quick": { "kind": "native-model", "model": "opus" },
+        "standard": { "kind": "native-model", "model": "opus" },
+        "high-consequence": { "kind": "native-model", "model": "opus" }
+      },
+      "design_runners": {
+        "quick": { "kind": "native-model", "model": "opus" },
+        "standard": { "kind": "native-model", "model": "opus" },
+        "high-consequence": {
+          "kind": "parallel",
+          "targets": [
+            { "kind": "native-model", "model": "opus" },
+            { "kind": "session" }
+          ]
+        }
+      },
+      "discovery_reviewers": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "recheck_leaf_reviewers": {
+        "quick": { "kind": "named-agent", "agent": "df-reviewer-recheck" },
+        "standard": { "kind": "named-agent", "agent": "df-reviewer-recheck" },
+        "high-consequence": { "kind": "named-agent", "agent": "df-reviewer-recheck" }
+      },
+      "eval_graders": {
+        "quick": { "kind": "native-model", "model": "sonnet" },
+        "standard": { "kind": "native-model", "model": "sonnet" },
+        "high-consequence": { "kind": "native-model", "model": "sonnet" }
+      },
+      "persona_reviewers_cli": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "cross_model_review": {
+        "quick": { "kind": "transport", "name": "codex-cli" },
+        "standard": { "kind": "transport", "name": "codex-cli" },
+        "high-consequence": { "kind": "transport", "name": "codex-cli" }
+      },
+      "discovery_context": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "escalation": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      }
+    },
+    "codex": {
+      "session_router": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "orchestrator": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "menial_scoped_investigation": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "implementation_delegate": {
+        "quick": { "kind": "named-agent", "agent": "luna_max" },
+        "standard": { "kind": "named-agent", "agent": "luna_max" },
+        "high-consequence": { "kind": "named-agent", "agent": "luna_max" }
+      },
+      "judgment_delegate": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "investigation_synthesizer": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "design_runners": {
+        "quick": { "kind": "named-agent", "agent": "terra_xhigh" },
+        "standard": { "kind": "named-agent", "agent": "terra_xhigh" },
+        "high-consequence": { "kind": "named-agent", "agent": "terra_xhigh" }
+      },
+      "discovery_reviewers": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "recheck_leaf_reviewers": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "eval_graders": {
+        "quick": { "kind": "session" },
+        "standard": { "kind": "session" },
+        "high-consequence": { "kind": "session" }
+      },
+      "persona_reviewers_cli": {
+        "quick": { "kind": "cli", "model": null, "effort": null },
+        "standard": { "kind": "cli", "model": null, "effort": null },
+        "high-consequence": { "kind": "cli", "model": null, "effort": null }
+      },
+      "cross_model_review": {
+        "quick": { "kind": "transport", "name": "claude-tmux" },
+        "standard": { "kind": "transport", "name": "claude-tmux" },
+        "high-consequence": { "kind": "transport", "name": "claude-tmux" }
+      },
+      "discovery_context": {
+        "quick": { "kind": "named-agent", "agent": "terra_xhigh" },
+        "standard": { "kind": "named-agent", "agent": "terra_xhigh" },
+        "high-consequence": { "kind": "named-agent", "agent": "terra_xhigh" }
+      },
+      "escalation": {
+        "quick": { "kind": "named-agent", "agent": "sol_high" },
+        "standard": { "kind": "named-agent", "agent": "sol_high" },
+        "high-consequence": { "kind": "named-agent", "agent": "sol_high" }
+      }
+    }
+  }
+}
