@@ -6,7 +6,9 @@ disable-model-invocation: true
 
 # Arena
 
-Every background runner follows `../../references/role-callers-inventory.md`.
+Every background runner uses the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md`, then invoke required
+runtime wrappers under `<df-root>`, never from a copied global skill directory.
 Preflight its frozen role before reservation, then use that target natively.
 
 Fan out N parallel attempts at the same task. Read every candidate end to end. Pick the strongest as the base. Graft the best ideas from the others into it. Verify the synthesized result.

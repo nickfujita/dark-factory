@@ -5,7 +5,9 @@ description: "Fan out N parallel workers, drain them, and return one report. Use
 
 # Swarm
 
-Every background runner follows `../../references/role-callers-inventory.md`.
+Every background runner uses the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md`, then invoke required
+runtime wrappers under `<df-root>`, never from a copied global skill directory.
 Preflight its frozen role before reservation, then use that target natively.
 
 Fan out N parallel workers. They may cover separate slices, race the same brief, or mix both. The parent waits, aggregates, and returns one report. No raw dumps.

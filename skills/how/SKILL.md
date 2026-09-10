@@ -5,7 +5,9 @@ description: "Use for \"how does X work\", code walkthroughs before changing som
 
 # How
 
-Every background runner follows `../../references/role-callers-inventory.md`.
+Every background runner uses the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md`, then invoke required
+runtime wrappers under `<df-root>`, never from a copied global skill directory.
 Preflight its frozen role before reservation, then use that target natively.
 
 Explore the codebase to answer "how does X work?" questions. Produce clear architectural explanations at the level of a senior engineer onboarding onto a subsystem. Enough to build a working mental model, not annotated source code.

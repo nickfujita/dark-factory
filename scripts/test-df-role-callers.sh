@@ -421,31 +421,69 @@ for file in "${callers[@]}"; do
 done
 if [[ "$fail" -eq 0 ]]; then ok 'static inventory check finds the shared boundary in every caller'; fi
 
-assert_installed_inventory_links() {
+assert_root_inventory_instructions() {
   local label=$1
   local skill_root=$2
-  local expected_inventory=$3
-  local skill_file reference resolved count=0 tick
-  tick="$(printf '\140')"
+  local skill_file count=0
   while IFS= read -r skill_file; do
-    reference="$(awk -F "$tick" '/role-callers-inventory\.md/ { print $2; exit }' "$skill_file")"
-    resolved="$(realpath -m "$(dirname "$skill_file")/$reference")"
     count=$((count + 1))
-    if [[ "$resolved" != "$expected_inventory" || ! -f "$resolved" ]]; then
-      bad "$label resolves inventory link from $(basename "$(dirname "$skill_file")")" "$reference -> $resolved"
+    if ! rg -Fq '<df-root>/references/role-callers-inventory.md' "$skill_file"; then
+      bad "$label declares the session-hook inventory root" "$skill_file"
+    fi
+    if rg -Fq '../../references/role-callers-inventory.md' "$skill_file"; then
+      bad "$label has no copied-skill relative inventory link" "$skill_file"
     fi
   done < <(rg -l 'role-callers-inventory\.md' "$skill_root" | sort)
-  if [[ "$count" != 11 ]]; then
-    bad "$label contains the complete inventory-link set" "found $count links"
+  if [[ "$count" != 14 ]]; then
+    bad "$label contains the complete inventory-instruction set" "found $count instructions"
   elif [[ "$fail" -eq 0 ]]; then
-    ok "$label resolves all installed inventory links"
+    ok "$label declares the session-hook inventory root in every caller instruction"
   fi
 }
 
-assert_installed_inventory_links 'source installed root' "$repo_root/skills" \
-  "$repo_root/references/role-callers-inventory.md"
-assert_installed_inventory_links 'Codex installed root' "$repo_root/codex-plugin/skills" \
-  "$repo_root/codex-plugin/references/role-callers-inventory.md"
+assert_root_inventory_instructions 'source tree' "$repo_root/skills"
+assert_root_inventory_instructions 'Codex tree' "$repo_root/codex-plugin/skills"
+
+sync_root="$work/sync-layout"
+copied_source_skill="$sync_root/claude-skills/df-qa-validation"
+copied_codex_skill="$sync_root/codex-skills/df-qa-validation"
+mkdir -p "$(dirname "$copied_source_skill")" "$(dirname "$copied_codex_skill")"
+cp -a "$repo_root/skills/df-qa-validation" "$copied_source_skill"
+cp -a "$repo_root/codex-plugin/skills/df-qa-validation" "$copied_codex_skill"
+
+source_hook_line="$(sh "$repo_root/scripts/df-session-hook.sh" | tail -1)"
+source_hook_root="${source_hook_line#The dark-factory root here is }"
+source_hook_root="${source_hook_root%%. Resolve*}"
+codex_hook_line="$(sh "$repo_root/codex-plugin/scripts/df-session-hook.sh" | tail -1)"
+codex_hook_root="${codex_hook_line#The dark-factory root here is }"
+codex_hook_root="${codex_hook_root%%. Resolve*}"
+source_inventory="$source_hook_root/references/role-callers-inventory.md"
+codex_inventory="$codex_hook_root/references/role-callers-inventory.md"
+source_qa_from_hook="$source_hook_root/skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
+codex_qa_from_hook="$codex_hook_root/skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
+if [[ "$source_hook_root" == "$repo_root" && "$codex_hook_root" == "$repo_root/codex-plugin" ]] \
+  && [[ -f "$source_inventory" && -f "$codex_inventory" ]] \
+  && cmp -s "$source_inventory" "$codex_inventory" \
+  && rg -Fq '<df-root>/scripts/df-role-caller.sh reserve' "$source_inventory" \
+  && rg -Fq '<df-root>/scripts/df-role-caller.sh reserve' "$codex_inventory" \
+  && rg -Fq '<df-root>/scripts/df-state.sh complete' "$source_inventory" \
+  && rg -Fq '<df-root>/scripts/df-state.sh complete' "$codex_inventory" \
+  && rg -Fq '<df-root>/references/role-callers-inventory.md' "$copied_source_skill/SKILL.md" \
+  && rg -Fq '<df-root>/references/role-callers-inventory.md' "$copied_codex_skill/SKILL.md" \
+  && [[ ! -e "$sync_root/claude-skills/references/role-callers-inventory.md" ]] \
+  && [[ ! -e "$sync_root/codex-skills/references/role-callers-inventory.md" ]] \
+  && [[ -x "$source_qa_from_hook" && -x "$codex_qa_from_hook" ]]; then
+  ok 'copied source and Codex skills resolve inventory and wrappers from hook roots'
+else
+  bad 'copied source and Codex skills resolve inventory and wrappers from hook roots'
+fi
+
+assert_single_success 'source copied-layout QA instruction' bash "$source_qa_from_hook" "$prd" "$input" "$consumer/sync-source-qa.md" \
+  --df-run role-callers --df-lane standard --df-repo-root "$consumer"
+assert_single_success 'Codex copied-layout QA instruction' env -u CODEX_SKILLS_HOME \
+  FAKE_ROLE_TARGET='{"kind":"cli","model":null,"effort":null}' \
+  bash "$codex_qa_from_hook" "$prd" "$input" "$consumer/sync-codex-qa.md" \
+  --df-run role-callers --df-lane standard --df-repo-root "$consumer"
 
 printf '%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]

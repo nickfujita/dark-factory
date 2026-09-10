@@ -5,6 +5,10 @@ description: "Codex-native code review for a feature branch: one whole-branch di
 
 # Code Review
 
+For every shell caller, use the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md` and invoke its runtime
+wrapper under `<df-root>`, never from a copied global skill directory.
+
 Review a feature branch in **one whole-branch discovery pass on a frozen tree**,
 then verify the remediation and stop. There is no round loop. Fixes are applied
 autonomously — the user is not asked to approve findings one by one. Returns
@@ -233,16 +237,11 @@ is the High-consequence path; in Quick and Standard prefer the single
 combined-rubric subagent and do not reach for it to save a message.
 
 ```bash
-script_path="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-code-review/scripts/run_codex_subagent_reviews.sh"
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-plugin/skills/df-code-review/scripts/run_codex_subagent_reviews.sh"
-fi
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/*/dark-factory/*/skills/df-code-review/scripts/run_codex_subagent_reviews.sh 2>/dev/null | sort -V | tail -1)"
-fi
+df_root="<Dark Factory root reported by the session hook>"
+script_path="$df_root/skills/df-code-review/scripts/run_codex_subagent_reviews.sh"
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_codex_subagent_reviews.sh" >&2
-  echo "Checked: \${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/, <repo>/codex-plugin/skills/, and the dark-factory plugin cache" >&2
+  echo "Checked: $df_root/skills/df-code-review/scripts/" >&2
   exit 1
 fi
 
@@ -279,13 +278,8 @@ them, and waits for completion sentinels before returning. It preflights both
 transport legs, then owns one reservation per window and their completion.
 
 ```bash
-script_path="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-code-review/scripts/run_claude_code_reviews_tmux.sh"
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-plugin/skills/df-code-review/scripts/run_claude_code_reviews_tmux.sh"
-fi
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/*/dark-factory/*/skills/df-code-review/scripts/run_claude_code_reviews_tmux.sh 2>/dev/null | sort -V | tail -1)"
-fi
+df_root="<Dark Factory root reported by the session hook>"
+script_path="$df_root/skills/df-code-review/scripts/run_claude_code_reviews_tmux.sh"
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_claude_code_reviews_tmux.sh" >&2; exit 1
 fi

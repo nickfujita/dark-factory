@@ -1,20 +1,25 @@
 # Role caller inventory
 
-Every dispatch begins from a frozen plan. At run entry, after `df-state.sh init`,
+The session hook reports the Dark Factory root. Let `<df-root>` be that exact
+path. Read this inventory and invoke its runtime helpers from `<df-root>`, not
+from a consumer checkout or a copied global skill directory.
+
+Every dispatch begins from a frozen plan. At run entry, after
+`<df-root>/scripts/df-state.sh init`,
 prepare it once with the active harness and consuming repository root:
 
 ```bash
-node <plugin-root>/scripts/df-role.mjs prepare-run \
+node <df-root>/scripts/df-role.mjs prepare-run \
   --run <run-id> --harness <claude|codex> --repo-root <consumer-root>
 ```
 
 The plan stays in external run state. Resume uses it. A caller never prepares a
 replacement after an override or agent definition changes.
 
-Shell-owned callers use `scripts/df-role-caller.sh reserve`. It checks the
+Shell-owned callers use `<df-root>/scripts/df-role-caller.sh reserve`. It checks the
 active run lane, preflights the declared role, rejects a target the caller
 cannot represent, prints the result, then reserves. The caller completes each
-sequence with `df-state.sh complete`. Native harness callers use its
+sequence with `<df-root>/scripts/df-state.sh complete`. Native harness callers use its
 `preflight` mode before their native reservation and spawn. A parallel target
 reserves one sequence for each actual native leaf.
 

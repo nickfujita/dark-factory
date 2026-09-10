@@ -6,7 +6,9 @@ disable-model-invocation: true
 
 # df-design
 
-Every background runner follows `../../references/role-callers-inventory.md`.
+Every background runner uses the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md`, then invoke required
+runtime wrappers under `<df-root>`, never from a copied global skill directory.
 Preflight its frozen role before reservation, then use that target natively.
 
 Design before implementing. Sketch types, function signatures, class shapes, and module boundaries with `not implemented` bodies and pseudocode. Synthesize across independent runner candidates, then fill in code against the chosen sketch. If implementation proves the sketch wrong, throw it out and redesign.

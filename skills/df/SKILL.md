@@ -73,8 +73,10 @@ node scripts/df-role.mjs prepare-run \
   --run "<run-id>" --harness claude --repo-root "<consumer-root>"
 ```
 
-Before each background dispatch, use the frozen plan as specified in
-`../../references/role-callers-inventory.md`. Preflight the declared responsibility,
+Before each background dispatch, use the frozen plan in
+`<df-root>/references/role-callers-inventory.md`, where `<df-root>` is the Dark
+Factory root reported by the session hook. Invoke shell wrappers from `<df-root>`,
+not from a copied global skill directory. Preflight the declared responsibility,
 check that the native or transport interface can represent its target, then
 reserve each actual worker. A shell runner owns that reservation itself, so do
 not reserve it again in skill prose. The documented Luna limitation needs an

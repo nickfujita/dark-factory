@@ -6,6 +6,10 @@ disable-model-invocation: true
 
 # Code Review
 
+For every shell caller, use the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md` and invoke its runtime
+wrapper under `<df-root>`, never from a copied global skill directory.
+
 Review a feature branch in **one whole-branch discovery pass on a frozen tree**,
 then verify the remediation and stop. There is no round loop. Fixes are applied
 autonomously — the user is not asked to approve findings one by one. Chains to
@@ -248,16 +252,8 @@ remediation commit exists.
 
 **Codex Quality (Standard and High-consequence):**
 ```bash
-quality_script="$HOME/.claude/skills/df-code-review/scripts/run_codex_quality_review.sh"
-if [[ ! -f "$quality_script" ]]; then
-  quality_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/df-code-review/scripts/run_codex_quality_review.sh"
-fi
-if [[ ! -f "$quality_script" ]]; then
-  quality_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-code-review/scripts/run_codex_quality_review.sh"
-fi
-if [[ ! -f "$quality_script" ]]; then
-  quality_script="$(ls -d "$HOME"/.claude/plugins/cache/*/dark-factory/*/skills/df-code-review/scripts/run_codex_quality_review.sh 2>/dev/null | sort -V | tail -1)"
-fi
+df_root="<Dark Factory root reported by the session hook>"
+quality_script="$df_root/skills/df-code-review/scripts/run_codex_quality_review.sh"
 if [[ ! -f "$quality_script" ]]; then
   echo "ERROR: Cannot find run_codex_quality_review.sh" >&2; exit 1
 fi
@@ -269,16 +265,8 @@ bash "$quality_script" "$base_ref" "$review_dir/codex-quality-review.md" \
 
 **Codex Spec (High-consequence only):**
 ```bash
-spec_script="$HOME/.claude/skills/df-code-review/scripts/run_codex_spec_review.sh"
-if [[ ! -f "$spec_script" ]]; then
-  spec_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/df-code-review/scripts/run_codex_spec_review.sh"
-fi
-if [[ ! -f "$spec_script" ]]; then
-  spec_script="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-code-review/scripts/run_codex_spec_review.sh"
-fi
-if [[ ! -f "$spec_script" ]]; then
-  spec_script="$(ls -d "$HOME"/.claude/plugins/cache/*/dark-factory/*/skills/df-code-review/scripts/run_codex_spec_review.sh 2>/dev/null | sort -V | tail -1)"
-fi
+df_root="<Dark Factory root reported by the session hook>"
+spec_script="$df_root/skills/df-code-review/scripts/run_codex_spec_review.sh"
 if [[ ! -f "$spec_script" ]]; then
   echo "ERROR: Cannot find run_codex_spec_review.sh" >&2; exit 1
 fi

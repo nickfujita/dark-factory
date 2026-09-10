@@ -5,7 +5,9 @@ description: "Reconstruct recent working context from the df trail (run state fi
 
 # Recall
 
-Every background runner follows `../../references/role-callers-inventory.md`.
+Every background runner uses the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md`, then invoke required
+runtime wrappers under `<df-root>`, never from a copied global skill directory.
 Preflight its frozen role before reservation, then use that target natively.
 
 **Before you start or resume work, rebuild the user's recent working context and hand back a tight capsule of where things stand now and what to do next.** Use for "recall my work on X", "catch me up", "what have I been working on", or "where did I leave off".

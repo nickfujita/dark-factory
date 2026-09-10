@@ -5,6 +5,10 @@ description: "Codex-native PRD challenge. Standard runs a single pass, one Codex
 
 # PRD Challenge Round
 
+For every shell caller, use the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md` and invoke its runtime
+wrapper under `<df-root>`, never from a copied global skill directory.
+
 Stress-test a hardened PRD. This skill has two modes, and the lane picks which
 one runs. The PRD is remediated **autonomously** in both — the author is not
 asked to hand-fix findings.
@@ -453,16 +457,11 @@ Codex CLI script. It runs **detached and is polled** — a hard foreground
 timeout kills healthy passes mid-exploration on a large PRD.
 
 ```bash
-script_path="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-prd-challenge/scripts/run_codex_persona_reviews.sh"
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-plugin/skills/df-prd-challenge/scripts/run_codex_persona_reviews.sh"
-fi
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/*/dark-factory/*/skills/df-prd-challenge/scripts/run_codex_persona_reviews.sh 2>/dev/null | sort -V | tail -1)"
-fi
+df_root="<Dark Factory root reported by the session hook>"
+script_path="$df_root/skills/df-prd-challenge/scripts/run_codex_persona_reviews.sh"
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_codex_persona_reviews.sh" >&2
-  echo "Checked: \${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/, <repo>/codex-plugin/skills/, and the dark-factory plugin cache" >&2
+  echo "Checked: $df_root/skills/df-prd-challenge/scripts/" >&2
   exit 1
 fi
 
@@ -579,16 +578,11 @@ interactive Claude Code PRD review. Set the Bash timeout above
 `CLAUDE_REVIEW_TIMEOUT_SECONDS`.
 
 ```bash
-script_path="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/codex-plugin/skills/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
-fi
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(ls -d "${CODEX_HOME:-$HOME/.codex}"/plugins/cache/*/dark-factory/*/skills/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh 2>/dev/null | sort -V | tail -1)"
-fi
+df_root="<Dark Factory root reported by the session hook>"
+script_path="$df_root/skills/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_claude_prd_review_tmux.sh" >&2
-  echo "Checked: \${CODEX_SKILLS_HOME:-\${CODEX_HOME:-\$HOME/.codex}/skills}/, <repo>/codex-plugin/skills/, and the dark-factory plugin cache" >&2
+  echo "Checked: $df_root/skills/df-prd-challenge/scripts/" >&2
   exit 1
 fi
 

@@ -6,6 +6,10 @@ disable-model-invocation: true
 
 # PRD Challenge Round
 
+For every shell caller, use the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md` and invoke its runtime
+wrapper under `<df-root>`, never from a copied global skill directory.
+
 Stress-test a hardened PRD. This skill has two modes, and the lane picks which
 one runs. The PRD is remediated **autonomously** in both — the author is not
 asked to hand-fix findings.
@@ -512,20 +516,12 @@ with a wide window and is polled** — a hard foreground timeout kills healthy
 legs mid-exploration on a large PRD. Start it, then poll in slices:
 
 ```bash
-script_path="$HOME/.claude/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
-fi
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
-fi
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(ls -d "$HOME"/.claude/plugins/cache/*/dark-factory/*/skills/df-prd-challenge/scripts/run_codex_prd_review.sh 2>/dev/null | sort -V | tail -1)"
-fi
+df_root="<Dark Factory root reported by the session hook>"
+script_path="$df_root/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
 
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_codex_prd_review.sh" >&2
-  echo "Checked: \$HOME/.claude/skills/, <repo>/skills/, <repo>/.claude/skills/, and the dark-factory plugin cache" >&2
+  echo "Checked: $df_root/skills/df-prd-challenge/scripts/" >&2
   exit 1
 fi
 
