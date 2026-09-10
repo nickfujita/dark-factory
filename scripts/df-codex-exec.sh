@@ -114,17 +114,87 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 role_caller="$script_dir/df-role-caller.sh"
 state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$script_dir/df-state.sh}"
 
+preflight_target() {
+  local preflight target status
+  preflight="$(bash "$role_caller" preflight \
+    --run "$df_run" --lane "$df_lane" --repo-root "$df_repo_root" \
+    --responsibility cross_model_review \
+    --allow-kind transport --allow-transport codex-cli)"
+  status=$?
+  if (( status != 0 )); then
+    printf 'df-codex-exec: frozen-role preflight failed\n' >&2
+    return "$status"
+  fi
+  target="$(node -e '
+    try {
+      const result = JSON.parse(process.argv[1]);
+      if (!result || typeof result !== "object" || !result.target || typeof result.target !== "object") throw new Error();
+      process.stdout.write(JSON.stringify(result.target));
+    } catch {
+      process.stderr.write("df-codex-exec: role preflight returned an invalid target receipt\n");
+      process.exit(1);
+    }
+  ' "$preflight")"
+  status=$?
+  (( status == 0 )) || return "$status"
+  [[ -n "$target" ]] || { printf 'df-codex-exec: role preflight returned an empty target\n' >&2; return 1; }
+  printf '%s\n' "$target"
+}
+
 reserve_turn() {
-  local receipt current_target seq
+  local receipt parsed current_target seq recovery_seq status
+
+  current_target="$(preflight_target)"
+  status=$?
+  (( status == 0 )) || return "$status"
+  if [[ "$current_target" != "$META_ROLE_TARGET" ]]; then
+    printf 'df-codex-exec: frozen role identity changed; start a new durable Codex session\n' >&2
+    return 1
+  fi
+
   receipt="$(bash "$role_caller" reserve \
     --run "$df_run" --lane "$df_lane" --repo-root "$df_repo_root" \
     --responsibility cross_model_review --purpose "durable Codex turn $1" \
     --allow-kind transport --allow-transport codex-cli)"
-  current_target="$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(JSON.stringify(receipt.preflight.target));' "$receipt")"
-  seq="$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(receipt.seqs[0]);' "$receipt")"
+  status=$?
+  if (( status != 0 )); then
+    printf 'df-codex-exec: dispatch reservation failed\n' >&2
+    return "$status"
+  fi
+
+  parsed="$(node -e '
+    try {
+      const receipt = JSON.parse(process.argv[1]);
+      if (!receipt || typeof receipt !== "object" ||
+          !receipt.preflight || typeof receipt.preflight !== "object" ||
+          !receipt.preflight.target || typeof receipt.preflight.target !== "object" ||
+          !Array.isArray(receipt.seqs) || receipt.seqs.length !== 1 ||
+          !/^[1-9][0-9]*$/.test(String(receipt.seqs[0]))) throw new Error();
+      process.stdout.write(`${JSON.stringify(receipt.preflight.target)}\n${receipt.seqs[0]}`);
+    } catch {
+      process.stderr.write("df-codex-exec: reservation helper returned an invalid receipt\n");
+      process.exit(1);
+    }
+  ' "$receipt")"
+  status=$?
+  if (( status != 0 )); then
+    recovery_seq="$(node -e '
+      try {
+        const receipt = JSON.parse(process.argv[1]);
+        if (Array.isArray(receipt.seqs) && receipt.seqs.length === 1 && /^[1-9][0-9]*$/.test(String(receipt.seqs[0]))) {
+          process.stdout.write(String(receipt.seqs[0]));
+        }
+      } catch {}
+    ' "$receipt" 2>/dev/null)"
+    [[ -z "$recovery_seq" ]] || complete_turn "$recovery_seq" failed
+    return "$status"
+  fi
+  current_target=${parsed%%$'\n'*}
+  seq=${parsed#*$'\n'}
   if [[ "$current_target" != "$META_ROLE_TARGET" ]]; then
     complete_turn "$seq" failed
-    die 'frozen role identity changed; start a new durable Codex session'
+    printf 'df-codex-exec: frozen role identity changed; start a new durable Codex session\n' >&2
+    return 1
   fi
   printf '%s\n' "$seq"
 }
@@ -164,13 +234,26 @@ load_meta() {
   # Values were written with printf %q below.
   # shellcheck disable=SC1090
   source "$meta"
+  [[ -n "${META_DIR:-}" ]] || die "legacy session '$session_name' has no META_DIR; start a new session"
+  [[ -n "${META_DF_RUN:-}" ]] || die "legacy session '$session_name' has no META_DF_RUN; start a new session"
+  [[ -n "${META_DF_LANE:-}" ]] || die "legacy session '$session_name' has no META_DF_LANE; start a new session"
+  [[ -n "${META_DF_REPO_ROOT:-}" ]] || die "legacy session '$session_name' has no META_DF_REPO_ROOT; start a new session"
+  [[ -n "${META_ROLE_TARGET:-}" ]] || die "legacy session '$session_name' has no META_ROLE_TARGET; start a new session"
+  node -e '
+    try {
+      const target = JSON.parse(process.argv[1]);
+      if (!target || typeof target !== "object") throw new Error();
+    } catch {
+      process.stderr.write("df-codex-exec: persisted META_ROLE_TARGET is invalid; start a new session\n");
+      process.exit(1);
+    }
+  ' "$META_ROLE_TARGET" || exit $?
   workdir=$META_DIR
-  df_run=${META_DF_RUN:-}
-  df_lane=${META_DF_LANE:-}
-  df_repo_root=${META_DF_REPO_ROOT:-}
-  [[ -n "$df_run$df_lane$df_repo_root${META_ROLE_TARGET:-}" ]] \
-    || die "legacy session '$session_name' has no frozen role identity; start a new session"
+  df_run=$META_DF_RUN
+  df_lane=$META_DF_LANE
+  df_repo_root=$META_DF_REPO_ROOT
   if [[ -n "${META_DANGEROUS_BYPASS+x}" ]]; then
+    [[ -n "${META_SANDBOX:-}" ]] || die "session '$session_name' has no META_SANDBOX; start a new session"
     sandbox=$META_SANDBOX
     dangerous_bypass=$META_DANGEROUS_BYPASS
   else
@@ -219,10 +302,12 @@ run_turn() {
   local -a codex_args
   local dispatch_seq
 
+  dispatch_seq="$(reserve_turn "$turn")"
+  local reserve_status=$?
+  (( reserve_status == 0 )) || return "$reserve_status"
+  active_turn_seq=$dispatch_seq
   printf '%s\n' "$$" > "$session_dir/turn-$turn.pid"
   date -u +%FT%TZ > "$session_dir/turn-$turn.started"
-  dispatch_seq="$(reserve_turn "$turn")"
-  active_turn_seq=$dispatch_seq
 
   codex_args=(
     exec
@@ -313,10 +398,9 @@ case "$command_name" in
       *) die "unsupported sandbox mode: $sandbox" ;;
     esac
     [[ -n "$sandbox" ]] || sandbox='workspace-write'
-    META_ROLE_TARGET="$(bash "$role_caller" preflight \
-      --run "$df_run" --lane "$df_lane" --repo-root "$df_repo_root" \
-      --responsibility cross_model_review --allow-kind transport --allow-transport codex-cli \
-      | node -e 'const result = JSON.parse(require("fs").readFileSync(0, "utf8")); process.stdout.write(JSON.stringify(result.target));')"
+    META_ROLE_TARGET="$(preflight_target)"
+    preflight_status=$?
+    (( preflight_status == 0 )) || exit "$preflight_status"
     mkdir -p "$session_dir"
     printf 'META_DIR=%q\nMETA_DF_RUN=%q\nMETA_DF_LANE=%q\nMETA_DF_REPO_ROOT=%q\nMETA_ROLE_TARGET=%q\nMETA_SANDBOX=%q\nMETA_DANGEROUS_BYPASS=%q\nMETA_BRIEF=%q\n' \
       "$workdir" "$df_run" "$df_lane" "$df_repo_root" "$META_ROLE_TARGET" "$sandbox" "$dangerous_bypass" "$brief" > "$meta"

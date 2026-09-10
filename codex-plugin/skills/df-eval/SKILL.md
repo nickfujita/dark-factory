@@ -8,7 +8,8 @@ description: "Skill quality owner for Dark Factory. Blinded scenario evals gate 
 Every background runner uses the Dark Factory root reported by the session hook.
 Read `<df-root>/references/role-callers-inventory.md`, then invoke required
 runtime wrappers under `<df-root>`, never from a copied global skill directory.
-Preflight its frozen role before reservation, then use that target natively.
+Every grader call uses `eval_graders`; this parent owns terminal completion for
+each leaf. Follow the inventory's native contract before every child call.
 
 One owner for skill quality. Two duties. The scenario suite gates every skill change. The recurring retro mines run trails for improvements and routes every proposed edit through operator approval. Both run capped from birth. A recurring session that reads transcripts and proposes improvements is the same shape that ran away in df-prd-challenge. Strong models never run out of findings, so this loop ships with its own limits.
 

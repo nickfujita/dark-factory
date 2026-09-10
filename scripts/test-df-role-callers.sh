@@ -248,6 +248,95 @@ assert_multiple_allowed_leaves 'Codex adapter' "$codex_caller"
 assert_unallowed_leaf_stops 'source adapter' "$source_caller"
 assert_unallowed_leaf_stops 'Codex adapter' "$codex_caller"
 
+render_native_selection() {
+  node - "$1" "$2" <<'NODE'
+const [text, harness] = process.argv.slice(2);
+const result = JSON.parse(text);
+const leaves = result.target.kind === 'parallel' ? result.target.targets : [result.target];
+for (const target of leaves) {
+  if (harness === 'claude' && target.kind === 'session') console.log('session\tinherit');
+  else if (harness === 'claude' && target.kind === 'native-model') console.log(`native-model\t${target.model}`);
+  else if (harness === 'claude' && target.kind === 'named-agent') console.log(`named-agent\t${target.agent}`);
+  else if (harness === 'codex' && target.kind === 'session') console.log('session\tinherit');
+  else if (harness === 'codex' && target.kind === 'named-agent') console.log(`named-agent\t${target.agent}`);
+  else process.exit(1);
+}
+NODE
+}
+
+assert_native_mapping() {
+  local label=$1 harness=$2 target=$3 expected=$4 adapter=$5
+  shift 5
+  local preflight selection
+  reset_calls
+  if preflight="$(FAKE_ROLE_TARGET="$target" bash "$adapter" preflight \
+    --run role-callers --lane standard --repo-root "$consumer" \
+    --responsibility menial_scoped_investigation "$@")" \
+    && selection="$(render_native_selection "$preflight" "$harness")" \
+    && [[ "$selection" == "$expected" ]]; then
+    ok "$label maps the returned target to native selection"
+  else
+    bad "$label maps the returned target to native selection" "${selection:-no selection}"
+  fi
+  if grep -qE '^(reserve|worker|complete)' "$FAKE_CALLER_LOG"; then
+    bad "$label preflight does not reserve or launch"
+  fi
+}
+
+assert_native_mapping 'Claude session' claude '{"kind":"session"}' $'session\tinherit' \
+  "$source_caller" --allow-kind session
+assert_native_mapping 'Claude model' claude '{"kind":"native-model","model":"sonnet"}' $'native-model\tsonnet' \
+  "$source_caller" --allow-kind native-model
+assert_native_mapping 'Codex session' codex '{"kind":"session"}' $'session\tinherit' \
+  "$codex_caller" --allow-kind session
+assert_native_mapping 'Codex named agent' codex '{"kind":"named-agent","agent":"terra_xhigh"}' $'named-agent\tterra_xhigh' \
+  "$codex_caller" --allow-kind named-agent
+
+reset_calls
+parallel_selection_json='{"kind":"parallel","targets":[{"kind":"native-model","model":"opus"},{"kind":"session"}]}'
+parallel_preflight="$(FAKE_ROLE_TARGET="$parallel_selection_json" bash "$source_caller" preflight \
+  --run role-callers --lane standard --repo-root "$consumer" \
+  --responsibility design_runners --dispatch-count 2 \
+  --allow-kind native-model --allow-kind session)"
+parallel_rows="$(render_native_selection "$parallel_preflight" claude)"
+native_seqs=()
+while IFS=$'\t' read -r kind value; do
+  seq="$(bash "$work/fake-state.sh" reserve role-callers design_runners "deterministic native $kind $value")"
+  native_seqs+=("$seq")
+  printf 'native %s %s\n' "$kind" "$value" >>"$FAKE_CALLER_LOG"
+done <<<"$parallel_rows"
+for seq in "${native_seqs[@]}"; do bash "$work/fake-state.sh" complete role-callers "$seq" ok; done
+if [[ "$parallel_rows" == $'native-model\topus\nsession\tinherit' ]] \
+  && [[ "$(grep -c '^reserve' "$FAKE_CALLER_LOG")" == 2 ]] \
+  && [[ "$(grep -c '^native' "$FAKE_CALLER_LOG")" == 2 ]] \
+  && [[ "$(grep -c '^complete .* ok$' "$FAKE_CALLER_LOG")" == 2 ]]; then
+  ok 'deterministic native boundary preserves parallel order and completes every leaf'
+else
+  bad 'deterministic native boundary preserves parallel order and completes every leaf' "$(cat "$FAKE_CALLER_LOG")"
+fi
+
+reset_calls
+if FAKE_ROLE_FAIL=1 bash "$codex_caller" preflight \
+  --run role-callers --lane standard --repo-root "$consumer" \
+  --responsibility menial_scoped_investigation --allow-kind session >/dev/null 2>&1; then
+  bad 'deterministic native boundary rejects failed preflight'
+elif grep -qE '^(reserve|native|complete)' "$FAKE_CALLER_LOG"; then
+  bad 'failed native preflight leaves no reservation or child launch' "$(cat "$FAKE_CALLER_LOG")"
+else
+  ok 'failed native preflight leaves no reservation or child launch'
+fi
+
+reset_calls
+expect_fail 'native-only preflight rejects a CLI target' env \
+  FAKE_ROLE_TARGET='{"kind":"cli","model":null,"effort":null}' \
+  bash "$codex_caller" preflight --run role-callers --lane standard --repo-root "$consumer" \
+    --responsibility menial_scoped_investigation --allow-kind session --allow-kind named-agent
+if grep -qE '^(reserve|native|complete)' "$FAKE_CALLER_LOG"; then
+  bad 'unsupported native target made no reservation or child launch'
+else
+  ok 'unsupported native target made no reservation or child launch'
+fi
+
 : >"$FAKE_CALLER_LOG"
 expect_fail 'lane mismatch stops before reservation' \
   bash "$source_caller" reserve --run role-callers --lane quick --repo-root "$consumer" \
@@ -491,6 +580,50 @@ if [[ "$source_hook_root" == "$repo_root" && "$codex_hook_root" == "$repo_root/c
 else
   bad 'copied source and Codex skills resolve inventory and wrappers from hook roots'
 fi
+
+for inventory in "$source_inventory" "$codex_inventory"; do
+  for required in \
+    'bash "$df_root/scripts/df-role-caller.sh" preflight' \
+    '--run "$run_id" --responsibility "$responsibility" --lane "$lane"' \
+    '--repo-root "$consumer_root" --dispatch-count "$leaf_count"' \
+    'spawn_agent.agent_type' "Agent tool's \`subagent_type\`" \
+    'one sequence for every row' 'native caller owns' \
+    '`menial_scoped_investigation`'; do
+    if ! rg -Fq -- "$required" "$inventory"; then
+      bad 'canonical native inventory contains the executable lifecycle contract' "$inventory missing $required"
+    fi
+  done
+done
+if [[ "$fail" -eq 0 ]]; then ok 'canonical native inventories contain the executable lifecycle contract'; fi
+
+native_skill_expectations=(
+  'arena/SKILL.md:design_runners'
+  'df-code-review/SKILL.md:discovery_reviewers'
+  'df-code-review/SKILL.md:recheck_leaf_reviewers'
+  'df-design/SKILL.md:design_runners'
+  'df-eval/SKILL.md:eval_graders'
+  'df-implement/SKILL.md:implementation_delegate'
+  'df-implement/SKILL.md:judgment_delegate'
+  'df-plan/SKILL.md:menial_scoped_investigation'
+  'df-prd-challenge/SKILL.md:discovery_reviewers'
+  'df-prd-challenge/SKILL.md:recheck_leaf_reviewers'
+  'how/SKILL.md:menial_scoped_investigation'
+  'how/SKILL.md:investigation_synthesizer'
+  'interrogate/SKILL.md:discovery_reviewers'
+  'recall/SKILL.md:menial_scoped_investigation'
+  'swarm/SKILL.md:implementation_delegate'
+  'why/SKILL.md:investigation_synthesizer'
+)
+for skill_root in "$repo_root/skills" "$repo_root/codex-plugin/skills"; do
+  for expectation in "${native_skill_expectations[@]}"; do
+    file=${expectation%%:*}
+    responsibility=${expectation#*:}
+    if ! rg -Fq "$responsibility" "$skill_root/$file"; then
+      bad 'native skill site names its exact responsibility' "$skill_root/$file missing $responsibility"
+    fi
+  done
+done
+if [[ "$fail" -eq 0 ]]; then ok 'native skill sites name their exact responsibilities in both trees'; fi
 
 copied_role_helpers_ok=1
 for copied_skill in "$copied_source_router" "$copied_codex_router"; do

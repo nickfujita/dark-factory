@@ -8,7 +8,9 @@ description: "Design before code for routed work. Sketch types, signatures, and 
 Every background runner uses the Dark Factory root reported by the session hook.
 Read `<df-root>/references/role-callers-inventory.md`, then invoke required
 runtime wrappers under `<df-root>`, never from a copied global skill directory.
-Preflight its frozen role before reservation, then use that target natively.
+Candidate calls use `design_runners`; this parent owns terminal completion for
+each ordered leaf. Follow the inventory's native contract before every child
+call.
 
 Design before implementing. Sketch types, function signatures, class shapes, and module boundaries with `not implemented` bodies and pseudocode. Synthesize across independent runner candidates, then fill in code against the chosen sketch. If implementation proves the sketch wrong, throw it out and redesign.
 
@@ -39,7 +41,7 @@ Skip Phase A only when the work is genuinely greenfield with no surrounding syst
 
 ## Phase B: Sketch
 
-Spawn candidate runners as background native Codex subagents. Resolve them through the `design_runners` role in `../df/references/model-policy.md`, never a hardcoded model slug. The Standard lane runs one runner. The High-consequence lane runs two. Pass `references/runner-prompt.md` as each runner's prompt, with the requirements and the Phase A grounding artifacts as file pointers. Each candidate is a design package shaped per `references/rationale-template.md`: the caller's usage written first, then the type sketch, function signatures, module map, and prose rationale derived from it.
+Spawn candidate runners as background native Codex subagents. Resolve them through the `design_runners` responsibility in `../df/references/model-policy.md`, never a hardcoded model slug. The Standard lane runs one runner. The High-consequence lane runs two independent single-leaf role invocations and preflights each one. Pass `references/runner-prompt.md` as each runner's prompt, with the requirements and the Phase A grounding artifacts as file pointers. Each candidate is a design package shaped per `references/rationale-template.md`: the caller's usage written first, then the type sketch, function signatures, module map, and prose rationale derived from it.
 
 Design it twice. Require at least two structurally distinct candidates before synthesis, even when the first looks sufficient. This is the exhaust-the-design-space principle made concrete. Whole-shape alternatives, not point fixes inside one shape. With one runner, the runner produces both candidates. With two runners, each produces its best, and when they converge on the same shape, ask one for a genuine alternative before synthesizing.
 

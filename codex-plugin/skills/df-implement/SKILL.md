@@ -8,7 +8,10 @@ description: "Implementation stage for routed work. Executes the plan task by ta
 Every background runner uses the Dark Factory root reported by the session hook.
 Read `<df-root>/references/role-callers-inventory.md`, then invoke required
 runtime wrappers under `<df-root>`, never from a copied global skill directory.
-Preflight its frozen role before reservation, then use that target natively.
+Implementer calls use `implementation_delegate`, review calls use
+`recheck_leaf_reviewers`, and fresh rounds 4 and 5 use `judgment_delegate`.
+This parent follows the inventory's native contract and owns every terminal
+completion, including resumed implementer calls.
 
 Execute the implementation plan. You own the design and the program. Delegate the code-writing. Review every diff yourself. The economy is a fresh implementer per task from an extracted brief, one independent review per task with two verdicts, and a capped fix loop. On one measured feature it cost about 1.5x and caught five faults that passed a 16.7k-test suite. It is the pipeline's one measured win. Keep it intact.
 
@@ -32,7 +35,7 @@ Read the plan once. Note its global constraints. Create one todo per task. Then 
 
 ## Budget and ledger
 
-The task ledger lives in the run state store outside the repo, the single authoritative record per run. `scripts/df-state.sh` is the accessor. The script lands in this same wave; until it is on disk, append the same lines to the run state file by hand, reservation still before spawn.
+The task ledger lives in the run state store outside the repo, the single authoritative record per run. `<df-root>/scripts/df-state.sh` is the only accessor. Do not edit run-state files by hand.
 
 - Preflight every frozen role, then reserve every dispatch through `scripts/df-state.sh` **before** spawning. A dispatch is counted the moment it is reserved, not when it returns. A spawn without a reservation is a budget leak.
 - Nested dispatches count against the parent budget. When df-implement itself runs as a dispatched stage, its implementers, reviewers, and re-reviewers draw down the run's budget, never a fresh one.
@@ -54,9 +57,9 @@ Briefs, reports, and review packages live beside the ledger in the run state dir
 
 Every spawn resolves a role through `../df/references/model-policy.md`, never a hardcoded model slug.
 
-- Implementers run the `implementation_delegate` role. When the plan text contains the complete code to write, the work is transcription plus testing; use the menial tier for that implementer, and for batched mechanical edits.
-- Task reviewers and re-reviewers run the `recheck_leaf_reviewers` role. It is a floor, the one pin allowed to exceed a throttled session, because its job is to keep the review meaningful.
-- Fix rounds 4 and 5 dispatch on the judgment tier, the session model via inherit. When the session is throttled at or below the implementation tier, the escalation is fresh eyes alone. Dispatch it anyway.
+- Implementers run the `implementation_delegate` responsibility. The returned target still applies when the plan text makes the work transcription plus testing; this site does not switch to an investigation role.
+- Task reviewers and re-reviewers run the `recheck_leaf_reviewers` responsibility. It is a floor, the one pin allowed to exceed a throttled session, because its job is to keep the review meaningful.
+- Fix rounds 4 and 5 run the `judgment_delegate` responsibility. When the session is throttled at or below the implementation tier, the escalation is fresh eyes alone. Dispatch it anyway.
 
 ## Rulings, not stalls
 

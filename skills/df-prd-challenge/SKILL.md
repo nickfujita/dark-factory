@@ -9,6 +9,9 @@ disable-model-invocation: true
 For every shell caller, use the Dark Factory root reported by the session hook.
 Read `<df-root>/references/role-callers-inventory.md` and invoke its runtime
 wrapper under `<df-root>`, never from a copied global skill directory.
+Native discovery and full-persona calls use `discovery_reviewers`; downgraded
+rechecks and fresh delta verifiers use `recheck_leaf_reviewers`. This parent
+owns every native leaf's terminal completion under the inventory's contract.
 
 Stress-test a hardened PRD. This skill has two modes, and the lane picks which
 one runs. The PRD is remediated **autonomously** in both — the author is not
@@ -221,7 +224,8 @@ the three terminal outcomes. Nothing in it loops.
 
 Mechanics for this tree:
 
-1. **Preflight two declared roles.** The in-session Claude reviewer reserves
+1. **Preflight two declared roles.** The in-session Claude reviewer uses
+   `discovery_reviewers` and reserves
    its own native dispatch. The Codex shell leg reserves its own transport
    dispatch after its frozen-role preflight.
 2. **Run both in parallel, in a single message.** The Claude reviewer is an
@@ -433,7 +437,8 @@ information — it belongs in the report, not just in your head.
 Read `references/personas.md` for the 3 persona system prompts, the shared
 output contract, and the delta-verification and recheck-scope modes.
 
-**Each pass, preflight and reserve three dispatches, then dispatch all 3 Claude
+**Each pass, preflight `discovery_reviewers` or `recheck_leaf_reviewers` as the
+tier table requires and reserve three dispatches, then dispatch all 3 Claude
 personas as parallel sub-agents** (all 3 Agent calls in one message). Each sub-agent
 receives:
 

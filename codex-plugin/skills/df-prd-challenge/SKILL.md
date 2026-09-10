@@ -8,6 +8,9 @@ description: "Codex-native PRD challenge. Standard runs a single pass, one Codex
 For every shell caller, use the Dark Factory root reported by the session hook.
 Read `<df-root>/references/role-callers-inventory.md` and invoke its runtime
 wrapper under `<df-root>`, never from a copied global skill directory.
+Native discovery and full-persona calls use `discovery_reviewers`; downgraded
+rechecks and fresh delta verifiers use `recheck_leaf_reviewers`. This parent
+owns every native leaf's terminal completion under the inventory's contract.
 
 Stress-test a hardened PRD. This skill has two modes, and the lane picks which
 one runs. The PRD is remediated **autonomously** in both — the author is not
@@ -217,8 +220,8 @@ the three terminal outcomes. Nothing in it loops.
 
 Mechanics for this tree:
 
-1. **Preflight two declared roles.** The in-session Codex reviewer reserves its
-   native dispatch. The Claude transport reserves its own dispatch after its
+1. **Preflight two declared roles.** The in-session Codex reviewer uses
+   `discovery_reviewers` and reserves its native dispatch. The Claude transport reserves its own dispatch after its
    frozen-role preflight.
 2. **Run both in parallel, in a single message.** The Codex reviewer is a
    native subagent at `DISCOVERY_TIER` carrying the shared rubric from
@@ -428,7 +431,8 @@ information — it belongs in the report, not just in your head.
 Read `references/personas.md` for the 3 persona system prompts, the shared
 output contract, and the delta-verification and recheck-scope modes.
 
-**Each pass, preflight and reserve three dispatches, then run 3 parallel Codex
+**Each pass, preflight `discovery_reviewers` or `recheck_leaf_reviewers` as the
+tier table requires and reserve three dispatches, then run 3 parallel Codex
 persona reviews** (one per persona). Preferred path: explicitly spawn 3 native Codex
 subagents, then wait for all three before synthesis. Each subagent receives:
 

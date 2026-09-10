@@ -9,7 +9,9 @@ disable-model-invocation: true
 Every background runner uses the Dark Factory root reported by the session hook.
 Read `<df-root>/references/role-callers-inventory.md`, then invoke required
 runtime wrappers under `<df-root>`, never from a copied global skill directory.
-Preflight its frozen role before reservation, then use that target natively.
+Every planning explorer call uses `menial_scoped_investigation`; this parent
+owns terminal completion for each leaf. Follow the inventory's native contract
+before every child call.
 
 **You own the plan, not the code. The plan is the deliverable. Do not implement.** The plan is a checklist df-implement runs box by box and the operator audits from the evidence. Write every task so a cheap model can implement it by transcription. Exact paths, exact signatures, verbatim code. A task that needs judgment to fill in is a task you have not finished writing.
 
@@ -37,7 +39,7 @@ A non-visual question about timing, behavior, or whether an API works gets a pro
 
 ## Explore in subagents
 
-Spawn read-only explorers with the Agent tool, in the background, on the menial investigation role from `../df/references/model-policy.md` (the guard-the-context-window principle). Each returns file pointers, conventions, test commands, and entry points. No inlined dumps.
+Spawn read-only explorers with the Agent tool, in the background, on the `menial_scoped_investigation` responsibility from `../df/references/model-policy.md` (the guard-the-context-window principle). Each returns file pointers, conventions, test commands, and entry points. No inlined dumps.
 
 ## Slice into PRs
 

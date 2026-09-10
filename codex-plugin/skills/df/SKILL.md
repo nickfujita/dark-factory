@@ -81,11 +81,12 @@ Before each background dispatch, use the frozen plan in
 `<df-root>/references/role-callers-inventory.md`, where `<df-root>` is the Dark
 Factory root reported by the session hook. Invoke shell wrappers from `<df-root>`,
 not from a copied global skill directory. Preflight the declared responsibility,
-check that the native or transport interface can represent its target, then
-reserve each actual worker. A shell runner owns that reservation itself, so do
-not reserve it again in skill prose. The documented Luna limitation needs an
-explicit `terra_xhigh` override before preparation. Do not substitute it at a
-call site.
+inspect and apply the returned target through the inventory's native contract,
+then reserve each actual worker. The downstream skill names the exact
+responsibility and owns terminal completion. A shell runner owns that
+reservation itself, so do not reserve it again in skill prose. The documented
+Luna limitation needs an explicit `terra_xhigh` override before preparation.
+Do not substitute it at a call site.
 
 Spawn native Codex subagents. Defaults for every spawn:
 

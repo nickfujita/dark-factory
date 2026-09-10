@@ -8,7 +8,10 @@ description: "Use for \"how does X work\", code walkthroughs before changing som
 Every background runner uses the Dark Factory root reported by the session hook.
 Read `<df-root>/references/role-callers-inventory.md`, then invoke required
 runtime wrappers under `<df-root>`, never from a copied global skill directory.
-Preflight its frozen role before reservation, then use that target natively.
+Explorer calls use `menial_scoped_investigation`, the explainer uses
+`investigation_synthesizer`, and an optional native critic uses
+`judgment_delegate`. This parent follows the inventory's native contract and
+owns every terminal completion.
 
 Explore the codebase to answer "how does X work?" questions. Produce clear architectural explanations at the level of a senior engineer onboarding onto a subsystem. Enough to build a working mental model, not annotated source code.
 
@@ -53,7 +56,7 @@ Spawn all explorers with the Agent tool in a single message. For each:
 
 - run in the background
 - a read-only instruction in the prompt: explore and report, never write or modify anything
-- the menial investigation role resolved through the df model policy (`../df/references/model-policy.md`), never a hardcoded model slug
+- the `menial_scoped_investigation` responsibility resolved through the df model policy (`../df/references/model-policy.md`), never a hardcoded model slug
 
 Each explorer gets the same base prompt from `references/explorer-prompt.md` plus a specific exploration angle naming its slice. Each explorer should:
 
@@ -79,7 +82,7 @@ Once all explorers return, spawn a single explainer with the Agent tool to synth
 
 - run in the background
 - a read-only instruction
-- the investigation-synthesizer role from the df model policy
+- the `investigation_synthesizer` responsibility from the df model policy
 
 The explainer gets all explorers' findings and writes the human-facing explanation (output format below). Read `references/explainer-prompt.md` for the full prompt template. The explainer reconciles overlapping findings, resolves contradictions, and weaves the slices into a unified picture.
 
@@ -113,7 +116,7 @@ Run the full explain flow above (Steps 1 to 4). You must understand the architec
 
 The panel is two-family, one Claude critic plus one Codex critic. That is the panel ceiling from the df model policy, not a downgrade to work around; a same-family rerun is a correlated draw, not a second opinion.
 
-**Claude critic.** Runs on the judgment-delegate role from the df model policy. That role defaults to inherit, so either run the critique in-session after the explanation is presented, or spawn one agent with the Agent tool (background, read-only instruction, model field omitted). Build the prompt from `references/critic-prompt.md`. The critic gets:
+**Claude critic.** Runs on the `judgment_delegate` responsibility from the df model policy. That role defaults to inherit, so either run the critique in-session after the explanation is presented, or spawn one agent with the Agent tool (background, read-only instruction, model field omitted). Build the prompt from `references/critic-prompt.md`. The critic gets:
 
 1. The explanation from Step 1, so it doesn't re-explore
 2. The relevant file paths, so it can read the actual code

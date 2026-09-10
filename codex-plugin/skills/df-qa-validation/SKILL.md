@@ -8,6 +8,8 @@ description: "Validate a PRD against the feature's committed verification recipe
 For every shell caller, use the Dark Factory root reported by the session hook.
 Read `<df-root>/references/role-callers-inventory.md` and invoke its runtime
 wrapper under `<df-root>`, never from a copied global skill directory.
+This skill has no native child call: the first review stays in the orchestrator
+session, and the listed shell wrapper owns the second review's role lifecycle.
 
 Validate a PRD against the feature's committed verification recipes using two
 independent review contexts: the

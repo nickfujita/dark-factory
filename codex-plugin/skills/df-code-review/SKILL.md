@@ -8,6 +8,9 @@ description: "Codex-native code review for a feature branch: one whole-branch di
 For every shell caller, use the Dark Factory root reported by the session hook.
 Read `<df-root>/references/role-callers-inventory.md` and invoke its runtime
 wrapper under `<df-root>`, never from a copied global skill directory.
+Native discovery and second-opinion calls use `discovery_reviewers`; fresh
+delta-verification calls use `recheck_leaf_reviewers`. This parent owns each
+native leaf's terminal completion under the inventory's native contract.
 
 Review a feature branch in **one whole-branch discovery pass on a frozen tree**,
 then verify the remediation and stop. There is no round loop. Fixes are applied
@@ -197,8 +200,9 @@ where `<timestamp>` is `YYYY-MM-DDTHH-MM-SSZ` (UTC).
 ## Step 2: The discovery pass
 
 **One pass. Every reviewer the lane calls for, in parallel, in a single
-message, all reading `REVIEW_SHA`.** Preflight each declared role, then reserve
-each native dispatch.
+message, all reading `REVIEW_SHA`.** Preflight `discovery_reviewers`, inspect
+the returned native target, then reserve one sequence per reviewer before the
+child calls.
 
 Subagents do not inherit your shell variables or context: state the concrete
 diff path (`<REVIEW_ROOT>/branch-diff.txt`), the concrete `REVIEW_SHA`, and for
@@ -372,7 +376,8 @@ gets, who verifies, the verdict block, and how to read the result.
 
 In short. Assemble the delta (each finding as raised, its disposition and
 reason, the fix diff, the test evidence, plus `git diff <REVIEW_SHA>..HEAD` and
-the fixed unresolved list). Preflight and reserve a dispatch per verifying leg. Send it back
+the fixed unresolved list). Preflight `recheck_leaf_reviewers` and reserve a
+dispatch per fresh native verifying leg. Send it back
 to the reviewer that raised the findings, in its thread where the harness can
 continue one; where it cannot — the CLI legs are fresh processes every time —
 dispatch a fresh in-session Codex subagent with the original finding text
