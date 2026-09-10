@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: run_codex_subagent_reviews.sh <prd-path> <qa-path> <base-ref> <output-dir>
+# Usage: run_codex_subagent_reviews.sh <prd-path> <selection-ref> <repo-root> <base-ref> <output-dir>
 # Runs the three Phase A code review roles as parallel codex exec processes.
 #
 # Output validation is FAIL-CLOSED (ported from df-prd-challenge): an empty or
@@ -17,8 +17,8 @@ set -euo pipefail
 # review target is committed state (git diff base..HEAD), so a snapshot at HEAD
 # is exact.
 
-if [[ $# -lt 4 ]]; then
-  echo "Usage: run_codex_subagent_reviews.sh <prd-path> <qa-path> <base-ref> <output-dir>" >&2
+if [[ $# -ne 5 ]]; then
+  echo "Usage: run_codex_subagent_reviews.sh <prd-path> <selection-ref> <repo-root> <base-ref> <output-dir>" >&2
   exit 1
 fi
 
@@ -27,39 +27,47 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 1
 fi
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+local_root="$(cd "$script_dir/../../.." && pwd)"
+if [[ -n "${DARK_FACTORY_ROOT:-}" && -f "$DARK_FACTORY_ROOT/scripts/df-code-review-selection.mjs" ]]; then
+  df_root="$DARK_FACTORY_ROOT"
+elif [[ -f "$local_root/scripts/df-code-review-selection.mjs" ]]; then
+  df_root="$local_root"
+else
+  echo "Error: cannot find df-code-review-selection.mjs. Invoke this wrapper from the Dark Factory installation or checkout named by the session hook." >&2
+  exit 1
+fi
+selection_tool="$df_root/scripts/df-code-review-selection.mjs"
+
 prd_path="$1"
-qa_path="$2"
-base_ref="$3"
-out_dir="$4"
+selection_ref="$2"
+repo_root="$3"
+base_ref="$4"
+out_dir="$5"
 
 MIN_BODY_BYTES="${CODEX_MIN_BODY_BYTES:-400}"
 
+if [[ "$repo_root" != /* ]]; then repo_root="$(cd "$repo_root" && pwd -P)"; fi
+if [[ "$out_dir" != /* ]]; then out_dir="$repo_root/$out_dir"; fi
+selection_input="$out_dir/selection-input.json"
+node "$selection_tool" prepare \
+  --prd-path "$prd_path" \
+  --selection-ref "$selection_ref" \
+  --repo-root "$repo_root" \
+  --output-path "$selection_input" >/dev/null
+repo_root="$(git -C "$repo_root" rev-parse --show-toplevel)"
+selection_details="$(node "$selection_tool" describe --input-path "$selection_input")"
 if [[ "$prd_path" != /* ]]; then prd_path="$repo_root/$prd_path"; fi
-if [[ "$qa_path" != /* ]]; then qa_path="$repo_root/$qa_path"; fi
-
-if [[ ! -f "$prd_path" ]]; then
-  echo "Error: PRD file not found at $prd_path" >&2
-  exit 1
-fi
-if [[ ! -f "$qa_path" ]]; then
-  echo "Error: QA runbook not found at $qa_path" >&2
-  exit 1
-fi
-if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
+if ! git -C "$repo_root" rev-parse --verify "$base_ref" >/dev/null 2>&1; then
   echo "Error: base-ref '$base_ref' is not a valid git ref." >&2
   exit 1
 fi
-if git diff --quiet "$base_ref" HEAD; then
+if git -C "$repo_root" diff --quiet "$base_ref" HEAD; then
   echo "Error: no diff found between HEAD and $base_ref" >&2
   exit 1
 fi
 
-codex_skills_dir="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}"
-ref_dir="$codex_skills_dir/df-code-review/references"
-if [[ ! -d "$ref_dir" ]]; then
-  ref_dir="$repo_root/codex-plugin/skills/df-code-review/references"
-fi
+ref_dir="$script_dir/../references"
 if [[ ! -d "$ref_dir" ]]; then
   echo "Error: reference directory not found" >&2
   exit 1
@@ -67,10 +75,9 @@ fi
 
 review_dir="${DARK_FACTORY_REVIEW_DIR:-$out_dir}"
 mkdir -p "$review_dir" "$out_dir"
-git diff "$base_ref" HEAD > "$review_dir/branch-diff.txt"
+git -C "$repo_root" diff "$base_ref" HEAD > "$review_dir/branch-diff.txt"
 
 prd_rel="${prd_path#"$repo_root"/}"
-qa_rel="${qa_path#"$repo_root"/}"
 
 # ---------------------------------------------------------------- sandbox (D26)
 # Never fall back to danger-full-access on the live tree. If the read-only
@@ -102,10 +109,19 @@ if ! unshare --net true 2>/dev/null; then
     mkdir -p "$snapshot_dir/tree"
     cp -a "$repo_root/." "$snapshot_dir/tree/"
   fi
+  while IFS= read -r input_rel; do
+    mkdir -p "$snapshot_dir/tree/$(dirname "$input_rel")"
+    cp -f "$repo_root/$input_rel" "$snapshot_dir/tree/$input_rel"
+  done < <(node "$selection_tool" paths --input-path "$selection_input")
   review_tree="$snapshot_dir/tree"
   sandbox_mode="danger-full-access"
   sandbox_note="sandbox degraded to danger-full-access on a disposable $snapshot_kind snapshot (unshare --net unavailable); the live tree is not exposed"
 fi
+
+node "$selection_tool" verify \
+  --prd-path "$prd_path" \
+  --selection-ref "$selection_ref" \
+  --repo-root "$repo_root" >/dev/null
 
 # A review is accepted only if the body actually contains one (fail-closed,
 # ported from df-prd-challenge's status-file contract).
@@ -156,11 +172,14 @@ run_review() {
     echo "# $label"
     echo
     echo "- PRD: \`$prd_rel\`"
-    echo "- QA Runbook: \`$qa_rel\`"
+    echo "- Selection input: \`$selection_input\`"
     echo "- Base ref: \`$base_ref\`"
     echo "- Prompt: \`$prompt_rel\`"
     echo "- Sandbox: $sandbox_note"
     echo "- Generated (UTC): \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`"
+    echo
+    echo "## Sealed verification selection"
+    printf '%s\n' "$selection_details"
     echo
   } >"$out_path"
 
@@ -176,7 +195,13 @@ run_review() {
 $prompt_text
 
 The PRD path is $prd_rel.
-The QA runbook path is $qa_rel.
+The sealed verification selection is:
+
+$selection_details
+
+For every selected entry, read its skillPath and recipePath. Do not substitute,
+discover, merge, or omit an entry. A no-user-route selection has zero entries;
+read its reason and review only the PRD-bound scope.
 The branch diff has been cached at $review_dir/branch-diff.txt.
 Read changed files as needed for context.
 Return findings in the exact format required by the reviewer prompt.
@@ -239,6 +264,14 @@ done
 if [[ "$status" -ne 0 ]]; then
   echo "One or more Codex subagent reviews failed or produced no usable review. See $out_dir/*.stderr.log" >&2
   exit "$status"
+fi
+
+if ! node "$selection_tool" verify \
+  --prd-path "$prd_path" \
+  --selection-ref "$selection_ref" \
+  --repo-root "$repo_root" >/dev/null; then
+  echo "Error: selected source changed during review. Coverage must reseal and this review must restart." >&2
+  exit 1
 fi
 
 echo "Codex subagent-style reviews written to: $out_dir"
