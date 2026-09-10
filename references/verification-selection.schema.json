@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dark-factory.dev/schemas/verification-selection-v1.json",
+  "title": "Dark Factory verification selection",
+  "description": "The canonical, content-addressed selection stored beneath an external df run. Runtime validation additionally verifies repository containment, regular files, source hashes, run ownership, and canonical JSON bytes.",
+  "oneOf": [
+    { "$ref": "#/$defs/userFacing" },
+    { "$ref": "#/$defs/noUserRoute" }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "nonblank": {
+      "type": "string",
+      "pattern": "^\\S(?:.*\\S)?$"
+    },
+    "repoPath": {
+      "type": "string",
+      "description": "Canonical POSIX path relative to the supplied repository root. Runtime rejects traversal, absolute paths, non-regular files, and symlink escapes.",
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*//)(?!.*(?:^|/)\\.(?:/|$))(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000-\\u001F]+$"
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "medium", "skillPath", "skillSha256", "recipePath", "subFeature", "recipeSha256", "requirementIds", "negativeRequirementIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonblank" },
+        "medium": { "$ref": "#/$defs/nonblank" },
+        "skillPath": { "$ref": "#/$defs/repoPath" },
+        "skillSha256": { "$ref": "#/$defs/digest" },
+        "recipePath": { "$ref": "#/$defs/repoPath" },
+        "subFeature": { "oneOf": [{ "$ref": "#/$defs/nonblank" }, { "type": "null" }] },
+        "recipeSha256": { "$ref": "#/$defs/digest" },
+        "requirementIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonblank" },
+          "uniqueItems": true
+        },
+        "negativeRequirementIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonblank" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "catalogLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repoPath" },
+        "sha256": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "userFacing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "runId", "featureSlug", "prdPath", "prdSha256", "catalogLink", "declaredMedia", "entries"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "user-facing" },
+        "runId": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "featureSlug": { "$ref": "#/$defs/nonblank" },
+        "prdPath": { "$ref": "#/$defs/repoPath" },
+        "prdSha256": { "$ref": "#/$defs/digest" },
+        "catalogLink": { "oneOf": [{ "$ref": "#/$defs/catalogLink" }, { "type": "null" }] },
+        "declaredMedia": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonblank" }
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/entry" }
+        }
+      }
+    },
+    "noUserRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "runId", "featureSlug", "prdPath", "prdSha256", "reason", "entries"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "no-user-route" },
+        "runId": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "featureSlug": { "$ref": "#/$defs/nonblank" },
+        "prdPath": { "$ref": "#/$defs/repoPath" },
+        "prdSha256": { "$ref": "#/$defs/digest" },
+        "reason": { "$ref": "#/$defs/nonblank" },
+        "entries": { "type": "array", "maxItems": 0 }
+      }
+    }
+  }
+}

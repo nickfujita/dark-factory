@@ -16,6 +16,8 @@ A run lives in one directory:
   run.tsv           one row of run facts, including the current state
   dispatches.tsv    append-only dispatch ledger
   dispositions.tsv  append-only finding dispositions from review stages
+  verification-selections/
+                    immutable, content-addressed selection objects
   lock/             mkdir-based mutex, holds an owner file
 ```
 
@@ -36,6 +38,13 @@ Never rebuild this path in prose or in a script. Ask for it:
 scripts/df-state.sh path            # the store root
 scripts/df-state.sh path <run-id>   # one run's directory
 ```
+
+`verification-selections/<sha256>.json` is owned exclusively by
+`scripts/df-selection.mjs`. A writer first validates an active run, then
+publishes one complete canonical JSON object with no overwrite. Readers use an
+explicit `<run-id>:sha256:<digest>` reference, validate that it belongs to this
+run directory and repository, and may read retained terminal runs. They never
+discover a latest selection or create run state.
 
 Every `.tsv` file is tab-separated with one header row. Field values never contain a
 tab or a newline. The writer replaces both with a space.

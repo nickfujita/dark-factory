@@ -211,6 +211,7 @@ type VerificationSelection =
       prdPath: string;
       prdSha256: string;
       catalogLink: Readonly<{ path: string; sha256: string }> | null;
+      declaredMedia: readonly [Medium, ...Medium[]];
       entries: readonly [SelectionEntry, ...SelectionEntry[]];
     }>
   | Readonly<{
@@ -255,8 +256,10 @@ function materializeSelection(input: {
 }
 ```
 
-Canonicalization sorts entries by medium, recipe path, and sub-feature and sorts
-requirement IDs inside each entry. The sealer validates all referenced files
+Coverage supplies `declaredMedia` from the project's own declared input set; it
+does not infer media from directory names. Canonicalization sorts declared media,
+entries by medium, recipe path, and sub-feature, and requirement IDs inside each
+entry. The sealer validates all referenced files
 and hashes before an atomic rename. A reader validates the content digest and
 all referenced content hashes before returning entries. It never falls back to
 `latest` or current map discovery.
@@ -272,7 +275,8 @@ The CLI maps `seal --run --draft --repo-root` to `sealSelection` and
 `materialize --ref --repo-root --consumer --format` calls
 `materializeSelection`. Its consumer is exactly `qa-validation`, `dev-verify`,
 `code-review`, or `acceptance`. JSON format emits the returned entry array;
-paths format emits those entries' recipe identities. Neither format rediscovers
+paths format emits one JSON tuple `[medium, recipePath, subFeature]` per line,
+so it preserves distinct selected sub-features. Neither format rediscovers
 recipes. The input reference is `ref` in every API.
 
 ### Project-owned catalog and migration checks
