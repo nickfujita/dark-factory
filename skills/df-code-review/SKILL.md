@@ -83,7 +83,7 @@ must only ever be able to touch a throwaway.
 | `REPORT_DIR` | `<run-dir>/reviews/code-review/` | the final report |
 
 `<run-dir>` is this run's directory in the agent's own store, printed by
-`bash scripts/df-state.sh path "<run-id>"`. It sits outside the repo, so a run
+`bash "$DF_ROOT/scripts/df-state.sh" path "<run-id>"`. It sits outside the repo, so a run
 leaves the project's tree untouched and needs no `.gitignore` entry. Two
 concurrent runs are two run ids and two directories, so they cannot clobber
 each other.
@@ -94,16 +94,13 @@ work now is the dispatch budget plus a shape that runs discovery exactly once.
 
 ## Dispatch reservations
 
-Every reviewer dispatch preflights its frozen role, then reserves a seq through
-`scripts/df-state.sh` **before** it spawns. The reservation is spent the moment
-it lands:
-
-```bash
-df_root="<Dark Factory root reported by the session hook>"
-node "$df_root/scripts/df-role.mjs" preflight --run "<run-id>" --lane "<lane>" \
-  --repo-root "<consumer-root>" --responsibility discovery_reviewers
-seq=$(bash "$df_root/scripts/df-state.sh" reserve "<run-id>" discovery_reviewers "code review discovery, claude leg")
-```
+Every reviewer dispatch follows the executable native or shell contract in
+`$DF_ROOT/references/role-callers-inventory.md`. Native callers preflight the
+responsibility, verify the returned target, reserve through the canonical
+caller, record the selected identity with the receipt, and complete every seq
+with a terminal outcome. Shell wrappers own the same lifecycle internally.
+Never split preflight from a direct state reservation; that bypasses frozen
+target selection and leaves completion ownership ambiguous.
 
 Reserving covers the discovery reviewers, every delta-verification leg, any
 retry after a crashed run, the second-opinion pass, the flag-flip pass, and
@@ -118,10 +115,10 @@ hardcode a model slug at a call site.
 
 - Feature branch checked out with implementation complete
 - Tests passing before review begins
-- E2e test suite exists and passes, covering QA runbook test cases
+- E2e test suite exists and passes for the selected recipe identities
 - Codex CLI installed and authenticated (`codex --version` succeeds)
-- PRD (`docs/prd-<feature>.md`, Status: Approved or Approved with open items)
-  and QA runbook (`docs/qa/qa-<feature>.md`) exist for this feature
+- An explicit `SELECTION_REF` from `df-verify-coverage`, its owning `REPO_ROOT`,
+  and the `PRD_PATH` bound by that selection
 - An open df run in the run-state store, or the standing to open one
 
 ## Step 1: Resolve inputs and freeze the tree
@@ -143,21 +140,26 @@ echo "REVIEW_SHA=$review_sha"
 If the default branch cannot be determined, ask the user for the base ref
 instead of guessing.
 
-**Derive feature slug from branch name:**
-Strip common prefixes (`feat/`, `feature/`, `fix/`, `chore/`). Use the
-remainder as the slug (e.g., `feat/user-auth` → `user-auth`).
+**Resolve the sealed selection before any review scratch, snapshot, or dispatch.**
+Coverage hands over `SELECTION_REF` in the form
+`<run-id>:sha256:<digest>`, `REPO_ROOT`, and `PRD_PATH`. The public B1 reader
+must validate all source digests. `PRD_PATH` must resolve to the PRD bound by
+the selection. Never replace a missing reference with a runbook, a latest
+selection, discovered recipe, or a chat list.
 
-**Locate PRD and QA runbook:**
-1. Scan `docs/` for `prd-<slug>.md` with Status: Approved or Approved with open items
-2. Scan `docs/qa/` for `qa-<slug>.md`
-3. If no exact match: list candidate files and ask the user to confirm paths
+The session hook reports `DF_ROOT`, the Dark Factory installation or checkout
+that contains `scripts/df-code-review-selection.mjs`. A copied global skill
+directory is not that root. Invoke wrappers from `DF_ROOT` with
+`DARK_FACTORY_ROOT="$DF_ROOT"` when their copied location cannot find the
+helper beside the plugin scripts.
 
 **Resolve this run's directory and cache the frozen diff.** Everything this
 skill produces lives under the run directory in the agent's own store, never in
 the repo under review. The run id scopes it, so concurrent reviews cannot
 clobber each other.
 ```bash
-run_dir="$(bash scripts/df-state.sh path "<run-id>")"
+DF_ROOT="<Dark Factory root reported by the session hook>"
+run_dir="$(bash "$DF_ROOT/scripts/df-state.sh" path "<run-id>")"
 review_dir="$run_dir/work/code-review"
 report_dir="$run_dir/reviews/code-review"
 mkdir -p "$review_dir" "$report_dir"
@@ -180,16 +182,8 @@ are no changes to review vs the detected default branch.
 
 Resolve the reference directory (needed for Claude sub-agent prompts):
 ```bash
-ref_dir="$HOME/.claude/skills/df-code-review/references"
-if [[ ! -d "$ref_dir" ]]; then
-  ref_dir="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/df-code-review/references"
-fi
-if [[ ! -d "$ref_dir" ]]; then
-  ref_dir="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-code-review/references"
-fi
-if [[ ! -d "$ref_dir" ]]; then
-  ref_dir="$(ls -d "$HOME"/.claude/plugins/cache/*/dark-factory/*/skills/df-code-review/references 2>/dev/null | sort -V | tail -1)"
-fi
+ref_dir="$DF_ROOT/skills/df-code-review/references"
+[[ -d "$ref_dir" ]] || { echo "ERROR: no Claude code-review references under $DF_ROOT" >&2; exit 1; }
 ```
 
 Reserve the report path now; you assemble and write the full report once, at
@@ -205,9 +199,9 @@ message, all reading `REVIEW_SHA`.** Preflight `discovery_reviewers`, inspect
 the returned native target, then reserve one sequence per reviewer before the
 child calls.
 
-Sub-agents do not inherit your shell variables or context: state the concrete
-diff path (`<REVIEW_ROOT>/branch-diff.txt`), the concrete `REVIEW_SHA`, and for
-any spec-aware reviewer the concrete PRD and QA runbook paths, in each prompt.
+Sub-agents do not inherit shell variables or context. State the concrete diff
+path (`<REVIEW_ROOT>/branch-diff.txt`), `REVIEW_SHA`, `PRD_PATH`, selection
+digest, and every materialized recipe identity in each spec-aware prompt.
 
 **Quick lane — one reviewer.** One in-session sub-agent at `DISCOVERY_TIER`,
 reading all three prompt files (`$ref_dir/claude-quality-prompt.md`,
@@ -219,11 +213,11 @@ per dimension. It also gets the lane's recorded finish predicate, which is what
 **Standard lane — one in-session reviewer plus one cross-family reviewer.**
 
 - **In-session:** the same combined-rubric sub-agent as Quick, plus the PRD and
-  QA runbook paths.
+  materialized sealed selection.
 - **Cross-family:** `run_codex_quality_review.sh` (Step 3). It carries the
   correctness and edge-case rubric, which is where cross-model disagreement is
   worth the most on code. Spec compliance is covered by the in-session reviewer,
-  which has the PRD and runbook in context. That trade is deliberate and it is
+  which has the PRD and selection in context. That trade is deliberate and it is
   what the one-Claude-plus-one-Codex ceiling buys; High-consequence is where the
   Codex spec leg also runs.
 
@@ -234,7 +228,7 @@ per dimension. It also gets the lane's recorded finish predicate, which is what
 - **Reviewer 2 — Claude Security:** `$ref_dir/claude-security-prompt.md`.
   Header: `## Findings — Claude Security`.
 - **Reviewer 3 — Claude Spec:** `$ref_dir/claude-spec-compliance-prompt.md`.
-  Also reads `<prd-path>` and `<qa-path>`. Header: `## Findings — Claude Spec`.
+  Also reads `PRD_PATH` and every selected identity. Header: `## Findings — Claude Spec`.
 - **Reviewers 4 and 5 — the Codex legs:** `run_codex_quality_review.sh` and
   `run_codex_spec_review.sh` (Step 3).
 
@@ -257,28 +251,26 @@ remediation commit exists.
 
 **Codex Quality (Standard and High-consequence):**
 ```bash
-df_root="<Dark Factory root reported by the session hook>"
-quality_script="$df_root/skills/df-code-review/scripts/run_codex_quality_review.sh"
-if [[ ! -f "$quality_script" ]]; then
-  echo "ERROR: Cannot find run_codex_quality_review.sh" >&2; exit 1
-fi
+quality_script="$DF_ROOT/skills/df-code-review/scripts/run_codex_quality_review.sh"
+[[ -f "$quality_script" ]] || { echo "ERROR: no Codex quality wrapper under $DF_ROOT" >&2; exit 1; }
 review_dir="<REVIEW_ROOT from Step 1>"
 base_ref="<base_ref from Step 1>"
-bash "$quality_script" "$base_ref" "$review_dir/codex-quality-review.md" \
-  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
+DARK_FACTORY_ROOT="$DF_ROOT" bash "$quality_script" \
+  "$PRD_PATH" "$SELECTION_REF" "$REPO_ROOT" "$base_ref" \
+  "$review_dir/codex-quality-review.md" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "$REPO_ROOT"
 ```
 
 **Codex Spec (High-consequence only):**
 ```bash
-df_root="<Dark Factory root reported by the session hook>"
-spec_script="$df_root/skills/df-code-review/scripts/run_codex_spec_review.sh"
-if [[ ! -f "$spec_script" ]]; then
-  echo "ERROR: Cannot find run_codex_spec_review.sh" >&2; exit 1
-fi
+spec_script="$DF_ROOT/skills/df-code-review/scripts/run_codex_spec_review.sh"
+[[ -f "$spec_script" ]] || { echo "ERROR: no Codex spec wrapper under $DF_ROOT" >&2; exit 1; }
 review_dir="<REVIEW_ROOT from Step 1>"
 base_ref="<base_ref from Step 1>"
-bash "$spec_script" "<prd-path>" "<qa-path>" "$base_ref" "$review_dir/codex-spec-review.md" \
-  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
+DARK_FACTORY_ROOT="$DF_ROOT" bash "$spec_script" \
+  "$PRD_PATH" "$SELECTION_REF" "$REPO_ROOT" "$base_ref" \
+  "$review_dir/codex-spec-review.md" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "$REPO_ROOT"
 ```
 
 Both scripts own frozen-role preflight, reservation, and completion. They are
@@ -411,7 +403,7 @@ lane's reviewer set, adjudicate, remediate, then **one bounded delta
 confirmation** of that remediation, per Step 6 and inside `VERIFY_RETRY_LIMIT`.
 Then stop. There is no second integrated pass, and a chain gets exactly one.
 
-The full acceptance runbook runs alongside this pass, at the same flag-flip PR.
+The full acceptance selection runs alongside this pass, at the same flag-flip PR.
 That pairing is the point: the integrated review reads the assembled change
 while acceptance exercises it.
 
@@ -431,7 +423,10 @@ directory, outside the repo.
 **Review SHA:** <the frozen commit the discovery pass read>
 **Remediation SHA:** <HEAD after remediation>
 **PRD:** <prd-path>
-**QA Runbook:** <qa-path>
+**Selection Ref:** <run-id>:sha256:<digest>
+**Selection Digest:** <digest>
+**Selected recipe identities:**
+- <entry-id> | <medium> | <recipe-path> | <sub-feature> | <skill-path> | REQ: <ids> | NEG: <ids>
 **Reviewers:** <the ones that actually ran, with the leg each belongs to>
 **Dispatches:** <used> of <budget>
 
@@ -499,6 +494,9 @@ handoff from `df-verify-coverage`.
   is a delta verification, scoped to the fixes.
 - **Reviewing a moving tree.** Freeze at `REVIEW_SHA`, put it in every brief,
   and void the pass if HEAD moves under it.
+- **Replacing a sealed selection.** Materialize through B1 before snapshots and
+  again after reviewer output. If a selected source changed, coverage reseals
+  and the affected review restarts.
 - **Refreshing the diff mid-pass.** That was the round loop's mechanic. It is
   gone with the rounds.
 - **Spawning a reviewer without reserving first.** The reservation is the count,
@@ -523,14 +521,17 @@ handoff from `df-verify-coverage`.
 
 ## Notes
 
-- **Reference file resolution**: look in `$HOME/.claude/skills/df-code-review/references/`
-  first, then `<repo>/skills/df-code-review/references/`, then
-  `<repo>/.claude/skills/df-code-review/references/`
+- **Reference file resolution**: use `$DF_ROOT/skills/df-code-review/references/`.
+  `DF_ROOT` is the installation or checkout from the session hook, never the
+  consumer repository or a copied global skill directory.
 - **Reference files**: `claude-quality-prompt.md`, `claude-security-prompt.md`
   and `claude-spec-compliance-prompt.md` (the discovery rubrics),
   `delta-verification.md` (the CONFIRMED / NOT CONFIRMED contract),
   `synthesis-prompt.md` (synthesis, lead adjudication, and delta-verification
   synthesis)
+- The code-review input bundle keeps the selection ref, digest, no-user-route
+  reason when present, and every selected identity. Review prompts, reviewer
+  headers, the final report, and delta verification retain that same data.
 - The diff is captured once, against `REVIEW_SHA`, from committed state only —
   no working-tree noise
 - Scratch (diff cache, Codex outputs, stderr logs, delta files) and the

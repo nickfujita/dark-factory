@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: run_codex_quality_review.sh <base-ref> <output-path> \
-#   --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
+# Usage: run_codex_quality_review.sh <prd-path> <selection-ref> <repo-root> \
+#   <base-ref> <output-path> --df-run <run-id> --df-lane <lane> \
+#   --df-repo-root <consumer-root>
 # Runs a Codex CLI code quality review of the branch diff and writes findings
-# to the output path. Codex has read-only repo access and runs its own
-# git diff / file reads internally — nothing is inlined into the prompt.
+# to the output path. The PRD and sealed selection are explicit review input;
+# Codex computes the diff and reads selected files internally.
 #
 # Output validation is FAIL-CLOSED (ported from df-prd-challenge): an empty or
 # trivial review body is a failed run and a non-zero exit, never a warning.
@@ -19,8 +20,8 @@ set -euo pipefail
 # created for this review and deleted after. The status output says which mode
 # actually ran.
 
-if [[ $# -ne 8 ]]; then
-  echo "Usage: run_codex_quality_review.sh <base-ref> <output-path> --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>" >&2
+if [[ $# -ne 11 ]]; then
+  echo "Usage: run_codex_quality_review.sh <prd-path> <selection-ref> <repo-root> <base-ref> <output-path> --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>" >&2
   exit 1
 fi
 
@@ -29,9 +30,27 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 1
 fi
 
-base_ref="$1"
-out_path="$2"
-shift 2
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+local_root="$(cd "$script_dir/../../.." && pwd)"
+if [[ -n "${DARK_FACTORY_ROOT:-}" && -f "$DARK_FACTORY_ROOT/scripts/df-code-review-selection.mjs" ]]; then
+  df_root="$DARK_FACTORY_ROOT"
+elif [[ -f "$local_root/scripts/df-code-review-selection.mjs" ]]; then
+  df_root="$local_root"
+else
+  echo "Error: cannot find df-code-review-selection.mjs. Invoke this wrapper from the Dark Factory installation or checkout named by the session hook." >&2
+  exit 1
+fi
+df_root="$(cd "$df_root" && pwd -P)"
+selection_tool="$df_root/scripts/df-code-review-selection.mjs"
+role_caller="$df_root/scripts/df-role-caller.sh"
+state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$df_root/scripts/df-state.sh}"
+
+prd_path="$1"
+selection_ref="$2"
+repo_root="$3"
+base_ref="$4"
+out_path="$5"
+shift 5
 
 df_run=''
 df_lane=''
@@ -48,21 +67,36 @@ done
   echo "Error: --df-run, --df-lane, and --df-repo-root are required." >&2
   exit 1
 }
-repo_root="$(cd "$df_repo_root" && pwd -P)"
-plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
-role_caller="$plugin_root/scripts/df-role-caller.sh"
-state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$plugin_root/scripts/df-state.sh}"
+repo_root="$(cd "$repo_root" && pwd -P)"
+df_repo_root="$(cd "$df_repo_root" && pwd -P)"
+if [[ "$repo_root" != "$df_repo_root" ]]; then
+  echo "Error: repo-root and --df-repo-root must name the same consumer checkout." >&2
+  exit 1
+fi
 
 MIN_BODY_BYTES="${CODEX_MIN_BODY_BYTES:-400}"
 
+if [[ "$repo_root" != /* ]]; then repo_root="$(cd "$repo_root" && pwd -P)"; fi
+if [[ "$out_path" != /* ]]; then out_path="$repo_root/$out_path"; fi
+selection_input="${out_path}.selection.json"
+node "$selection_tool" prepare \
+  --prd-path "$prd_path" \
+  --selection-ref "$selection_ref" \
+  --repo-root "$repo_root" \
+  --output-path "$selection_input" >/dev/null
+repo_root="$(git -C "$repo_root" rev-parse --show-toplevel)"
+selection_details="$(node "$selection_tool" describe --input-path "$selection_input")"
+if [[ "$prd_path" != /* ]]; then prd_path="$repo_root/$prd_path"; fi
+prd_rel="${prd_path#"$repo_root"/}"
+
 # Validate base ref before using it
-if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
+if ! git -C "$repo_root" rev-parse --verify "$base_ref" >/dev/null 2>&1; then
   echo "Error: base-ref '$base_ref' is not a valid git ref." >&2
   exit 1
 fi
 
 # Verify there are changes to review
-if git diff --quiet "$base_ref" HEAD; then
+if git -C "$repo_root" diff --quiet "$base_ref" HEAD; then
   echo "Error: no diff found between HEAD and $base_ref" >&2
   exit 1
 fi
@@ -109,18 +143,36 @@ if ! unshare --net true 2>/dev/null; then
     mkdir -p "$snapshot_dir/tree"
     cp -a "$repo_root/." "$snapshot_dir/tree/"
   fi
+  # Selected inputs may carry uncommitted edits. Overlay every PRD, skill and
+  # recipe that B1 materialized, so the frozen snapshot reads the same bytes
+  # as the owning consumer checkout.
+  while IFS= read -r input_rel; do
+    mkdir -p "$snapshot_dir/tree/$(dirname "$input_rel")"
+    cp -f "$repo_root/$input_rel" "$snapshot_dir/tree/$input_rel"
+  done < <(node "$selection_tool" paths --input-path "$selection_input")
   review_tree="$snapshot_dir/tree"
   sandbox_mode="danger-full-access"
   sandbox_note="sandbox degraded to danger-full-access on a disposable $snapshot_kind snapshot (unshare --net unavailable); the live tree is not exposed"
 fi
 
+# A changed selected source requires coverage to reseal and a review restart.
+node "$selection_tool" verify \
+  --prd-path "$prd_path" \
+  --selection-ref "$selection_ref" \
+  --repo-root "$repo_root" >/dev/null
+
 {
   echo "# Codex Code Quality Review"
   echo
+  echo "- PRD: \`$prd_rel\`"
+  echo "- Selection input: \`$selection_input\`"
   echo "- Base ref: \`$base_ref\`"
   echo "- Generated (UTC): \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`"
   echo "- Reviewer: Codex CLI (code quality axis)"
   echo "- Sandbox: $sandbox_note"
+  echo
+  echo "## Sealed verification selection"
+  printf '%s\n' "$selection_details"
   echo
 } >"$out_path"
 
@@ -162,20 +214,28 @@ validate_body() {
 }
 
 # Codex has read-only sandbox access to the review tree. Tell it the base ref
-# and let it run git diff and read source files internally — no inlined
-# content. stdin is closed: a reviewer that blocks on stdin produces a header
-# and no findings, then reports success.
+# and sealed selection, then let it run git diff and read source files
+# internally. stdin is closed: a reviewer that blocks on stdin produces a
+# header and no findings, then reports success.
 dispatch_receipt="$(bash "$role_caller" reserve \
   --run "$df_run" --lane "$df_lane" --repo-root "$repo_root" \
   --responsibility cross_model_review --purpose 'code review quality' \
   --allow-kind transport --allow-transport codex-cli)"
 dispatch_seq="$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(receipt.seqs[0]);' "$dispatch_receipt")"
-
 codex_exit=0
 codex exec \
   --sandbox "$sandbox_mode" \
   -C "$review_tree" \
   "You are an independent code quality reviewer examining a feature branch diff.
+
+First, read these files:
+- PRD: $prd_rel
+
+$selection_details
+
+For every selected entry, read its skillPath and recipePath. Do not substitute,
+discover, merge, or omit an entry. A no-user-route selection has zero entries;
+read its reason and review only the PRD-bound scope.
 
 Run: git diff $base_ref HEAD
 to see the branch changes. Read the changed source files for full context.
@@ -241,6 +301,14 @@ if [[ "$verdict" != "valid" ]]; then
   echo "" >>"$out_path"
   echo "_No usable review produced (reason: \`$reason\`)._" >>"$out_path"
   echo "_This run produced NO reviewer opinion. Do not treat it as a clean round._" >>"$out_path"
+  exit 1
+fi
+
+if ! node "$selection_tool" verify \
+  --prd-path "$prd_path" \
+  --selection-ref "$selection_ref" \
+  --repo-root "$repo_root" >/dev/null; then
+  echo "Error: selected source changed during review. Coverage must reseal and this review must restart." >&2
   exit 1
 fi
 

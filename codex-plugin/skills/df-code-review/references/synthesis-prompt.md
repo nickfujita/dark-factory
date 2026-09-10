@@ -5,6 +5,11 @@ adjudicate them. This runs once, over every reviewer that ran the pass. It runs
 again after the remediation, over the delta verification's verdicts (Step 7).
 Collect only the reviewers that actually ran.
 
+Keep the sealed selection ref, digest, and every selected identity beside the
+running record. Copy them unchanged into the final report and each delta input.
+Do not synthesize findings from a reviewer report whose selection header differs
+from the discovery input bundle.
+
 ## Step 1: Collect the Pass's Findings
 
 In-session leg:

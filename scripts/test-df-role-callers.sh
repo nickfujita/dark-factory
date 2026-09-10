@@ -110,6 +110,7 @@ chmod +x "$bin/codex"
 
 export FAKE_CALLER_LOG="$work/calls.log"
 export FAKE_CALLER_RUNS="$runs"
+export DF_STATE_ROOT="$runs"
 export DF_ROLE_CALLER_ROLE_HELPER="$work/fake-role.mjs"
 export DF_ROLE_CALLER_STATE_HELPER="$work/fake-state.sh"
 export PATH="$bin:$PATH"
@@ -374,6 +375,40 @@ input="$consumer/input.md"
 out="$consumer/out.md"
 printf '# PRD\n' >"$prd"
 printf '# Review input\n' >"$input"
+mkdir -p "$consumer/skills" "$consumer/recipes"
+printf '# Synthetic verification skill\n' >"$consumer/skills/synthetic.md"
+printf '# Synthetic recipe\n' >"$consumer/recipes/synthetic.md"
+node - "$consumer" "$work/selection.json" <<'NODE'
+const { createHash } = require('node:crypto');
+const { readFileSync, writeFileSync } = require('node:fs');
+const [repo, output] = process.argv.slice(2);
+const digest = (path) => createHash('sha256').update(readFileSync(`${repo}/${path}`)).digest('hex');
+writeFileSync(output, JSON.stringify({
+  schemaVersion: 1,
+  kind: 'user-facing',
+  runId: 'role-callers',
+  featureSlug: 'synthetic-callers',
+  prdPath: 'prd.md',
+  prdSha256: digest('prd.md'),
+  catalogLink: null,
+  declaredMedia: ['cli-agent'],
+  entries: [{
+    id: 'synthetic-cli',
+    medium: 'cli-agent',
+    skillPath: 'skills/synthetic.md',
+    skillSha256: digest('skills/synthetic.md'),
+    recipePath: 'recipes/synthetic.md',
+    subFeature: null,
+    recipeSha256: digest('recipes/synthetic.md'),
+    requirementIds: [],
+    negativeRequirementIds: [],
+  }],
+}, null, 2));
+NODE
+selection_ref="$(node "$repo_root/scripts/df-selection.mjs" seal \
+  --run role-callers --draft "$work/selection.json" --repo-root "$consumer" \
+  | awk -F= '/^SELECTION_REF=/{print $2}')"
+[[ -n "$selection_ref" ]] || { bad 'caller fixture seals review selection'; exit 1; }
 (cd "$consumer" && bash "$source_qa" "$prd" "$input" "$out" \
   --df-run role-callers --df-lane standard --df-repo-root "$consumer")
 preflight_line="$(line_number "$FAKE_CALLER_LOG" '^preflight')"
@@ -413,17 +448,23 @@ assert_preflight_failure 'df-codex-review' bash "$source_review" "$review_brief"
 printf 'branch change\n' >"$consumer/feature.md"
 git -C "$consumer" add feature.md
 git -C "$consumer" commit -qm 'synthetic feature change'
-assert_single_success 'source quality runner' bash "$source_quality" HEAD~1 "$consumer/quality-success.md" \
+assert_single_success 'source quality runner' env DARK_FACTORY_ROOT="$repo_root" \
+  bash "$source_quality" "$prd" "$selection_ref" "$consumer" HEAD~1 "$consumer/quality-success.md" \
   --df-run role-callers --df-lane standard --df-repo-root "$consumer"
-assert_single_worker_failure 'source quality runner' bash "$source_quality" HEAD~1 "$consumer/quality-worker-failure.md" \
+assert_single_worker_failure 'source quality runner' env DARK_FACTORY_ROOT="$repo_root" \
+  bash "$source_quality" "$prd" "$selection_ref" "$consumer" HEAD~1 "$consumer/quality-worker-failure.md" \
   --df-run role-callers --df-lane standard --df-repo-root "$consumer"
-assert_preflight_failure 'source quality runner' bash "$source_quality" HEAD~1 "$consumer/quality-preflight-failure.md" \
+assert_preflight_failure 'source quality runner' env DARK_FACTORY_ROOT="$repo_root" \
+  bash "$source_quality" "$prd" "$selection_ref" "$consumer" HEAD~1 "$consumer/quality-preflight-failure.md" \
   --df-run role-callers --df-lane standard --df-repo-root "$consumer"
-assert_single_success 'source spec runner' bash "$source_spec" "$prd" "$input" HEAD~1 "$consumer/spec-success.md" \
+assert_single_success 'source spec runner' env DARK_FACTORY_ROOT="$repo_root" \
+  bash "$source_spec" "$prd" "$selection_ref" "$consumer" HEAD~1 "$consumer/spec-success.md" \
   --df-run role-callers --df-lane standard --df-repo-root "$consumer"
-assert_single_worker_failure 'source spec runner' bash "$source_spec" "$prd" "$input" HEAD~1 "$consumer/spec-worker-failure.md" \
+assert_single_worker_failure 'source spec runner' env DARK_FACTORY_ROOT="$repo_root" \
+  bash "$source_spec" "$prd" "$selection_ref" "$consumer" HEAD~1 "$consumer/spec-worker-failure.md" \
   --df-run role-callers --df-lane standard --df-repo-root "$consumer"
-assert_preflight_failure 'source spec runner' bash "$source_spec" "$prd" "$input" HEAD~1 "$consumer/spec-preflight-failure.md" \
+assert_preflight_failure 'source spec runner' env DARK_FACTORY_ROOT="$repo_root" \
+  bash "$source_spec" "$prd" "$selection_ref" "$consumer" HEAD~1 "$consumer/spec-preflight-failure.md" \
   --df-run role-callers --df-lane standard --df-repo-root "$consumer"
 
 assert_single_success 'Codex QA runner' env FAKE_ROLE_TARGET='{"kind":"cli","model":null,"effort":null}' \
@@ -475,13 +516,16 @@ assert_three_worker_failure() {
 }
 
 assert_three_success 'Codex subagent runner' env FAKE_ROLE_TARGET='{"kind":"cli","model":null,"effort":null}' \
-  bash "$codex_subagents" "$prd" "$input" HEAD~1 "$consumer/subagents-success" \
+  DARK_FACTORY_ROOT="$repo_root/codex-plugin" bash "$codex_subagents" \
+  "$prd" "$selection_ref" "$consumer" HEAD~1 "$consumer/subagents-success" \
   --df-run role-callers --df-lane standard --df-repo-root "$consumer"
 assert_three_worker_failure 'Codex subagent runner' env FAKE_ROLE_TARGET='{"kind":"cli","model":null,"effort":null}' \
-  bash "$codex_subagents" "$prd" "$input" HEAD~1 "$consumer/subagents-worker-failure" \
+  DARK_FACTORY_ROOT="$repo_root/codex-plugin" bash "$codex_subagents" \
+  "$prd" "$selection_ref" "$consumer" HEAD~1 "$consumer/subagents-worker-failure" \
   --df-run role-callers --df-lane standard --df-repo-root "$consumer"
 assert_preflight_failure 'Codex subagent runner' env FAKE_ROLE_TARGET='{"kind":"cli","model":null,"effort":null}' \
-  bash "$codex_subagents" "$prd" "$input" HEAD~1 "$consumer/subagents-preflight-failure" \
+  DARK_FACTORY_ROOT="$repo_root/codex-plugin" bash "$codex_subagents" \
+  "$prd" "$selection_ref" "$consumer" HEAD~1 "$consumer/subagents-preflight-failure" \
   --df-run role-callers --df-lane standard --df-repo-root "$consumer"
 
 callers=(
@@ -631,17 +675,27 @@ for copied_skill in "$copied_source_router" "$copied_codex_router"; do
     && rg -Fq 'node "$df_root/scripts/df-role.mjs" prepare-run' "$copied_skill/SKILL.md" \
     || copied_role_helpers_ok=0
 done
-for copied_skill in "$copied_source_code_review" "$copied_codex_code_review" \
-  "$copied_source_prd_challenge" "$copied_codex_prd_challenge"; do
+for copied_skill in "$copied_source_prd_challenge" "$copied_codex_prd_challenge"; do
   rg -Fq 'df_root="<Dark Factory root reported by the session hook>"' "$copied_skill/SKILL.md" \
     && rg -Fq 'node "$df_root/scripts/df-role.mjs" preflight' "$copied_skill/SKILL.md" \
     && rg -Fq 'bash "$df_root/scripts/df-state.sh" reserve' "$copied_skill/SKILL.md" \
     || copied_role_helpers_ok=0
 done
+for copied_skill in "$copied_source_code_review" "$copied_codex_code_review"; do
+  dispatch_section="$(awk '
+    /^## Dispatch reservations$/ { active=1; next }
+    active && /^## / { exit }
+    active { print }
+  ' "$copied_skill/SKILL.md")"
+  [[ "$dispatch_section" == *'$DF_ROOT/references/role-callers-inventory.md'* ]] \
+    && [[ "$dispatch_section" == *'complete every seq'* ]] \
+    && ! grep -qE 'df-role\.mjs|df-state\.sh.*reserve' <<<"$dispatch_section" \
+    || copied_role_helpers_ok=0
+done
 if [[ "$copied_role_helpers_ok" == 1 && -f "$source_prepare_from_hook" && -f "$codex_prepare_from_hook" ]]; then
-  ok 'copied source and Codex skill instructions root-qualify role helpers'
+  ok 'copied source and Codex skill instructions use canonical role lifecycles'
 else
-  bad 'copied source and Codex skill instructions root-qualify role helpers'
+  bad 'copied source and Codex skill instructions use canonical role lifecycles'
 fi
 
 sync_router_runs="$work/sync-router-runs"

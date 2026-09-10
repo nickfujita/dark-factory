@@ -31,6 +31,15 @@ Plus, once for the whole delta:
   the pass being verified
 - the fixed **unresolved list**: findings from discovery that were deliberately
   not fixed, so the verifier does not re-raise them as new
+- the sealed selection header from discovery: selection ref, digest, and every
+  entry ID, medium, recipe path, sub-feature, skill path, and REQ/NEG mapping
+
+Before dispatch, materialize the same `SELECTION_REF` through the B1 reader
+against its owning `REPO_ROOT`. The digest and every identity must match the
+discovery input bundle. If the reader detects source drift, or any delta input
+carries a different digest or identity list, coverage must reseal and the
+affected review starts again. Do not substitute a newer selection or a copied
+recipe list.
 
 ## Who verifies
 
@@ -56,8 +65,10 @@ Send this to the verifier as its instruction. It replaces the discovery prompt.
 ```
 This is a DELTA VERIFICATION, not a review round.
 
-You are given the current branch, the remediation delta, and the list of
-findings that were acted on. You are NOT reviewing the branch again.
+You are given the current branch, the remediation delta, the list of findings
+that were acted on, and the sealed selection header from discovery. Confirm the
+selection digest and every identity match the original input before reviewing.
+You are NOT reviewing the branch again.
 
 For EACH listed finding, emit exactly one verdict block:
 

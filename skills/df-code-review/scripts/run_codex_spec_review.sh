@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: run_codex_spec_review.sh <prd-path> <qa-path> <base-ref> <output-path> \
-#   --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
+# Usage: run_codex_spec_review.sh <prd-path> <selection-ref> <repo-root> \
+#   <base-ref> <output-path> --df-run <run-id> --df-lane <lane> \
+#   --df-repo-root <consumer-root>
 # Runs a Codex CLI spec compliance review of the branch diff against the PRD
-# and QA runbook. Codex reads the files and computes the diff internally —
-# nothing is inlined into the prompt.
+# and sealed recipe selection. Codex reads the files and computes the diff
+# internally. The selection identities are explicit review input.
 #
 # Output validation is FAIL-CLOSED (ported from df-prd-challenge): an empty or
 # trivial review body is a failed run and a non-zero exit, never a warning.
@@ -19,8 +20,8 @@ set -euo pipefail
 # created for this review and deleted after. The status output says which mode
 # actually ran.
 
-if [[ $# -ne 10 ]]; then
-  echo "Usage: run_codex_spec_review.sh <prd-path> <qa-path> <base-ref> <output-path> --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>" >&2
+if [[ $# -ne 11 ]]; then
+  echo "Usage: run_codex_spec_review.sh <prd-path> <selection-ref> <repo-root> <base-ref> <output-path> --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>" >&2
   exit 1
 fi
 
@@ -29,11 +30,27 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 1
 fi
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+local_root="$(cd "$script_dir/../../.." && pwd)"
+if [[ -n "${DARK_FACTORY_ROOT:-}" && -f "$DARK_FACTORY_ROOT/scripts/df-code-review-selection.mjs" ]]; then
+  df_root="$DARK_FACTORY_ROOT"
+elif [[ -f "$local_root/scripts/df-code-review-selection.mjs" ]]; then
+  df_root="$local_root"
+else
+  echo "Error: cannot find df-code-review-selection.mjs. Invoke this wrapper from the Dark Factory installation or checkout named by the session hook." >&2
+  exit 1
+fi
+df_root="$(cd "$df_root" && pwd -P)"
+selection_tool="$df_root/scripts/df-code-review-selection.mjs"
+role_caller="$df_root/scripts/df-role-caller.sh"
+state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$df_root/scripts/df-state.sh}"
+
 prd_path="$1"
-qa_path="$2"
-base_ref="$3"
-out_path="$4"
-shift 4
+selection_ref="$2"
+repo_root="$3"
+base_ref="$4"
+out_path="$5"
+shift 5
 
 df_run=''
 df_lane=''
@@ -50,35 +67,35 @@ done
   echo "Error: --df-run, --df-lane, and --df-repo-root are required." >&2
   exit 1
 }
-repo_root="$(cd "$df_repo_root" && pwd -P)"
-plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
-role_caller="$plugin_root/scripts/df-role-caller.sh"
-state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$plugin_root/scripts/df-state.sh}"
+repo_root="$(cd "$repo_root" && pwd -P)"
+df_repo_root="$(cd "$df_repo_root" && pwd -P)"
+if [[ "$repo_root" != "$df_repo_root" ]]; then
+  echo "Error: repo-root and --df-repo-root must name the same consumer checkout." >&2
+  exit 1
+fi
 
 MIN_BODY_BYTES="${CODEX_MIN_BODY_BYTES:-400}"
 
+if [[ "$repo_root" != /* ]]; then repo_root="$(cd "$repo_root" && pwd -P)"; fi
+if [[ "$out_path" != /* ]]; then out_path="$repo_root/$out_path"; fi
+selection_input="${out_path}.selection.json"
+node "$selection_tool" prepare \
+  --prd-path "$prd_path" \
+  --selection-ref "$selection_ref" \
+  --repo-root "$repo_root" \
+  --output-path "$selection_input" >/dev/null
+repo_root="$(git -C "$repo_root" rev-parse --show-toplevel)"
+selection_details="$(node "$selection_tool" describe --input-path "$selection_input")"
+
 if [[ "$prd_path" != /* ]]; then prd_path="$repo_root/$prd_path"; fi
-if [[ "$qa_path" != /* ]]; then qa_path="$repo_root/$qa_path"; fi
-
-if [[ ! -f "$prd_path" ]]; then
-  echo "Error: PRD file not found at $prd_path" >&2
-  exit 1
-fi
-
-if [[ ! -f "$qa_path" ]]; then
-  echo "Error: QA runbook not found at $qa_path" >&2
-  exit 1
-fi
-
 prd_rel="${prd_path#"$repo_root"/}"
-qa_rel="${qa_path#"$repo_root"/}"
 
-if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
+if ! git -C "$repo_root" rev-parse --verify "$base_ref" >/dev/null 2>&1; then
   echo "Error: base-ref '$base_ref' is not a valid git ref." >&2
   exit 1
 fi
 
-if git diff --quiet "$base_ref" HEAD; then
+if git -C "$repo_root" diff --quiet "$base_ref" HEAD; then
   echo "Error: no diff found between HEAD and $base_ref" >&2
   exit 1
 fi
@@ -124,25 +141,37 @@ if ! unshare --net true 2>/dev/null; then
     mkdir -p "$snapshot_dir/tree"
     cp -a "$repo_root/." "$snapshot_dir/tree/"
   fi
-  # The PRD and QA runbook may carry uncommitted edits; overlay the live
-  # copies so the snapshot reviews the current documents, not HEAD's.
-  mkdir -p "$snapshot_dir/tree/$(dirname "$prd_rel")" "$snapshot_dir/tree/$(dirname "$qa_rel")"
-  cp -f "$prd_path" "$snapshot_dir/tree/$prd_rel"
-  cp -f "$qa_path" "$snapshot_dir/tree/$qa_rel"
+  # Selected inputs may carry uncommitted edits. Overlay every PRD, skill and
+  # recipe that B1 materialized, so the frozen snapshot reads the same bytes
+  # as the owning consumer checkout.
+  while IFS= read -r input_rel; do
+    mkdir -p "$snapshot_dir/tree/$(dirname "$input_rel")"
+    cp -f "$repo_root/$input_rel" "$snapshot_dir/tree/$input_rel"
+  done < <(node "$selection_tool" paths --input-path "$selection_input")
   review_tree="$snapshot_dir/tree"
   sandbox_mode="danger-full-access"
   sandbox_note="sandbox degraded to danger-full-access on a disposable $snapshot_kind snapshot (unshare --net unavailable); the live tree is not exposed"
 fi
 
+# Validate once more after creating any snapshot and before the reviewer can
+# start. A changed selected source requires coverage to reseal and a restart.
+node "$selection_tool" verify \
+  --prd-path "$prd_path" \
+  --selection-ref "$selection_ref" \
+  --repo-root "$repo_root" >/dev/null
+
 {
   echo "# Codex Spec Compliance Review"
   echo
   echo "- PRD: \`$prd_rel\`"
-  echo "- QA Runbook: \`$qa_rel\`"
+  echo "- Selection input: \`$selection_input\`"
   echo "- Base ref: \`$base_ref\`"
   echo "- Generated (UTC): \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`"
   echo "- Reviewer: Codex CLI (spec compliance axis)"
   echo "- Sandbox: $sandbox_note"
+  echo
+  echo "## Sealed verification selection"
+  printf '%s\n' "$selection_details"
   echo
 } >"$out_path"
 
@@ -184,7 +213,7 @@ validate_body() {
 }
 
 # Codex has read-only sandbox access to the review tree. Tell it where to find
-# the PRD and QA runbook and how to get the diff — no content inlined. stdin
+# the PRD and sealed selection and how to get the diff. stdin
 # is closed: a reviewer that blocks on stdin produces a header and no
 # findings, then reports success.
 dispatch_receipt="$(bash "$role_caller" reserve \
@@ -198,23 +227,29 @@ codex exec \
   --sandbox "$sandbox_mode" \
   -C "$review_tree" \
   "You are an independent spec compliance reviewer. Verify that the implementation
-satisfies the approved PRD and QA runbook.
+satisfies the approved PRD and every identity in the sealed verification selection.
 
 First, read these files:
 - PRD: $prd_rel
-- QA runbook: $qa_rel
+
+$selection_details
+
+For every selected entry, read its skillPath and recipePath. Do not substitute,
+discover, merge, or omit an entry. A no-user-route selection has zero entries;
+read its reason and review only the PRD-bound scope.
 
 Then run: git diff $base_ref HEAD
 to see the branch changes.
 
 Read the changed source files for full context as needed.
 
-Review the branch diff against the PRD and QA runbook for:
+Review the branch diff against the PRD and sealed selection for:
 - **Requirement coverage**: Every REQ-xxx and NEG-xxx has corresponding implementation
 - **Acceptance criteria**: Each criterion is met by the code
 - **Negative requirements**: What must NOT happen is enforced in code
 - **Edge cases**: PRD edge cases are handled
-- **QA alignment**: Implementation would pass each TC-xxx in the runbook
+- **Recipe alignment**: Implementation matches every selected recipe identity,
+  including its medium, sub-feature, and REQ/NEG mappings
 - **Scope**: No scope creep (implementing things not in PRD) and no missing scope
 
 Produce findings in this exact format:
@@ -222,7 +257,7 @@ Produce findings in this exact format:
 ## Findings — Codex Spec
 
 ### [SEVERITY] <One-line finding title>
-**Requirement:** REQ-xxx | NEG-xxx | TC-xxx
+**Requirement:** REQ-xxx | NEG-xxx | selected entry ID
 **Location:** \`path/to/file.ts:line\` (or \"Not implemented\" if missing entirely)
 **Issue:** 2-3 sentences explaining the gap between spec and implementation.
 **Recommendation:** What the code should do to satisfy the requirement.
@@ -243,7 +278,7 @@ NO FINDINGS
 Never return an empty document. Never stop to ask a question — you are running
 non-interactively with no stdin.
 
-Base your review only on the PRD and QA runbook — not on general best practices.
+Base your review only on the PRD and sealed selection — not on general best practices.
 Do not flag missing features that are explicitly out of scope in the PRD.
 If the PRD is ambiguous about a requirement, note the ambiguity rather than
 assuming a specific interpretation." \
@@ -259,6 +294,16 @@ if [[ "$codex_exit" -ne 0 ]]; then
   echo "" >>"$out_path"
   echo "_Codex CLI exited with code $codex_exit. No findings produced._" >>"$out_path"
   echo "_This run produced NO reviewer opinion. Do not treat it as a clean round._" >>"$out_path"
+  exit 1
+fi
+
+if ! node "$selection_tool" verify \
+  --prd-path "$prd_path" \
+  --selection-ref "$selection_ref" \
+  --repo-root "$repo_root" >/dev/null; then
+  echo "Error: selected source changed during review. Coverage must reseal and this review must restart." >&2
+  echo "" >>"$out_path"
+  echo "_Selected source changed during review. Coverage must reseal and this review must restart._" >>"$out_path"
   exit 1
 fi
 
