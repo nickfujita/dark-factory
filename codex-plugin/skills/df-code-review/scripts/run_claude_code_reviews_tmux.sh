@@ -4,7 +4,7 @@
 # transport guard below and leave the reviewers running with no prompt.
 set -Eeuo pipefail
 
-# Usage: run_claude_code_reviews_tmux.sh <prd-path> <qa-path> <base-ref> <output-dir>
+# Usage: run_claude_code_reviews_tmux.sh <prd-path> <selection-ref> <repo-root> <base-ref> <output-dir>
 # Starts two interactive Claude Code sessions in tmux (quality + spec), sends
 # review prompts, and waits until each writes a completion sentinel.
 #
@@ -21,8 +21,8 @@ set -Eeuo pipefail
 # other concurrent run. TMUX_TMPDIR cannot substitute: it only feeds the default
 # socket path, which is skipped whenever $TMUX supplies one.
 
-if [[ $# -lt 4 ]]; then
-  echo "Usage: run_claude_code_reviews_tmux.sh <prd-path> <qa-path> <base-ref> <output-dir>" >&2
+if [[ $# -ne 5 ]]; then
+  echo "Usage: run_claude_code_reviews_tmux.sh <prd-path> <selection-ref> <repo-root> <base-ref> <output-dir>" >&2
   exit 1
 fi
 
@@ -35,23 +35,42 @@ if ! command -v claude >/dev/null 2>&1; then
   exit 1
 fi
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+local_root="$(cd "$script_dir/../../.." && pwd)"
+if [[ -n "${DARK_FACTORY_ROOT:-}" && -f "$DARK_FACTORY_ROOT/scripts/df-code-review-selection.mjs" ]]; then
+  df_root="$DARK_FACTORY_ROOT"
+elif [[ -f "$local_root/scripts/df-code-review-selection.mjs" ]]; then
+  df_root="$local_root"
+else
+  echo "Error: cannot find df-code-review-selection.mjs. Invoke this wrapper from the Dark Factory installation or checkout named by the session hook." >&2
+  exit 1
+fi
+selection_tool="$df_root/scripts/df-code-review-selection.mjs"
+
 prd_path="$1"
-qa_path="$2"
-base_ref="$3"
-out_dir="$4"
+selection_ref="$2"
+repo_root="$3"
+base_ref="$4"
+out_dir="$5"
 
-if [[ "$prd_path" != /* ]]; then prd_path="$repo_root/$prd_path"; fi
-if [[ "$qa_path" != /* ]]; then qa_path="$repo_root/$qa_path"; fi
+if [[ "$repo_root" != /* ]]; then repo_root="$(cd "$repo_root" && pwd -P)"; fi
 if [[ "$out_dir" != /* ]]; then out_dir="$repo_root/$out_dir"; fi
+selection_input="$out_dir/selection-input.json"
+node "$selection_tool" prepare \
+  --prd-path "$prd_path" \
+  --selection-ref "$selection_ref" \
+  --repo-root "$repo_root" \
+  --output-path "$selection_input" >/dev/null
+repo_root="$(git -C "$repo_root" rev-parse --show-toplevel)"
+if [[ "$prd_path" != /* ]]; then prd_path="$repo_root/$prd_path"; fi
+selection_details="$(node "$selection_tool" describe --input-path "$selection_input")"
+selection_digest="$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).selection.digest)' "$selection_input")"
 
-if [[ ! -f "$prd_path" ]]; then echo "Error: PRD file not found at $prd_path" >&2; exit 1; fi
-if [[ ! -f "$qa_path" ]]; then echo "Error: QA runbook not found at $qa_path" >&2; exit 1; fi
-if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
+if ! git -C "$repo_root" rev-parse --verify "$base_ref" >/dev/null 2>&1; then
   echo "Error: base-ref '$base_ref' is not a valid git ref." >&2
   exit 1
 fi
-if git diff --quiet "$base_ref" HEAD; then
+if git -C "$repo_root" diff --quiet "$base_ref" HEAD; then
   echo "Error: no diff found between HEAD and $base_ref" >&2
   exit 1
 fi
@@ -64,6 +83,11 @@ spec_done="$out_dir/claude-spec-review.done"
 rm -f "$quality_done" "$spec_done"
 min_body_bytes="${CLAUDE_REVIEW_MIN_BODY_BYTES:-400}"
 
+node "$selection_tool" verify \
+  --prd-path "$prd_path" \
+  --selection-ref "$selection_ref" \
+  --repo-root "$repo_root" >/dev/null
+
 # A review is accepted only if the report actually contains one (fail-closed,
 # ported from df-prd-challenge's report grammar).
 validate_report() {
@@ -73,6 +97,9 @@ validate_report() {
   if [[ "$bytes" -eq 0 ]]; then echo "invalid empty_report"; return 0; fi
   if ! grep -q "^$header" "$report"; then
     echo "invalid missing_findings_header"; return 0
+  fi
+  if ! grep -Fq "Selection digest: $selection_digest" "$report"; then
+    echo "invalid missing_selection_digest"; return 0
   fi
   # Tolerate case drift and the literal bracket form of the prompt's own
   # "### [SEVERITY]" template.
@@ -90,7 +117,6 @@ validate_report() {
 }
 
 prd_rel="${prd_path#"$repo_root"/}"
-qa_rel="${qa_path#"$repo_root"/}"
 out_rel="${out_dir#"$repo_root"/}"
 session="${CLAUDE_REVIEW_TMUX_SESSION:-df-claude-code-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 
@@ -141,6 +167,11 @@ Important execution rules:
 Run: git diff $base_ref HEAD
 Read changed files for context. Review only changed code.
 
+Begin the report with this sealed selection header. Preserve every line:
+
+## Sealed verification selection
+$selection_details
+
 Produce findings in this exact format:
 
 ## Findings — Claude Quality
@@ -178,17 +209,25 @@ Important execution rules:
 
 First read:
 - PRD: $prd_rel
-- QA runbook: $qa_rel
+
+Then read every selected skillPath and recipePath. Do not substitute,
+discover, merge, or omit an entry. A no-user-route selection has zero entries;
+read its reason and review only the PRD-bound scope.
+
+Begin the report with this sealed selection header. Preserve every line:
+
+## Sealed verification selection
+$selection_details
 
 Then run: git diff $base_ref HEAD
-Read changed files for context. Review the branch diff against the PRD and QA runbook.
+Read changed files for context. Review the branch diff against the PRD and sealed selection.
 
 Produce findings in this exact format:
 
 ## Findings — Claude Spec
 
 ### [SEVERITY] <One-line finding title>
-**Requirement:** REQ-xxx | NEG-xxx | TC-xxx
+**Requirement:** REQ-xxx | NEG-xxx | selected entry ID
 **Location:** \`path/to/file.ts:line\` (or "Not implemented" if missing entirely)
 **Issue:** 2-3 sentences explaining the gap between spec and implementation.
 **Recommendation:** What the code should do to satisfy the requirement.
@@ -259,6 +298,13 @@ while (( SECONDS < deadline )); do
     fi
     # Both reports are on disk, so neither reviewer has anything left to say.
     # Killing the session also retires this run's server.
+    if ! node "$selection_tool" verify \
+      --prd-path "$prd_path" \
+      --selection-ref "$selection_ref" \
+      --repo-root "$repo_root" >/dev/null; then
+      echo "Error: selected source changed during review. Coverage must reseal and this review must restart." >&2
+      exit 1
+    fi
     tm kill-session -t "$session" 2>/dev/null || true
     echo "Claude code reviews written to: $out_dir"
     exit 0
