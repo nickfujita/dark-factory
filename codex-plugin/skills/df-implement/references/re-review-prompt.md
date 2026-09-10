@@ -1,6 +1,6 @@
 # Re-review prompt
 
-The controller builds each fix-round re-review from this template. The re-reviewer verifies the findings were addressed and checks the fix diff for new breakage. It is not a fresh review; the full review already happened. Spawn as a background native Codex subagent, resolved through the `recheck_leaf_reviewers` role in `../../df/references/model-policy.md`. Reserve the dispatch through `scripts/df-state.sh` before spawning. Create a fresh disposable snapshot for the round and delete it after.
+The controller builds each fix-round re-review from this template. The re-reviewer verifies the findings were addressed and checks the fix diff for new breakage. It is not a fresh review; the full review already happened. Spawn as a background native Codex subagent, preflighted through the `recheck_leaf_reviewers` role in `../../df/references/model-policy.md`. The native harness reserves the dispatch before spawning. Create a fresh disposable snapshot for the round and delete it after.
 
 ```
 You are re-reviewing one task's fix round. A previous review produced

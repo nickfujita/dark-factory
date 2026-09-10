@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: run_codex_qa_validation.sh <prd-path> <review-input-path> <output-path>
+# Usage: run_codex_qa_validation.sh <prd-path> <review-input-path> <output-path> \
+#   --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
 # Runs a fresh Codex CLI review of a PRD+verification review input pair and writes findings to
 # the output path. Designed for the verification review input validation stage — produces
 # structured findings compatible with the synthesis step.
@@ -19,8 +20,8 @@ set -euo pipefail
 # created for this review and deleted after. The status output says which mode
 # actually ran.
 
-if [[ $# -lt 3 ]]; then
-  echo "Usage: run_codex_qa_validation.sh <prd-path> <review-input-path> <output-path>" >&2
+if [[ $# -ne 9 ]]; then
+  echo "Usage: run_codex_qa_validation.sh <prd-path> <review-input-path> <output-path> --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>" >&2
   exit 1
 fi
 
@@ -29,11 +30,30 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 1
 fi
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-
 prd_path="$1"
 qa_path="$2"
 out_path="$3"
+shift 3
+
+df_run=''
+df_lane=''
+df_repo_root=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --df-run) df_run=$2; shift 2 ;;
+    --df-lane) df_lane=$2; shift 2 ;;
+    --df-repo-root) df_repo_root=$2; shift 2 ;;
+    *) echo "Error: unknown role-dispatch option '$1'" >&2; exit 1 ;;
+  esac
+done
+[[ -n "$df_run" && -n "$df_lane" && -n "$df_repo_root" ]] || {
+  echo "Error: --df-run, --df-lane, and --df-repo-root are required." >&2
+  exit 1
+}
+repo_root="$(cd "$df_repo_root" && pwd -P)"
+plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+role_caller="$plugin_root/scripts/df-role-caller.sh"
+state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$plugin_root/scripts/df-state.sh}"
 
 MIN_BODY_BYTES="${CODEX_MIN_BODY_BYTES:-400}"
 
@@ -86,7 +106,18 @@ cleanup_snapshot() {
   rm -rf "$snapshot_dir"
   snapshot_dir=""
 }
-trap cleanup_snapshot EXIT
+dispatch_seq=''
+complete_dispatch() {
+  local exit_code=$?
+  if [[ -n "$dispatch_seq" ]]; then
+    local outcome=ok
+    [[ "$exit_code" -eq 0 ]] || outcome=failed
+    (cd "$repo_root" && bash "$state_helper" complete "$df_run" "$dispatch_seq" "$outcome") >/dev/null 2>&1 || true
+  fi
+  cleanup_snapshot
+  return "$exit_code"
+}
+trap complete_dispatch EXIT
 
 if ! unshare --net true 2>/dev/null; then
   sandbox_mode="danger-full-access"
@@ -161,10 +192,15 @@ validate_body() {
 # Codex has read-only sandbox access to the review tree. Tell it where to find
 # the PRD and verification review input — no content inlined. stdin is closed: a reviewer
 # that blocks on stdin produces a header and no findings, then reports success.
+dispatch_receipt="$(bash "$role_caller" reserve \
+  --run "$df_run" --lane "$df_lane" --repo-root "$repo_root" \
+  --responsibility persona_reviewers_cli --purpose 'qa validation review' \
+  --allow-kind cli)"
+dispatch_seq="$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(receipt.seqs[0]);' "$dispatch_receipt")"
+
 codex_exit=0
 codex exec \
   --sandbox "$sandbox_mode" \
-  --config model_reasoning_effort=xhigh \
   -C "$review_tree" \
   "You are an independent reviewer examining a verification review input against its source PRD
 (Product Requirements Document). The input contains a coverage handoff and

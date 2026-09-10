@@ -87,10 +87,13 @@ work now is the dispatch budget plus a shape that runs discovery exactly once.
 
 ## Dispatch reservations
 
-Every reviewer dispatch reserves a seq through `scripts/df-state.sh` **before**
-it spawns, and the reservation is spent the moment it lands:
+Every reviewer dispatch preflights its frozen role, then reserves a seq through
+`scripts/df-state.sh` **before** it spawns. The reservation is spent the moment
+it lands:
 
 ```bash
+node scripts/df-role.mjs preflight --run "<run-id>" --lane "<lane>" \
+  --repo-root "<consumer-root>" --responsibility discovery_reviewers
 seq=$(bash scripts/df-state.sh reserve "<run-id>" discovery_reviewers "code review discovery, claude leg")
 ```
 
@@ -190,7 +193,8 @@ where `<timestamp>` is `YYYY-MM-DDTHH-MM-SSZ` (UTC).
 ## Step 2: The discovery pass
 
 **One pass. Every reviewer the lane calls for, in parallel, in a single
-message, all reading `REVIEW_SHA`.** Reserve each dispatch first.
+message, all reading `REVIEW_SHA`.** Preflight each declared role, then reserve
+each native dispatch.
 
 Sub-agents do not inherit your shell variables or context: state the concrete
 diff path (`<REVIEW_ROOT>/branch-diff.txt`), the concrete `REVIEW_SHA`, and for
@@ -259,7 +263,8 @@ if [[ ! -f "$quality_script" ]]; then
 fi
 review_dir="<REVIEW_ROOT from Step 1>"
 base_ref="<base_ref from Step 1>"
-bash "$quality_script" "$base_ref" "$review_dir/codex-quality-review.md"
+bash "$quality_script" "$base_ref" "$review_dir/codex-quality-review.md" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
 ```
 
 **Codex Spec (High-consequence only):**
@@ -279,10 +284,12 @@ if [[ ! -f "$spec_script" ]]; then
 fi
 review_dir="<REVIEW_ROOT from Step 1>"
 base_ref="<base_ref from Step 1>"
-bash "$spec_script" "<prd-path>" "<qa-path>" "$base_ref" "$review_dir/codex-spec-review.md"
+bash "$spec_script" "<prd-path>" "<qa-path>" "$base_ref" "$review_dir/codex-spec-review.md" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
 ```
 
-Both scripts are fail-closed: an empty or structurally invalid review is a
+Both scripts own frozen-role preflight, reservation, and completion. They are
+fail-closed: an empty or structurally invalid review is a
 non-zero exit and **no reviewer opinion**, never a clean result. Read the
 stderr log next to the output rather than guessing.
 
@@ -349,7 +356,7 @@ gets, who verifies, the verdict block, and how to read the result.
 
 In short. Assemble the delta (each finding as raised, its disposition and
 reason, the fix diff, the test evidence, plus `git diff <REVIEW_SHA>..HEAD` and
-the fixed unresolved list). Reserve a dispatch per verifying leg. Send it back
+the fixed unresolved list). Preflight and reserve a dispatch per verifying leg. Send it back
 to the reviewer that raised the findings, in its thread where the harness can
 continue one; where it cannot — the CLI legs are fresh processes every time —
 dispatch an in-session reviewer at `RECHECK_TIER` with the original finding text

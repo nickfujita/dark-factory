@@ -5,6 +5,9 @@ description: "Design before code for routed work. Sketch types, signatures, and 
 
 # df-design
 
+Every background runner follows `../df/references/role-callers-inventory.md`.
+Preflight its frozen role before reservation, then use that target natively.
+
 Design before implementing. Sketch types, function signatures, class shapes, and module boundaries with `not implemented` bodies and pseudocode. Synthesize across independent runner candidates, then fill in code against the chosen sketch. If implementation proves the sketch wrong, throw it out and redesign.
 
 Principle names in this skill cite `../df/references/principles.md`.

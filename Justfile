@@ -100,6 +100,11 @@ check-role-policy:
 	node scripts/check-model-policy.mjs
 	bash scripts/test-df-role-policy.sh
 
+# Frozen role preflight, reservation order, installed-root helper lookup, and
+# runner-local fallback rejection. Offline fake process boundaries only.
+check-role-callers:
+	bash scripts/test-df-role-callers.sh
+
 # D24 run-state store acceptance: 37 assertions over concurrent reservation,
 # stale-lock reclaim, nested budgets, idempotent completion and resume.
 # Offline, no dependencies beyond bash and coreutils, about a second.

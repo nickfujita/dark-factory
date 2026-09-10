@@ -5,9 +5,12 @@ description: "Spawn N parallel candidates at the same task, pick a base, graft t
 
 # Arena
 
+Every background runner follows `../df/references/role-callers-inventory.md`.
+Preflight its frozen role before reservation, then use that target natively.
+
 Fan out N parallel attempts at the same task. Read every candidate end to end. Pick the strongest as the base. Graft the best ideas from the others into it. Verify the synthesized result.
 
-The arena is token-expensive by design and gated accordingly. It runs only in the High-consequence lane, only when the operator invokes it by hand, and never as a default step of any playbook. df-design owns routine design exploration; the arena is for work where one attempt at a non-trivial artifact would lock in the wrong shape, and the operator has judged the redundancy worth paying for. Inside a df run, reserve every candidate and the judge through `scripts/df-state.sh` before spawning; they are nested dispatches against the run's budget. The script lands in this same wave; until it is on disk, write the reservation lines to the run state file by hand, still before spawning.
+The arena is token-expensive by design and gated accordingly. It runs only in the High-consequence lane, only when the operator invokes it by hand, and never as a default step of any playbook. df-design owns routine design exploration; the arena is for work where one attempt at a non-trivial artifact would lock in the wrong shape, and the operator has judged the redundancy worth paying for. Inside a df run, preflight every candidate and the judge, then reserve each through `scripts/df-state.sh` before spawning; they are nested dispatches against the run's budget. The script lands in this same wave; until it is on disk, write the reservation lines to the run state file by hand, still before spawning.
 
 Principle names in this skill cite `../df/references/principles.md`.
 

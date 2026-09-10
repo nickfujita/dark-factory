@@ -6,6 +6,9 @@ disable-model-invocation: true
 
 # df-implement
 
+Every background runner follows `../df/references/role-callers-inventory.md`.
+Preflight its frozen role before reservation, then use that target natively.
+
 Execute the implementation plan. You own the design and the program. Delegate the code-writing. Review every diff yourself. The economy is a fresh implementer per task from an extracted brief, one independent review per task with two verdicts, and a capped fix loop. On one measured feature it cost about 1.5x and caught five faults that passed a 16.7k-test suite. It is the pipeline's one measured win. Keep it intact.
 
 Delegating the code-writing is mandatory. No skip-with-reason escape, and the laziness-protocol principle does not override it. The gain is review separation, not lines saved. You can spawn a subagent even though you are one. Your workers cannot. They own their diffs directly, and review arrives from you.
@@ -30,7 +33,7 @@ Read the plan once. Note its global constraints. Create one todo per task. Then 
 
 The task ledger lives in the run state store outside the repo, the single authoritative record per run. `scripts/df-state.sh` is the accessor. The script lands in this same wave; until it is on disk, append the same lines to the run state file by hand, reservation still before spawn.
 
-- Reserve every dispatch through `scripts/df-state.sh` **before** spawning. A dispatch is counted the moment it is reserved, not when it returns. A spawn without a reservation is a budget leak.
+- Preflight every frozen role, then reserve every dispatch through `scripts/df-state.sh` **before** spawning. A dispatch is counted the moment it is reserved, not when it returns. A spawn without a reservation is a budget leak.
 - Nested dispatches count against the parent budget. When df-implement itself runs as a dispatched stage, its implementers, reviewers, and re-reviewers draw down the run's budget, never a fresh one.
 - Budget exhaustion is a stop, not a flag. Record the state, surface it to the operator, stop dispatching.
 - The ledger is the recovery map. Conversation memory does not survive compaction, and controllers that lost their place have re-dispatched entire completed task sequences. At start, check the ledger. A task with a `complete` line is done; never re-dispatch it. A task whose last line is a fix round is mid-loop; resume at the next round. After compaction, trust the ledger and `git log` over your own recollection.

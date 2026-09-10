@@ -47,7 +47,6 @@ name. Do not restate a value inline — if you need the number, read it here.
 | `DISCOVERY_TIER` | **unpinned — the operator's Codex default, no hardcoded effort flag** (env-overridable) | discovery reviewers, both lanes |
 | `REVIEW_ROOT` | `<run-dir>/work/prd-challenge` | all scratch output for one run |
 | `REPORT_DIR` | `<run-dir>/reviews/prd-challenge/` | the final report |
-| `CODEX_REASONING_EFFORT` | `xhigh` in High-consequence, the operator's default in Standard | Codex persona reviewers |
 | `CODEX_WINDOW_SECONDS` | `3600` | total detached window for one Codex leg |
 | `CODEX_WAIT_SLICE_SECONDS` | `480` | one foreground poll slice (keeps each Bash call under the harness cap) |
 | `CODEX_POLL_SECONDS` | `20` | poll interval inside a slice |
@@ -155,6 +154,8 @@ capped loop run indefinitely. A delta verification is a reviewer dispatch and
 it costs one.
 
 ```bash
+node scripts/df-role.mjs preflight --run "<run-id>" --lane "<lane>" \
+  --repo-root "<consumer-root>" --responsibility discovery_reviewers
 seq=$(bash scripts/df-state.sh reserve "<run-id>" discovery_reviewers "prd challenge discovery, codex leg")
 ```
 
@@ -211,8 +212,9 @@ the three terminal outcomes. Nothing in it loops.
 
 Mechanics for this tree:
 
-1. **Reserve two dispatches.** One for the in-session Codex reviewer, one for
-   the Claude leg.
+1. **Preflight two declared roles.** The in-session Codex reviewer reserves its
+   native dispatch. The Claude transport reserves its own dispatch after its
+   frozen-role preflight.
 2. **Run both in parallel, in a single message.** The Codex reviewer is a
    native subagent at `DISCOVERY_TIER` carrying the shared rubric from
    `references/single-pass.md` plus the shared output contract from
@@ -421,8 +423,8 @@ information — it belongs in the report, not just in your head.
 Read `references/personas.md` for the 3 persona system prompts, the shared
 output contract, and the delta-verification and recheck-scope modes.
 
-**Each pass, reserve three dispatches, then run 3 parallel Codex persona
-reviews** (one per persona). Preferred path: explicitly spawn 3 native Codex
+**Each pass, preflight and reserve three dispatches, then run 3 parallel Codex
+persona reviews** (one per persona). Preferred path: explicitly spawn 3 native Codex
 subagents, then wait for all three before synthesis. Each subagent receives:
 
 - Its persona system prompt from `references/personas.md`
@@ -466,9 +468,13 @@ fi
 
 review_dir="<REVIEW_ROOT from Step 1>"
 out_dir="$review_dir/prd-personas-<N>"   # <N> = Phase A pass number
-bash "$script_path" start "<prd-path>" "$out_dir"
+bash "$script_path" start "<prd-path>" "$out_dir" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
 echo "OUTPUT_DIR=$out_dir"
 ```
+
+The detached runner owns one frozen-role preflight, reservation, and terminal
+completion for each CLI persona. Do not reserve those shell legs in advance.
 
 Then poll. Each `wait` call blocks for at most `CODEX_WAIT_SLICE_SECONDS`;
 repeat until the state is terminal.
@@ -486,7 +492,8 @@ delta_path="$review_dir/phase-a-delta-<N>.md"     # you write this file
 out_dir="$review_dir/prd-personas-verify-<N>"
 CODEX_REVIEW_MODE=verification \
 CODEX_REVIEW_DELTA_FILE="$delta_path" \
-  bash "$script_path" start "<prd-path>" "$out_dir"
+  bash "$script_path" start "<prd-path>" "$out_dir" \
+    --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
 bash "$script_path" wait "$out_dir"
 ```
 
@@ -567,8 +574,9 @@ In **Standard**, this runs once, as the cross-family half of the single pass,
 plus once more for the delta verification. In **High-consequence**, it runs as
 the second phase of the loop, once Phase A exits cleanly.
 
-Reserve the dispatch first, then run the interactive Claude Code PRD review
-through tmux. Set the Bash timeout above `CLAUDE_REVIEW_TIMEOUT_SECONDS`.
+The tmux runner preflights and owns its transport reservation, then runs the
+interactive Claude Code PRD review. Set the Bash timeout above
+`CLAUDE_REVIEW_TIMEOUT_SECONDS`.
 
 ```bash
 script_path="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-prd-challenge/scripts/run_claude_prd_review_tmux.sh"
@@ -589,7 +597,8 @@ mkdir -p "$review_dir"
 out_path="$review_dir/claude-challenge-review-<N>.md"   # <N> = pass number
 bash "$script_path" \
   "<prd-path>" \
-  "$out_path"
+  "$out_path" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
 echo "OUTPUT_PATH=$out_path"
 ```
 

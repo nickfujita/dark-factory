@@ -4,7 +4,8 @@
 # transport guard below and skip the status file the caller contracts for.
 set -Eeuo pipefail
 
-# Usage: run_claude_prd_review_tmux.sh <prd-path> <output-path>
+# Usage: run_claude_prd_review_tmux.sh <prd-path> <output-path> \
+#   --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
 # Starts an interactive Claude Code session in tmux, sends a PRD review prompt,
 # and waits until Claude writes a completion sentinel after the report.
 #
@@ -38,8 +39,8 @@ set -Eeuo pipefail
 # TMUX_TMPDIR cannot do this: it only feeds the default socket path, which is
 # skipped whenever $TMUX supplies one.
 
-if [[ $# -lt 2 ]]; then
-  echo "Usage: run_claude_prd_review_tmux.sh <prd-path> <output-path>" >&2
+if [[ $# -ne 8 || "$3" != --df-run || "$5" != --df-lane || "$7" != --df-repo-root ]]; then
+  echo "Usage: run_claude_prd_review_tmux.sh <prd-path> <output-path> --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>" >&2
   exit 1
 fi
 
@@ -52,9 +53,15 @@ if ! command -v claude >/dev/null 2>&1; then
   exit 1
 fi
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 prd_path="$1"
 out_path="$2"
+df_run="$4"
+df_lane="$6"
+df_repo_root="$8"
+repo_root="$(cd "$df_repo_root" && pwd -P)"
+plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+role_caller="$plugin_root/scripts/df-role-caller.sh"
+state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$plugin_root/scripts/df-state.sh}"
 
 if [[ "$prd_path" != /* ]]; then prd_path="$repo_root/$prd_path"; fi
 if [[ "$out_path" != /* ]]; then out_path="$repo_root/$out_path"; fi
@@ -89,6 +96,24 @@ write_status() {
     echo "UPDATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   } >"$tmp"
   mv -f "$tmp" "$status_path"
+}
+
+dispatch_seq=''
+prompt_file=''
+complete_dispatch() {
+  local outcome=$1
+  [[ -n "$dispatch_seq" ]] || return 0
+  (cd "$repo_root" && bash "$state_helper" complete "$df_run" "$dispatch_seq" "$outcome") >/dev/null 2>&1 || true
+}
+finish_dispatch() {
+  local exit_code=$? outcome=failed
+  trap - EXIT
+  if [[ "$exit_code" -eq 0 ]]; then outcome=ok
+  elif [[ "$exit_code" -eq 4 ]]; then outcome=expired
+  fi
+  complete_dispatch "$outcome"
+  [[ -z "$prompt_file" ]] || rm -f "$prompt_file"
+  exit "$exit_code"
 }
 
 # A round is accepted only if the report actually contains a review. The grammar
@@ -159,8 +184,14 @@ tm() { tmux -L "$tmux_label" "$@"; }
 # `sh -c`, so the assignment survives on every tmux version.
 suppress_bridge="CCMATRIX_SUPPRESS_SESSION=1"
 
+dispatch_receipt="$(bash "$role_caller" reserve \
+  --run "$df_run" --lane "$df_lane" --repo-root "$repo_root" \
+  --responsibility cross_model_review --purpose 'Codex-to-Claude PRD review' \
+  --allow-kind transport --allow-transport claude-tmux)"
+dispatch_seq="$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(receipt.seqs[0]);' "$dispatch_receipt")"
+trap finish_dispatch EXIT
+
 prompt_file="$(mktemp "${TMPDIR:-/tmp}/dark-factory-claude-prd-prompt.XXXXXX")"
-trap 'rm -f "$prompt_file"' EXIT
 
 mode_block=""
 if [[ "$review_mode" == "verification" ]]; then

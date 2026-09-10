@@ -114,9 +114,13 @@ mkdir -p "$run_dir/work"
 bash "$script_path" \
   "<prd-path>" \
   "$run_dir/work/qa-review-input.md" \
-  "$out_path"
+  "$out_path" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
 echo "OUTPUT_PATH=$out_path"
 ```
+
+The runner owns its frozen-role preflight, reservation, and terminal
+completion. Do not reserve this shell leg in advance.
 
 The output path is deterministic: `<run-dir>/work/codex-qa-validation-review.md`,
 where `<run-dir>` is `bash scripts/df-state.sh path "<run-id>"`. It is in the

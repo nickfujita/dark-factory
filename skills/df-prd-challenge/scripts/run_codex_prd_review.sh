@@ -4,10 +4,12 @@ set -euo pipefail
 # run_codex_prd_review.sh — Codex CLI reviewer for the PRD challenge round.
 #
 # Usage:
-#   run_codex_prd_review.sh start  <prd-path> <out-path>
+#   run_codex_prd_review.sh start <prd-path> <out-path> \
+#       --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
 #   run_codex_prd_review.sh status <out-path>
 #   run_codex_prd_review.sh wait   <out-path> [max_wait_seconds]
-#   run_codex_prd_review.sh <prd-path> <out-path>      # legacy: start + wait
+#   run_codex_prd_review.sh <prd-path> <out-path> \
+#       --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
 #
 # The review runs DETACHED with a wide window and is polled, because a hard
 # foreground timeout kills healthy rounds mid-exploration on a large PRD.
@@ -39,7 +41,6 @@ set -euo pipefail
 #   CODEX_WAIT_SLICE_SECONDS=480   default blocking time for one `wait` call
 #   CODEX_POLL_SECONDS=20          poll interval inside a slice
 #   CODEX_MIN_BODY_BYTES=400       minimum accepted body when findings are claimed
-#   CODEX_REASONING_EFFORT=xhigh   codex model_reasoning_effort
 #   CODEX_REVIEW_MODE=discovery|verification
 #   CODEX_REVIEW_DELTA_FILE=<path> remediation delta, required for verification
 #   CODEX_REVIEW_FORCE=1           allow overwriting a non-empty existing out-path
@@ -48,17 +49,22 @@ WINDOW_SECONDS="${CODEX_WINDOW_SECONDS:-3600}"
 WAIT_SLICE_SECONDS="${CODEX_WAIT_SLICE_SECONDS:-480}"
 POLL_SECONDS="${CODEX_POLL_SECONDS:-20}"
 MIN_BODY_BYTES="${CODEX_MIN_BODY_BYTES:-400}"
-REASONING_EFFORT="${CODEX_REASONING_EFFORT:-xhigh}"
 REVIEW_MODE="${CODEX_REVIEW_MODE:-discovery}"
 DELTA_FILE="${CODEX_REVIEW_DELTA_FILE:-}"
+
+plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+role_caller="$plugin_root/scripts/df-role-caller.sh"
+state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$plugin_root/scripts/df-state.sh}"
 
 usage() {
   cat <<'USAGE'
 Usage:
-  run_codex_prd_review.sh start  <prd-path> <out-path>
+  run_codex_prd_review.sh start <prd-path> <out-path> \
+      --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
   run_codex_prd_review.sh status <out-path>
   run_codex_prd_review.sh wait   <out-path> [max_wait_seconds]
-  run_codex_prd_review.sh <prd-path> <out-path>      # legacy: start + wait
+  run_codex_prd_review.sh <prd-path> <out-path> \
+      --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
 
 The caller's contract is the status file printed by `status` / `wait`:
   STATE=running|complete|failed|limit|timeout
@@ -234,6 +240,27 @@ worker() {
 
   echo "$$" >"$pid_file"
 
+  local df_run df_lane frozen_target current_target dispatch_seq
+  df_run="$(sed -n 's/^DF_RUN=//p' "$meta_file" | tail -1)"
+  df_lane="$(sed -n 's/^DF_LANE=//p' "$meta_file" | tail -1)"
+  frozen_target="$(sed -n 's/^ROLE_TARGET_JSON=//p' "$meta_file" | tail -1)"
+  dispatch_seq="$(sed -n 's/^DISPATCH_SEQ=//p' "$meta_file" | tail -1)"
+  current_target="$(bash "$role_caller" preflight --run "$df_run" --lane "$df_lane" \
+    --repo-root "$repo_root" --responsibility cross_model_review \
+    --allow-kind transport --allow-transport codex-cli)" || {
+      write_status failed "" 0 0 role_preflight_failed
+      (cd "$repo_root" && bash "$state_helper" complete "$df_run" "$dispatch_seq" failed) >/dev/null 2>&1 || true
+      rm -f "$pid_file"
+      return 1
+    }
+  current_target="$(node -e 'const result = JSON.parse(process.argv[1]); process.stdout.write(JSON.stringify(result.target));' "$current_target")"
+  if [[ "$current_target" != "$frozen_target" ]]; then
+    write_status failed "" 0 0 frozen_role_identity_changed
+    (cd "$repo_root" && bash "$state_helper" complete "$df_run" "$dispatch_seq" failed) >/dev/null 2>&1 || true
+    rm -f "$pid_file"
+    return 1
+  fi
+
   local prompt
   prompt="$(build_prompt "$rel_path")"
 
@@ -276,7 +303,6 @@ worker() {
   # findings, and then reports success.
   ${launcher[@]+"${launcher[@]}"} codex exec \
     --sandbox "$sandbox_mode" \
-    --config "model_reasoning_effort=$REASONING_EFFORT" \
     -C "$review_tree" \
     "$prompt" \
     <"/dev/null" \
@@ -327,6 +353,11 @@ worker() {
 
   assemble_output "$rel_path" "$state" "$codex_exit" "$reason"
   write_status "$state" "$codex_exit" "$bytes" "$findings" "$reason"
+  local dispatch_outcome=failed
+  if [[ "$state" == complete ]]; then dispatch_outcome=ok
+  elif [[ "$state" == timeout ]]; then dispatch_outcome=expired
+  fi
+  (cd "$repo_root" && bash "$state_helper" complete "$df_run" "$dispatch_seq" "$dispatch_outcome") >/dev/null 2>&1 || true
   rm -f "$pid_file"
   cleanup_snapshot
 }
@@ -449,6 +480,7 @@ may have missed. Focus on:
 cmd_start() {
   local prd_path="$1"
   paths_for "$2"
+  local df_run="$3" df_lane="$4" df_repo_root="$5"
 
   if ! command -v codex >/dev/null 2>&1; then
     echo "Error: codex CLI is not installed or not in PATH." >&2
@@ -456,7 +488,7 @@ cmd_start() {
   fi
 
   local repo_root
-  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  repo_root="$(cd "$df_repo_root" && pwd -P)"
 
   if [[ "$prd_path" != /* ]]; then
     prd_path="$repo_root/$prd_path"
@@ -492,11 +524,23 @@ cmd_start() {
     rel_path="$(basename "$prd_path")"
   fi
 
+  local dispatch_receipt dispatch_seq frozen_target
+  dispatch_receipt="$(bash "$role_caller" reserve \
+    --run "$df_run" --lane "$df_lane" --repo-root "$repo_root" \
+    --responsibility cross_model_review --purpose 'prd challenge review' \
+    --allow-kind transport --allow-transport codex-cli)"
+  dispatch_seq="$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(receipt.seqs[0]);' "$dispatch_receipt")"
+  frozen_target="$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(JSON.stringify(receipt.preflight.target));' "$dispatch_receipt")"
+
   rm -f "$body_path" "$stderr_log" "$pid_file"
   {
     echo "PRD=$prd_path"
     echo "REL=$rel_path"
     echo "REPO_ROOT=$repo_root"
+    echo "DF_RUN=$df_run"
+    echo "DF_LANE=$df_lane"
+    echo "DISPATCH_SEQ=$dispatch_seq"
+    echo "ROLE_TARGET_JSON=$frozen_target"
     echo "MODE=$REVIEW_MODE"
     echo "WINDOW_SECONDS=$WINDOW_SECONDS"
     echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -569,6 +613,13 @@ reap_if_over_window() {
     meta_mode="$(sed -n 's/^MODE=//p' "$meta_file" | tail -1)"
     [[ -n "$meta_mode" ]] && REVIEW_MODE="$meta_mode"
     write_status "timeout" "" "0" "0" "window_elapsed"
+    local df_run dispatch_seq meta_repo
+    df_run="$(sed -n 's/^DF_RUN=//p' "$meta_file" | tail -1)"
+    dispatch_seq="$(sed -n 's/^DISPATCH_SEQ=//p' "$meta_file" | tail -1)"
+    meta_repo="$(sed -n 's/^REPO_ROOT=//p' "$meta_file" | tail -1)"
+    if [[ -n "$df_run" && -n "$dispatch_seq" && -n "$meta_repo" ]]; then
+      (cd "$meta_repo" && bash "$state_helper" complete "$df_run" "$dispatch_seq" expired) >/dev/null 2>&1 || true
+    fi
   fi
 }
 
@@ -623,8 +674,8 @@ case "$1" in
     ;;
   start)
     shift
-    [[ $# -eq 2 ]] || { usage >&2; exit 1; }
-    cmd_start "$1" "$2"
+    [[ $# -eq 8 && "$3" == --df-run && "$5" == --df-lane && "$7" == --df-repo-root ]] || { usage >&2; exit 1; }
+    cmd_start "$1" "$2" "$4" "$6" "$8"
     ;;
   status)
     shift
@@ -641,8 +692,8 @@ case "$1" in
     ;;
   *)
     # Legacy two-positional form: start, then poll for the whole window.
-    [[ $# -eq 2 ]] || { usage >&2; exit 1; }
-    cmd_start "$1" "$2" >/dev/null
+    [[ $# -eq 8 && "$3" == --df-run && "$5" == --df-lane && "$7" == --df-repo-root ]] || { usage >&2; exit 1; }
+    cmd_start "$1" "$2" "$4" "$6" "$8" >/dev/null
     paths_for "$2"
     cmd_wait "$2" "$((WINDOW_SECONDS + 120))"
     ;;

@@ -10,7 +10,8 @@ set -euo pipefail
 # Usage:
 #   df-codex-review.sh <brief-file> <out-path> --deadline <seconds> \
 #       (--snapshot <path-to-tree> | --content <file>) \
-#       [--model <model>] [--effort <effort>] [--min-body <bytes>] [--force]
+#       --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root> \
+#       [--min-body <bytes>] [--force]
 #
 # Modes, exactly one:
 #   --snapshot <tree>  The reviewer reads code. The script creates a disposable
@@ -32,8 +33,8 @@ set -euo pipefail
 # scratch directory, and the status file's SANDBOX token says so. A degraded
 # sandbox can only touch a throwaway.
 #
-# Model and effort come from --model and --effort. Neither has a default in
-# this script: an omitted flag means the operator's codex config decides.
+# The frozen cross-model role selects the approved Codex CLI transport. This
+# script never accepts a caller-supplied model or reasoning effort.
 #
 # Deadline: --deadline is required. codex runs detached in its own session and
 # is polled; on expiry the whole process group is TERMed, then KILLed, and the
@@ -77,7 +78,8 @@ usage() {
 Usage:
   df-codex-review.sh <brief-file> <out-path> --deadline <seconds> \
       (--snapshot <path-to-tree> | --content <file>) \
-      [--model <model>] [--effort <effort>] [--min-body <bytes>] [--force]
+      --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root> \
+      [--min-body <bytes>] [--force]
 
 The caller's contract is the status file next to <out-path>:
   STATE=running|complete|failed|timeout|limit
@@ -99,8 +101,9 @@ MODE=""
 TREE=""
 CONTENT_FILE=""
 DEADLINE=""
-MODEL=""
-EFFORT=""
+DF_RUN=""
+DF_LANE=""
+DF_REPO_ROOT=""
 MIN_BODY="$MIN_BODY_DEFAULT"
 FORCE=0
 
@@ -117,12 +120,15 @@ while [[ $# -gt 0 ]]; do
     --deadline)
       [[ $# -ge 2 ]] || die "--deadline needs seconds"
       DEADLINE="$2"; shift 2 ;;
-    --model)
-      [[ $# -ge 2 ]] || die "--model needs a value"
-      MODEL="$2"; shift 2 ;;
-    --effort)
-      [[ $# -ge 2 ]] || die "--effort needs a value"
-      EFFORT="$2"; shift 2 ;;
+    --df-run)
+      [[ $# -ge 2 ]] || die "--df-run needs a value"
+      DF_RUN="$2"; shift 2 ;;
+    --df-lane)
+      [[ $# -ge 2 ]] || die "--df-lane needs a value"
+      DF_LANE="$2"; shift 2 ;;
+    --df-repo-root)
+      [[ $# -ge 2 ]] || die "--df-repo-root needs a path"
+      DF_REPO_ROOT="$2"; shift 2 ;;
     --min-body)
       [[ $# -ge 2 ]] || die "--min-body needs bytes"
       MIN_BODY="$2"; shift 2 ;;
@@ -156,7 +162,13 @@ fi
 [[ -n "$DEADLINE" ]] || die "--deadline is required"
 [[ "$DEADLINE" =~ ^[0-9]+$ && "$DEADLINE" -gt 0 ]] || die "--deadline must be a positive integer"
 [[ "$MIN_BODY" =~ ^[0-9]+$ ]] || die "--min-body must be a non-negative integer"
+[[ -n "$DF_RUN" && -n "$DF_LANE" && -n "$DF_REPO_ROOT" ]] \
+  || die "--df-run, --df-lane, and --df-repo-root are required"
+DF_REPO_ROOT="$(cd "$DF_REPO_ROOT" && pwd -P)"
 command -v codex >/dev/null 2>&1 || die "codex CLI is not installed or not in PATH"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+ROLE_CALLER="$SCRIPT_DIR/df-role-caller.sh"
+STATE_HELPER="${DF_ROLE_CALLER_STATE_HELPER:-$SCRIPT_DIR/df-state.sh}"
 
 base="${OUT%.md}"
 status_file="${base}.status"
@@ -285,6 +297,13 @@ build_prompt() {
 # --------------------------------------------------------------------- reap
 
 CODEX_PID=""
+DISPATCH_SEQ=""
+
+complete_dispatch() {
+  local outcome=$1
+  [[ -n "$DISPATCH_SEQ" ]] || return 0
+  (cd "$DF_REPO_ROOT" && bash "$STATE_HELPER" complete "$DF_RUN" "$DISPATCH_SEQ" "$outcome") >/dev/null 2>&1 || true
+}
 
 reap_codex() {
   local pgid=""
@@ -307,6 +326,7 @@ on_interrupt() {
     reap_codex
   fi
   write_status "failed" "" "0" "interrupted"
+  complete_dispatch failed
   cleanup_workdir
   exit 143
 }
@@ -345,6 +365,11 @@ fi
 prompt="$(build_prompt)"
 
 rm -f "$OUT" "$pgid_file"
+dispatch_receipt="$(bash "$ROLE_CALLER" reserve \
+  --run "$DF_RUN" --lane "$DF_LANE" --repo-root "$DF_REPO_ROOT" \
+  --responsibility cross_model_review --purpose 'cross-model review' \
+  --allow-kind transport --allow-transport codex-cli)"
+DISPATCH_SEQ="$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(receipt.seqs[0]);' "$dispatch_receipt")"
 write_status "running" "" "0" ""
 
 # codex runs detached in its own session; the leader records its own pid so
@@ -357,8 +382,6 @@ if command -v setsid >/dev/null 2>&1 && setsid --help 2>&1 | grep -q -- '--wait'
 fi
 
 cmd=(codex exec --sandbox "$SANDBOX_MODE" --skip-git-repo-check -C "$WORK_DIR" -o "$OUT")
-if [[ -n "$MODEL" ]]; then cmd+=(-m "$MODEL"); fi
-if [[ -n "$EFFORT" ]]; then cmd+=(--config "model_reasoning_effort=$EFFORT"); fi
 cmd+=("$prompt")
 
 ${launcher[@]+"${launcher[@]}"} "${cmd[@]}" \
@@ -406,6 +429,11 @@ else
 fi
 
 write_status "$state" "$codex_exit" "$bytes" "$reason"
+dispatch_outcome=failed
+if [[ "$state" == complete ]]; then dispatch_outcome=ok
+elif [[ "$state" == timeout ]]; then dispatch_outcome=expired
+fi
+complete_dispatch "$dispatch_outcome"
 cleanup_workdir
 
 cat "$status_file"

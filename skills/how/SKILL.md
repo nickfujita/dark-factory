@@ -5,6 +5,9 @@ description: "Use for \"how does X work\", code walkthroughs before changing som
 
 # How
 
+Every background runner follows `../df/references/role-callers-inventory.md`.
+Preflight its frozen role before reservation, then use that target natively.
+
 Explore the codebase to answer "how does X work?" questions. Produce clear architectural explanations at the level of a senior engineer onboarding onto a subsystem. Enough to build a working mental model, not annotated source code.
 
 Two modes:

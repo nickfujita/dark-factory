@@ -87,10 +87,13 @@ exactly once.
 
 ## Dispatch reservations
 
-Every reviewer dispatch reserves a seq through `scripts/df-state.sh` **before**
-it spawns, and the reservation is spent the moment it lands:
+Every reviewer dispatch preflights its frozen role, then reserves a seq through
+`scripts/df-state.sh` **before** it spawns. The reservation is spent the moment
+it lands:
 
 ```bash
+node scripts/df-role.mjs preflight --run "<run-id>" --lane "<lane>" \
+  --repo-root "<consumer-root>" --responsibility discovery_reviewers
 seq=$(bash scripts/df-state.sh reserve "<run-id>" discovery_reviewers "code review discovery, in-session leg")
 ```
 
@@ -189,7 +192,8 @@ where `<timestamp>` is `YYYY-MM-DDTHH-MM-SSZ` (UTC).
 ## Step 2: The discovery pass
 
 **One pass. Every reviewer the lane calls for, in parallel, in a single
-message, all reading `REVIEW_SHA`.** Reserve each dispatch first.
+message, all reading `REVIEW_SHA`.** Preflight each declared role, then reserve
+each native dispatch.
 
 Subagents do not inherit your shell variables or context: state the concrete
 diff path (`<REVIEW_ROOT>/branch-diff.txt`), the concrete `REVIEW_SHA`, and for
@@ -246,9 +250,13 @@ review_dir="<REVIEW_ROOT from Step 1>"
 base_ref="<base_ref from Step 1>"
 out_dir="$review_dir/code-subagents"
 mkdir -p "$out_dir"
-DARK_FACTORY_REVIEW_DIR="$review_dir" bash "$script_path" "<prd-path>" "<qa-path>" "$base_ref" "$out_dir"
+DARK_FACTORY_REVIEW_DIR="$review_dir" bash "$script_path" "<prd-path>" "<qa-path>" "$base_ref" "$out_dir" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
 echo "OUTPUT_DIR=$out_dir"
 ```
+
+The fallback runner owns its three preflights, reservations, and completions.
+Do not reserve those CLI reviewer legs in advance.
 
 Read every markdown file in `$review_dir/code-subagents/` before synthesis.
 
@@ -267,8 +275,8 @@ one was the cross-family leg.
 Launch the Claude Code reviewers through the tmux helper with
 **`timeout: 1800000`**. The helper starts a real interactive `claude` session
 with two tmux windows (`quality` and `spec`), sends the review prompts into
-them, and waits for completion sentinels before returning. Reserve one
-dispatch per window before it runs.
+them, and waits for completion sentinels before returning. It preflights both
+transport legs, then owns one reservation per window and their completion.
 
 ```bash
 script_path="${CODEX_SKILLS_HOME:-${CODEX_HOME:-$HOME/.codex}/skills}/df-code-review/scripts/run_claude_code_reviews_tmux.sh"
@@ -284,7 +292,8 @@ fi
 review_dir="<REVIEW_ROOT from Step 1>"
 base_ref="<base_ref from Step 1>"
 mkdir -p "$review_dir/claude"
-bash "$script_path" "<prd-path>" "<qa-path>" "$base_ref" "$review_dir/claude"
+bash "$script_path" "<prd-path>" "<qa-path>" "$base_ref" "$review_dir/claude" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
 ```
 
 Do not use `claude -p`, `--print`, SDK mode, stdout piping, or any
@@ -368,7 +377,7 @@ gets, who verifies, the verdict block, and how to read the result.
 
 In short. Assemble the delta (each finding as raised, its disposition and
 reason, the fix diff, the test evidence, plus `git diff <REVIEW_SHA>..HEAD` and
-the fixed unresolved list). Reserve a dispatch per verifying leg. Send it back
+the fixed unresolved list). Preflight and reserve a dispatch per verifying leg. Send it back
 to the reviewer that raised the findings, in its thread where the harness can
 continue one; where it cannot — the CLI legs are fresh processes every time —
 dispatch a fresh in-session Codex subagent with the original finding text

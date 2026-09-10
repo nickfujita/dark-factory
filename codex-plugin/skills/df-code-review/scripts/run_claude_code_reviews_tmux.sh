@@ -4,7 +4,8 @@
 # transport guard below and leave the reviewers running with no prompt.
 set -Eeuo pipefail
 
-# Usage: run_claude_code_reviews_tmux.sh <prd-path> <qa-path> <base-ref> <output-dir>
+# Usage: run_claude_code_reviews_tmux.sh <prd-path> <qa-path> <base-ref> <output-dir> \
+#   --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
 # Starts two interactive Claude Code sessions in tmux (quality + spec), sends
 # review prompts, and waits until each writes a completion sentinel.
 #
@@ -21,8 +22,8 @@ set -Eeuo pipefail
 # other concurrent run. TMUX_TMPDIR cannot substitute: it only feeds the default
 # socket path, which is skipped whenever $TMUX supplies one.
 
-if [[ $# -lt 4 ]]; then
-  echo "Usage: run_claude_code_reviews_tmux.sh <prd-path> <qa-path> <base-ref> <output-dir>" >&2
+if [[ $# -ne 10 || "$5" != --df-run || "$7" != --df-lane || "$9" != --df-repo-root ]]; then
+  echo "Usage: run_claude_code_reviews_tmux.sh <prd-path> <qa-path> <base-ref> <output-dir> --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>" >&2
   exit 1
 fi
 
@@ -35,11 +36,17 @@ if ! command -v claude >/dev/null 2>&1; then
   exit 1
 fi
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 prd_path="$1"
 qa_path="$2"
 base_ref="$3"
 out_dir="$4"
+df_run="$6"
+df_lane="$8"
+df_repo_root="${10}"
+repo_root="$(cd "$df_repo_root" && pwd -P)"
+plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+role_caller="$plugin_root/scripts/df-role-caller.sh"
+state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$plugin_root/scripts/df-state.sh}"
 
 if [[ "$prd_path" != /* ]]; then prd_path="$repo_root/$prd_path"; fi
 if [[ "$qa_path" != /* ]]; then qa_path="$repo_root/$qa_path"; fi
@@ -214,6 +221,44 @@ quality_prompt="$(mktemp "${TMPDIR:-/tmp}/dark-factory-claude-quality-prompt.XXX
 spec_prompt="$(mktemp "${TMPDIR:-/tmp}/dark-factory-claude-spec-prompt.XXXXXX")"
 make_prompt quality "$quality_out" "$quality_done" "$quality_prompt"
 make_prompt spec "$spec_out" "$spec_done" "$spec_prompt"
+trap 'rm -f "$quality_prompt" "$spec_prompt"' EXIT
+
+# Two Claude processes are real dispatches, even though they share a tmux
+# session. Validate both legs before either reservation or tmux launch.
+bash "$role_caller" preflight \
+  --run "$df_run" --lane "$df_lane" --repo-root "$repo_root" \
+  --responsibility cross_model_review --allow-kind transport --allow-transport claude-tmux >/dev/null
+bash "$role_caller" preflight \
+  --run "$df_run" --lane "$df_lane" --repo-root "$repo_root" \
+  --responsibility cross_model_review --allow-kind transport --allow-transport claude-tmux >/dev/null
+
+dispatch_seqs=()
+dispatch_completed=0
+complete_dispatches() {
+  local outcome=$1 seq
+  [[ "$dispatch_completed" -eq 0 ]] || return 0
+  dispatch_completed=1
+  for seq in "${dispatch_seqs[@]}"; do
+    (cd "$repo_root" && bash "$state_helper" complete "$df_run" "$seq" "$outcome") >/dev/null 2>&1 || true
+  done
+}
+finish_dispatches() {
+  local exit_code=$? outcome=failed
+  trap - EXIT
+  [[ "$exit_code" -eq 0 ]] && outcome=ok
+  complete_dispatches "$outcome"
+  rm -f "$quality_prompt" "$spec_prompt"
+  exit "$exit_code"
+}
+trap finish_dispatches EXIT
+
+for purpose in 'Codex-to-Claude code quality review' 'Codex-to-Claude code spec review'; do
+  dispatch_receipt="$(bash "$role_caller" reserve \
+    --run "$df_run" --lane "$df_lane" --repo-root "$repo_root" \
+    --responsibility cross_model_review --purpose "$purpose" \
+    --allow-kind transport --allow-transport claude-tmux)"
+  dispatch_seqs+=("$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(receipt.seqs[0]);' "$dispatch_receipt")")
+done
 
 # Everything from the spawn to the last keystroke is the transport window. A
 # tmux error in here leaves two reviewer sessions running with no prompt in
@@ -272,4 +317,5 @@ done
 
 echo "Error: timed out waiting for Claude completion sentinels in: $out_dir" >&2
 echo "Reviewer session kept for inspection: tmux -L $tmux_label attach -t $session" >&2
+complete_dispatches expired
 exit 1

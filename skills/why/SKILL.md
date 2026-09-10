@@ -5,6 +5,9 @@ description: "Use for 'why does X work this way', 'why we picked Y', design rati
 
 # Why
 
+Every background runner follows `../df/references/role-callers-inventory.md`.
+Preflight its frozen role before reservation, then use that target natively.
+
 Investigate the motivation and intent behind code. Why was it built this way? What edge cases were considered? What product, business, or operational constraints shaped the design? What alternatives were rejected, and why?
 
 Companion to the `how` skill. `how` answers what the code does and how it works. `why` answers what forces led to its shape.

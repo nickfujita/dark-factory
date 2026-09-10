@@ -111,6 +111,39 @@ exit 0
 FAKE
 chmod +x "$BIN/codex"
 
+# The runners now enter through the frozen-role boundary. Keep its process
+# boundaries fake here while preserving the runner's real detached lifecycle.
+mkdir -p "$WORK/runs/runner-test"
+printf 'run_id\tlane\tcreated\tfinish_predicate\tartifact_sha\tbudget_dispatches\tbudget_wall_minutes\tstate\nrunner-test\tstandard\t2026-01-01T00:00:00Z\tfinish\t-\t99\t120\trunning\n' >"$WORK/runs/runner-test/run.tsv"
+printf 'seq\tts\trole\tpurpose\tparent_seq\toutcome\n' >"$WORK/runs/runner-test/dispatches.tsv"
+cat >"$WORK/fake-role.mjs" <<'NODE'
+import { appendFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+const role = args[args.indexOf('--responsibility') + 1];
+appendFileSync(process.env.FAKE_ROLE_CALLS, `preflight ${role}\n`);
+const target = process.env.FAKE_ROLE_TARGET
+  ? JSON.parse(process.env.FAKE_ROLE_TARGET)
+  : role === 'cross_model_review'
+  ? { kind: 'transport', name: 'codex-cli' }
+  : { kind: 'cli', model: null, effort: null };
+process.stdout.write(`${JSON.stringify({ responsibility: role, target, validatedNamedAgents: [] })}\n`);
+NODE
+cat >"$WORK/fake-state.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  path) printf '%s/%s\n' "$FAKE_ROLE_RUNS" "$2" ;;
+  reserve)
+    printf 'reserve %s\n' "$2" >>"$FAKE_ROLE_CALLS"
+    awk 'END { print NR }' "$FAKE_ROLE_RUNS/$2/dispatches.tsv" >>"$FAKE_ROLE_RUNS/$2/dispatches.tsv"
+    awk 'END { print NR - 1 }' "$FAKE_ROLE_RUNS/$2/dispatches.tsv"
+    ;;
+  complete) printf 'complete %s %s\n' "$3" "$4" >>"$FAKE_ROLE_CALLS" ;;
+  *) exit 1 ;;
+esac
+SH
+chmod +x "$WORK/fake-state.sh"
+
 # ------------------------------------------------------------- fake tmux/claude
 #
 # The tmux runner only needs: a session that "starts", buffer plumbing that
@@ -142,6 +175,10 @@ export CODEX_POLL_SECONDS=1
 export CODEX_WAIT_SLICE_SECONDS=40
 export CODEX_WINDOW_SECONDS=25
 export CODEX_SKILLS_HOME="$REPO_ROOT/codex-plugin/skills"
+export DF_ROLE_CALLER_ROLE_HELPER="$WORK/fake-role.mjs"
+export DF_ROLE_CALLER_STATE_HELPER="$WORK/fake-state.sh"
+export FAKE_ROLE_RUNS="$WORK/runs"
+export FAKE_ROLE_CALLS="$WORK/role-calls.log"
 
 PRD="$WORK/prd-sample.md"
 cat >"$PRD" <<'PRDDOC'
@@ -164,7 +201,8 @@ run_codex_round() {
   # run_codex_round <name> <scenario> [env assignments...]
   local name="$1" scenario="$2"; shift 2
   local out="$WORK/$name.md"
-  env FAKE_SCENARIO="$scenario" "$@" bash "$CODEX_RUNNER" start "$PRD" "$out" >/dev/null 2>&1
+  env FAKE_SCENARIO="$scenario" "$@" bash "$CODEX_RUNNER" start "$PRD" "$out" \
+    --df-run runner-test --df-lane standard --df-repo-root "$REPO_ROOT" >/dev/null 2>&1
   env FAKE_SCENARIO="$scenario" "$@" bash "$CODEX_RUNNER" wait "$out" >/dev/null 2>&1
   echo "${out%.md}.status"
 }
@@ -215,7 +253,8 @@ expect_kv "verification: prose with no verdict blocks fails closed" "$st" STATE 
 expect_kv "verification: no-verdict reason" "$st" REASON no_verdict_blocks
 
 out="$WORK/verify-nodelta.md"
-if CODEX_REVIEW_MODE=verification bash "$CODEX_RUNNER" start "$PRD" "$out" >/dev/null 2>&1; then
+if CODEX_REVIEW_MODE=verification bash "$CODEX_RUNNER" start "$PRD" "$out" \
+    --df-run runner-test --df-lane standard --df-repo-root "$REPO_ROOT" >/dev/null 2>&1; then
   fail "verification: start without a delta file is refused" "start exited 0"
 else
   pass "verification: start without a delta file is refused"
@@ -223,16 +262,19 @@ fi
 
 # --- guards and window
 out="$WORK/guard.md"
-env FAKE_SCENARIO=sleep bash "$CODEX_RUNNER" start "$PRD" "$out" >/dev/null 2>&1
+env FAKE_SCENARIO=sleep bash "$CODEX_RUNNER" start "$PRD" "$out" \
+  --df-run runner-test --df-lane standard --df-repo-root "$REPO_ROOT" >/dev/null 2>&1
 sleep 1
-if bash "$CODEX_RUNNER" start "$PRD" "$out" >/dev/null 2>&1; then
+if bash "$CODEX_RUNNER" start "$PRD" "$out" \
+    --df-run runner-test --df-lane standard --df-repo-root "$REPO_ROOT" >/dev/null 2>&1; then
   fail "guard: a second start over a RUNNING round is refused" "start exited 0"
 else
   pass "guard: a second start over a RUNNING round is refused"
 fi
 
 out="$WORK/window.md"
-env FAKE_SCENARIO=sleep CODEX_WINDOW_SECONDS=3 bash "$CODEX_RUNNER" start "$PRD" "$out" >/dev/null 2>&1
+env FAKE_SCENARIO=sleep CODEX_WINDOW_SECONDS=3 bash "$CODEX_RUNNER" start "$PRD" "$out" \
+  --df-run runner-test --df-lane standard --df-repo-root "$REPO_ROOT" >/dev/null 2>&1
 env FAKE_SCENARIO=sleep CODEX_WINDOW_SECONDS=3 bash "$CODEX_RUNNER" wait "$out" >/dev/null 2>&1
 expect_kv "window: an over-running round times out" "${out%.md}.status" STATE timeout
 
@@ -244,7 +286,8 @@ echo "== run_codex_persona_reviews.sh =="
 run_persona_round() {
   local name="$1" scenario="$2"; shift 2
   local dir="$WORK/$name"
-  env FAKE_SCENARIO="$scenario" "$@" bash "$PERSONA_RUNNER" start "$PRD" "$dir" >/dev/null 2>&1
+  env FAKE_SCENARIO="$scenario" "$@" bash "$PERSONA_RUNNER" start "$PRD" "$dir" \
+    --df-run runner-test --df-lane standard --df-repo-root "$REPO_ROOT" >/dev/null 2>&1
   env FAKE_SCENARIO="$scenario" "$@" bash "$PERSONA_RUNNER" wait "$dir" >/dev/null 2>&1
   echo "$dir/run.status"
 }
@@ -273,7 +316,8 @@ else
   fail "personas: the delta reached the reviewer prompts" "marker file empty"
 fi
 
-if CODEX_REVIEW_MODE=verification bash "$PERSONA_RUNNER" start "$PRD" "$WORK/personas-nodelta" >/dev/null 2>&1; then
+if CODEX_REVIEW_MODE=verification bash "$PERSONA_RUNNER" start "$PRD" "$WORK/personas-nodelta" \
+    --df-run runner-test --df-lane standard --df-repo-root "$REPO_ROOT" >/dev/null 2>&1; then
   fail "personas: start without a delta file is refused" "start exited 0"
 else
   pass "personas: start without a delta file is refused"
@@ -282,14 +326,19 @@ fi
 echo
 echo "== run_claude_prd_review_tmux.sh =="
 
+tmux_reserves_before="$(grep -c '^reserve ' "$FAKE_ROLE_CALLS" 2>/dev/null || true)"
+tmux_completes_before="$(grep -c '^complete ' "$FAKE_ROLE_CALLS" 2>/dev/null || true)"
+
 tmux_round() {
   # tmux_round <name> <report-body-file> [env...]
   local name="$1" body="$2"; shift 2
   local out="$WORK/$name.md"
   cp "$body" "$out"
-  env FAKE_SENTINEL="${out%.md}.done" \
+  env FAKE_ROLE_TARGET='{"kind":"transport","name":"claude-tmux"}' \
+      FAKE_SENTINEL="${out%.md}.done" \
       CLAUDE_REVIEW_STARTUP_DELAY=0 CLAUDE_REVIEW_TIMEOUT_SECONDS=20 "$@" \
-      bash "$TMUX_RUNNER" "$PRD" "$out" >/dev/null 2>&1
+      bash "$TMUX_RUNNER" "$PRD" "$out" \
+        --df-run runner-test --df-lane standard --df-repo-root "$REPO_ROOT" >/dev/null 2>&1
   echo "${out%.md}.status"
 }
 
@@ -327,10 +376,21 @@ st="$(tmux_round tmux-verify "$WORK/report-verdicts.md" \
 expect_kv "tmux: verification accepts a verdict-only report" "$st" STATE complete
 expect_kv "tmux: verification mode is recorded" "$st" MODE verification
 
-if CLAUDE_REVIEW_MODE=verification bash "$TMUX_RUNNER" "$PRD" "$WORK/tmux-nodelta.md" >/dev/null 2>&1; then
+if CLAUDE_REVIEW_MODE=verification FAKE_ROLE_TARGET='{"kind":"transport","name":"claude-tmux"}' \
+    bash "$TMUX_RUNNER" "$PRD" "$WORK/tmux-nodelta.md" \
+      --df-run runner-test --df-lane standard --df-repo-root "$REPO_ROOT" >/dev/null 2>&1; then
   fail "tmux: start without a delta file is refused" "exited 0"
 else
   pass "tmux: start without a delta file is refused"
+fi
+
+tmux_reserves_after="$(grep -c '^reserve ' "$FAKE_ROLE_CALLS" 2>/dev/null || true)"
+tmux_completes_after="$(grep -c '^complete ' "$FAKE_ROLE_CALLS" 2>/dev/null || true)"
+if [[ "$((tmux_reserves_after - tmux_reserves_before))" == 3 \
+   && "$((tmux_completes_after - tmux_completes_before))" == 3 ]]; then
+  pass "tmux: each terminal review closes its owned reservation"
+else
+  fail "tmux: each terminal review closes its owned reservation" "$(cat "$FAKE_ROLE_CALLS")"
 fi
 
 echo

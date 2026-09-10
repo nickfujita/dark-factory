@@ -19,9 +19,10 @@ three-worker cap still apply.
 
 ## Start
 
-The Dark Factory root is the path printed by the SessionStart hook. Create the
-program run first, reserve the dispatch, and write the standalone brief. Then
-place the Codex session state inside that run's external state directory:
+The Dark Factory root is the path printed by the SessionStart hook. Create and
+prepare the program run first, then write the standalone brief. The transport
+preflights and reserves every turn itself. Place its session state inside the
+run's external state directory:
 
 ```bash
 df_root=<dark-factory-root>
@@ -33,8 +34,7 @@ export DF_CODEX_STATE_ROOT="$run_dir/codex"
 bash "$df_root/scripts/df-codex-exec.sh" start "$worker" \
   --cd <exclusive-checkout-or-worktree> \
   --brief <brief-file> \
-  --model <model> \
-  --effort <effort>
+  --df-run "$run_id" --df-lane <lane> --df-repo-root <consumer-root>
 ```
 
 Run the final command with Claude Code's background-process facility. The

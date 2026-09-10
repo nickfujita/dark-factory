@@ -1,6 +1,6 @@
 # Implementer prompt
 
-The controller builds each implementer dispatch from this template. Spawn as a background native Codex subagent. Resolve the model through the `implementation_delegate` role in `../../df/references/model-policy.md`; a transcription task, where the plan text contains the complete code, takes the menial tier instead. A role marked inherit omits the model field. Reserve the dispatch through `scripts/df-state.sh` before spawning.
+The controller builds each implementer dispatch from this template. Spawn as a background native Codex subagent. Preflight the frozen `implementation_delegate` role through `../../df/references/model-policy.md`; a transcription task, where the plan text contains the complete code, takes the menial tier instead. A role marked inherit omits the model field. The native harness reserves the dispatch before spawning.
 
 ```
 You are implementing Task [N]: [task name].
