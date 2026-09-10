@@ -94,6 +94,12 @@ check-python:
 check-plugins:
 	bash scripts/check-plugin-manifests.sh
 
+# Role policy acceptance: synthetic run state and agent definitions exercise
+# layered overrides, frozen plans, and pre-dispatch named-agent validation.
+check-role-policy:
+	node scripts/check-model-policy.mjs
+	bash scripts/test-df-role-policy.sh
+
 # D24 run-state store acceptance: 37 assertions over concurrent reservation,
 # stale-lock reclaim, nested budgets, idempotent completion and resume.
 # Offline, no dependencies beyond bash and coreutils, about a second.
