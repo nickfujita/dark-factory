@@ -469,16 +469,33 @@ function readPlanLockOwner(lockPath, name = "owner") {
   }
 }
 
-function lockIsPastOwnerlessGrace(lockPath) {
+function lockIdentity(lockPath) {
   try {
-    return Date.now() - lstatSync(lockPath).mtimeMs >= NO_OWNER_GRACE_MS;
+    const stat = lstatSync(lockPath);
+    return { device: stat.dev, inode: stat.ino, mtimeMs: stat.mtimeMs };
   } catch {
-    return false;
+    return null;
   }
 }
 
 function isOwnerlessLock(lockPath) {
   return !existsSync(join(lockPath, "owner"));
+}
+
+function reclaimEligibility(lockPath) {
+  const identity = lockIdentity(lockPath);
+  if (!identity) return null;
+  const owner = readPlanLockOwner(lockPath);
+  const pid = owner ? ownerPid(owner) : null;
+  if (owner) {
+    return pid && !processIsAlive(pid) ? { kind: "dead-owner", identity, owner } : null;
+  }
+  if (!isOwnerlessLock(lockPath) || Date.now() - identity.mtimeMs < NO_OWNER_GRACE_MS) return null;
+  return { kind: "ownerless", identity, owner: null };
+}
+
+function sameLockIdentity(left, right) {
+  return left !== null && right !== null && left.device === right.device && left.inode === right.inode;
 }
 
 function removeClaim(lockPath, claim) {
@@ -490,7 +507,7 @@ function removeClaim(lockPath, claim) {
   }
 }
 
-function reclaimPlanLock(lockPath) {
+function reclaimPlanLock(lockPath, eligibility) {
   const claim = `pid=${process.pid}\tts=${new Date().toISOString()}\ttoken=${randomUUID()}\n`;
   try {
     writeFileSync(join(lockPath, "reclaim"), claim, { encoding: "utf8", flag: "wx", mode: 0o600 });
@@ -504,7 +521,9 @@ function reclaimPlanLock(lockPath) {
   try {
     const owner = readPlanLockOwner(lockPath);
     const pid = owner ? ownerPid(owner) : null;
-    if ((owner && (!pid || processIsAlive(pid))) || (!owner && (!isOwnerlessLock(lockPath) || !lockIsPastOwnerlessGrace(lockPath)))) {
+    if (!sameLockIdentity(eligibility.identity, lockIdentity(lockPath)) || owner !== eligibility.owner ||
+        (eligibility.kind === "dead-owner" && (!pid || processIsAlive(pid))) ||
+        (eligibility.kind === "ownerless" && !isOwnerlessLock(lockPath))) {
       return false;
     }
     const stalePath = `${lockPath}.stale.${process.pid}.${randomUUID()}`;
@@ -533,11 +552,8 @@ async function acquirePlanLock(runDir) {
       return { path: lockPath, owner };
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
-      const owner = readPlanLockOwner(lockPath);
-      const pid = owner ? ownerPid(owner) : null;
-      if ((owner && pid && !processIsAlive(pid)) || (!owner && isOwnerlessLock(lockPath) && lockIsPastOwnerlessGrace(lockPath))) {
-        reclaimPlanLock(lockPath);
-      }
+      const eligibility = reclaimEligibility(lockPath);
+      if (eligibility) reclaimPlanLock(lockPath, eligibility);
       await sleep(25);
     }
   }

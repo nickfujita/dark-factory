@@ -379,6 +379,24 @@ else
   fail "a dead role-plan lock owner is recovered" "$dead_lock_plan"
 fi
 
+new_run ownerless-lock-recovery
+ownerless_lock="$DF_STATE_ROOT/ownerless-lock-recovery/work/role-plan.lock"
+mkdir -p "$ownerless_lock"
+touch -d '2 minutes ago' "$ownerless_lock"
+ownerless_lock_plan="$(prepare ownerless-lock-recovery codex)"
+ownerless_lock_check="$(node -e '
+const fs = require("fs");
+const returned = JSON.parse(process.argv[1]);
+const persisted = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+process.stdout.write(JSON.stringify({ returned: returned.planDigest, persisted: persisted.planDigest }));
+' "$ownerless_lock_plan" "$DF_STATE_ROOT/ownerless-lock-recovery/work/role-plan.json")"
+if [[ ! -d "$ownerless_lock" && $(find "$DF_STATE_ROOT/ownerless-lock-recovery/work" -maxdepth 1 -type f -name 'role-plan.json' | awk 'END { print NR }') == 1 && \
+      $(json_field "$ownerless_lock_check" 'returned') == $(json_field "$ownerless_lock_check" 'persisted') ]]; then
+  pass "an aged ownerless role-plan lock is recovered into one published plan"
+else
+  fail "an aged ownerless role-plan lock is recovered into one published plan" "$ownerless_lock_check"
+fi
+
 clear_overrides
 mkdir -p "$WORK/concurrent-config-a/dark-factory" "$WORK/concurrent-config-b/dark-factory"
 printf '%s\n' '{"schemaVersion":1,"roles":{"codex":{"design_runners":{"standard":{"kind":"named-agent","agent":"terra_xhigh"}}}}}' >"$WORK/concurrent-config-a/dark-factory/config.json"
