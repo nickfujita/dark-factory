@@ -73,11 +73,25 @@ function repositoryPath(value, field) {
 function uniqueSortedStrings(values, field) {
   if (!Array.isArray(values)) fail(`${field}: expected an array`);
   const normalized = values.map((value, index) => nonblank(value, `${field}[${index}]`));
-  const sorted = [...normalized].sort();
+  const sorted = [...normalized].sort(stringComparator);
   for (let index = 1; index < sorted.length; index += 1) {
     if (sorted[index] === sorted[index - 1]) fail(`${field}: duplicate value '${sorted[index]}'`);
   }
   return sorted;
+}
+
+// JavaScript's default localeCompare depends on the process locale. Selection
+// bytes are content identity, so every selection order uses raw string code
+// units instead. This also gives null sub-features an explicit stable place.
+function stringComparator(left, right) {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
+
+function nullableStringComparator(left, right) {
+  if (left === null) return right === null ? 0 : -1;
+  if (right === null) return 1;
+  return stringComparator(left, right);
 }
 
 function hashBytes(bytes) {
@@ -141,14 +155,29 @@ function normalizeEntry(value, index, declaredMedia) {
 }
 
 function entryComparator(left, right) {
-  return left.medium.localeCompare(right.medium)
-    || left.recipePath.localeCompare(right.recipePath)
-    || String(left.subFeature).localeCompare(String(right.subFeature))
-    || left.id.localeCompare(right.id);
+  return stringComparator(left.medium, right.medium)
+    || stringComparator(left.recipePath, right.recipePath)
+    || nullableStringComparator(left.subFeature, right.subFeature)
+    || stringComparator(left.id, right.id);
 }
 
-function normalizeSelection(value) {
+function canonicalSealedRepoRoot(value, field) {
+  if (typeof value !== "string" || !isAbsolute(value)) {
+    fail(`${field}: expected a canonical absolute repository root`);
+  }
+  let canonical;
+  try {
+    canonical = realpathSync(value);
+  } catch {
+    fail(`${field}: repository root does not exist: ${value}`);
+  }
+  if (canonical !== value) fail(`${field}: expected a canonical absolute repository root`);
+  return canonical;
+}
+
+function normalizeSelection(value, sealed) {
   if (!isObject(value)) fail("selection: expected an object");
+  const systemFields = sealed ? ["repoRoot"] : [];
   if (value.kind === "user-facing") {
     exactKeys(value, [
       "schemaVersion",
@@ -160,6 +189,7 @@ function normalizeSelection(value) {
       "catalogLink",
       "declaredMedia",
       "entries",
+      ...systemFields,
     ], "selection");
     if (value.schemaVersion !== 1) fail("selection.schemaVersion: expected 1");
     if (value.kind !== "user-facing") fail("selection.kind: expected user-facing");
@@ -181,7 +211,7 @@ function normalizeSelection(value) {
       identities.add(identity);
     }
     entries.sort(entryComparator);
-    return {
+    const selection = {
       schemaVersion: 1,
       kind: "user-facing",
       runId: runId(value.runId, "selection.runId"),
@@ -192,14 +222,16 @@ function normalizeSelection(value) {
       declaredMedia,
       entries,
     };
+    if (sealed) selection.repoRoot = canonicalSealedRepoRoot(value.repoRoot, "selection.repoRoot");
+    return selection;
   }
   if (value.kind === "no-user-route") {
-    exactKeys(value, ["schemaVersion", "kind", "runId", "featureSlug", "prdPath", "prdSha256", "reason", "entries"], "selection");
+    exactKeys(value, ["schemaVersion", "kind", "runId", "featureSlug", "prdPath", "prdSha256", "reason", "entries", ...systemFields], "selection");
     if (value.schemaVersion !== 1) fail("selection.schemaVersion: expected 1");
     if (!Array.isArray(value.entries) || value.entries.length !== 0) {
       fail("selection.entries: no-user-route selections must have zero entries");
     }
-    return {
+    const selection = {
       schemaVersion: 1,
       kind: "no-user-route",
       runId: runId(value.runId, "selection.runId"),
@@ -209,6 +241,8 @@ function normalizeSelection(value) {
       reason: nonblank(value.reason, "selection.reason"),
       entries: [],
     };
+    if (sealed) selection.repoRoot = canonicalSealedRepoRoot(value.repoRoot, "selection.repoRoot");
+    return selection;
   }
   fail("selection.kind: expected user-facing or no-user-route");
 }
@@ -325,11 +359,16 @@ function runDirectoryFor(repoRoot, id, requireActive) {
   return resolvedRunDirectory;
 }
 
-function parseRef(value) {
+function normalizeRef(value) {
+  exactKeys(value, ["runId", "digest"], "ref");
+  return { runId: runId(value.runId, "ref.runId"), digest: digest(value.digest, "ref.digest") };
+}
+
+function parseCliRef(value) {
   if (typeof value !== "string") fail("ref: expected <run-id>:sha256:<digest>");
   const match = /^([A-Za-z0-9._-]+):sha256:([a-f0-9]{64})$/.exec(value);
   if (!match) fail("ref: expected <run-id>:sha256:<64 lowercase hex digest>");
-  return { runId: match[1], digest: match[2] };
+  return normalizeRef({ runId: match[1], digest: match[2] });
 }
 
 function refText(ref) {
@@ -347,7 +386,7 @@ function readSealedSelection(ref, repoRoot) {
   }
   if (!listing.isFile()) fail(`ref ${refText(ref)}: sealed selection must be a regular file`);
   const bytes = readFileSync(selectionFile);
-  const selection = normalizeSelection(parseJson(bytes, `ref ${refText(ref)}`));
+  const selection = normalizeSelection(parseJson(bytes, `ref ${refText(ref)}`), true);
   const canonical = canonicalJson(selection);
   const actualDigest = hashBytes(Buffer.from(canonical, "utf8"));
   if (actualDigest !== ref.digest) {
@@ -359,6 +398,9 @@ function readSealedSelection(ref, repoRoot) {
   if (selection.runId !== ref.runId) {
     fail(`ref ${refText(ref)}: selection.runId '${selection.runId}' does not match reference run`);
   }
+  if (selection.repoRoot !== repoRoot) {
+    fail(`ref ${refText(ref)}: selection.repoRoot '${selection.repoRoot}' does not match supplied repository root '${repoRoot}'`);
+  }
   checkSourceDigests(selection, repoRoot);
   return deepFreeze(selection);
 }
@@ -368,9 +410,10 @@ export function sealSelection({ runId: suppliedRunId, draftPath, repoRoot }) {
   const id = runId(suppliedRunId, "runId");
   if (typeof draftPath !== "string" || draftPath.length === 0) fail("draftPath: expected a path to a JSON draft");
   requireRegularFile(resolve(draftPath), "draftPath");
-  const selection = normalizeSelection(parseJson(readFileSync(resolve(draftPath)), "draftPath"));
-  if (selection.runId !== id) fail(`draftPath: selection.runId '${selection.runId}' does not match --run '${id}'`);
-  checkSourceDigests(selection, root);
+  const draft = normalizeSelection(parseJson(readFileSync(resolve(draftPath)), "draftPath"), false);
+  if (draft.runId !== id) fail(`draftPath: selection.runId '${draft.runId}' does not match --run '${id}'`);
+  checkSourceDigests(draft, root);
+  const selection = { ...draft, repoRoot: root };
   const canonical = canonicalJson(selection);
   const selectionDigest = hashBytes(Buffer.from(canonical, "utf8"));
   const runDirectory = runDirectoryFor(root, id, true);
@@ -385,6 +428,10 @@ export function sealSelection({ runId: suppliedRunId, draftPath, repoRoot }) {
     } catch (error) {
       if (error.code !== "EEXIST") throw error;
       const existing = readFileSync(finalPath, "utf8");
+      const existingSelection = normalizeSelection(parseJson(existing, `ref ${id}:sha256:${selectionDigest}`), true);
+      if (existingSelection.repoRoot !== root) {
+        fail(`ref ${id}:sha256:${selectionDigest}: existing selection belongs to '${existingSelection.repoRoot}', not '${root}'`);
+      }
       if (existing !== canonical) {
         fail(`ref ${id}:sha256:${selectionDigest}: refusing to overwrite differing existing content`);
       }
@@ -397,7 +444,7 @@ export function sealSelection({ runId: suppliedRunId, draftPath, repoRoot }) {
 
 export function openSelection({ ref, repoRoot }) {
   const root = resolveRepoRoot(repoRoot);
-  return readSealedSelection(parseRef(ref), root);
+  return readSealedSelection(normalizeRef(ref), root);
 }
 
 export function materializeSelection({ ref, repoRoot, consumer }) {
@@ -436,17 +483,17 @@ function main() {
   if (command === "seal") {
     requireOptions(command, values, ["run", "draft", "repo-root"]);
     const ref = sealSelection({ runId: values.run, draftPath: values.draft, repoRoot: values["repo-root"] });
-    process.stdout.write(`SELECTION_REF=${refText(ref)}\nENTRIES=${openSelection({ ref: refText(ref), repoRoot: values["repo-root"] }).entries.length}\nSTATUS=sealed\n`);
+    process.stdout.write(`SELECTION_REF=${refText(ref)}\nENTRIES=${openSelection({ ref, repoRoot: values["repo-root"] }).entries.length}\nSTATUS=sealed\n`);
     return;
   }
   if (command === "inspect") {
     requireOptions(command, values, ["ref", "repo-root"]);
-    process.stdout.write(`${JSON.stringify(openSelection({ ref: values.ref, repoRoot: values["repo-root"] }), null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify(openSelection({ ref: parseCliRef(values.ref), repoRoot: values["repo-root"] }), null, 2)}\n`);
     return;
   }
   if (command === "materialize") {
     requireOptions(command, values, ["ref", "repo-root", "consumer", "format"]);
-    const entries = materializeSelection({ ref: values.ref, repoRoot: values["repo-root"], consumer: values.consumer });
+    const entries = materializeSelection({ ref: parseCliRef(values.ref), repoRoot: values["repo-root"], consumer: values.consumer });
     if (values.format === "json") {
       process.stdout.write(`${JSON.stringify(entries, null, 2)}\n`);
       return;
