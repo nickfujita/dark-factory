@@ -21,7 +21,7 @@ function fail(message) {
 
 function parseArgs(argv) {
   const [command, ...argumentsList] = argv;
-  if (!command) fail("usage: df-code-review-selection.mjs prepare|verify|describe|paths ...");
+  if (!command) fail("usage: df-code-review-selection.mjs prepare|verify|describe|paths|validate-report-header ...");
   const values = {};
   for (let index = 0; index < argumentsList.length; index += 2) {
     const option = argumentsList[index];
@@ -110,6 +110,7 @@ function describeBundle(bundle) {
     `- Selection ref: ${bundle.selection.ref}`,
     `- Selection digest: ${bundle.selection.digest}`,
     `- Selection kind: ${bundle.selection.kind}`,
+    `- Selection PRD path: ${bundle.selection.prdPath}`,
     `- Selected entries: ${bundle.entries.length}`,
   ];
   if (bundle.selection.kind === "no-user-route") {
@@ -121,6 +122,23 @@ function describeBundle(bundle) {
     );
   }
   return `${lines.join("\n")}\n`;
+}
+
+function reportHeaderFor(bundle) {
+  return `## Sealed verification selection\n${describeBundle(bundle)}`;
+}
+
+function validateReportHeader(bundle, reportPath) {
+  let report;
+  try {
+    report = readFileSync(reportPath, "utf8");
+  } catch (error) {
+    fail(`report-path: could not read reviewer report (${error.message})`);
+  }
+  const expected = reportHeaderFor(bundle);
+  if (!report.startsWith(expected)) {
+    fail("report-path: sealed selection header does not exactly match the prepared review input");
+  }
 }
 
 function pathsFor(bundle) {
@@ -171,7 +189,13 @@ async function main() {
     if (paths.length > 0) process.stdout.write("\n");
     return;
   }
-  fail("usage: df-code-review-selection.mjs prepare|verify|describe|paths ...");
+  if (command === "validate-report-header") {
+    requireOptions(command, values, ["input-path", "report-path"]);
+    validateReportHeader(readBundle(values["input-path"]), values["report-path"]);
+    process.stdout.write("STATUS=valid\n");
+    return;
+  }
+  fail("usage: df-code-review-selection.mjs prepare|verify|describe|paths|validate-report-header ...");
 }
 
 main().catch((error) => {

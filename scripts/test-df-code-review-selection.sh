@@ -90,8 +90,10 @@ no_route_ref=$(node "$root/scripts/df-selection.mjs" seal --run review-selection
 
 workers="$scratch/workers"
 snapshots="$scratch/snapshots"
+tmux_cwds="$scratch/tmux-cwds"
 : >"$workers"
 : >"$snapshots"
+: >"$tmux_cwds"
 cat >"$bin/unshare" <<'SH'
 #!/usr/bin/env bash
 exit 1
@@ -138,7 +140,22 @@ cat >"$bin/tmux" <<'SH'
 set -euo pipefail
 if [[ "$1" == -L ]]; then shift 2; fi
 case "$1" in
-  new-session|new-window|send-keys|has-session|kill-session) exit 0 ;;
+  new-session|new-window)
+    shift
+    cwd=''
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -c) cwd=$2; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    [[ -n "$cwd" && "$cwd" != "$FAKE_SOURCE" ]]
+    [[ -f "$cwd/docs/prd.md" && -f "$cwd/skills/dashboard.md" && -f "$cwd/skills/cli.md" ]]
+    [[ -f "$cwd/recipes/shared.md" && -f "$cwd/recipes/cli.md" ]]
+    printf '%s\n' "$cwd" >>"$FAKE_TMUX_CWDS"
+    exit 0
+    ;;
+  send-keys|has-session|kill-session) exit 0 ;;
   load-buffer)
     name=$3
     source=$4
@@ -157,7 +174,13 @@ case "$1" in
     mkdir -p "$(dirname "$output")" "$(dirname "$done_file")"
     {
       echo '## Sealed verification selection'
-      sed -n '/^Sealed verification selection\./,/^Produce findings/p' "$FAKE_TMUX_STATE/$name" | sed '$d' | sed "s#^- Selection digest: .*#- Selection digest: $digest#"
+      sed -n '/^Sealed verification selection\./,/^Produce findings/p' "$FAKE_TMUX_STATE/$name" | sed '$d' | sed "s#^- Selection digest: .*#- Selection digest: $digest#" | {
+        if [[ "${FAKE_TMUX_SWAP_IDENTITY:-0}" == 1 ]]; then
+          sed 's#Entry "cli-list"#Entry "cli-list-replaced"#'
+        else
+          cat
+        fi
+      }
       echo
       echo "$header"
       echo
@@ -172,14 +195,23 @@ esac
 SH
 chmod +x "$bin/unshare" "$bin/codex" "$bin/claude" "$bin/tmux"
 export PATH="$bin:$PATH"
-export FAKE_SOURCE="$repo" FAKE_WORKERS="$workers" FAKE_SNAPSHOTS="$snapshots" FAKE_TMUX_STATE="$scratch/tmux"
+export FAKE_SOURCE="$repo" FAKE_WORKERS="$workers" FAKE_SNAPSHOTS="$snapshots" FAKE_TMUX_STATE="$scratch/tmux" FAKE_TMUX_CWDS="$tmux_cwds"
 mkdir -p "$FAKE_TMUX_STATE"
 
 source_runner="$root/skills/df-code-review/scripts/run_codex_spec_review.sh"
+quality_runner="$root/skills/df-code-review/scripts/run_codex_quality_review.sh"
 codex_runner="$root/codex-plugin/skills/df-code-review/scripts/run_codex_subagent_reviews.sh"
 tmux_runner="$root/codex-plugin/skills/df-code-review/scripts/run_claude_code_reviews_tmux.sh"
 
-echo '== source runner and frozen snapshot =='
+echo '== source quality and frozen snapshot =='
+DARK_FACTORY_ROOT="$root" bash "$quality_runner" docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/quality.md"
+grep -Fq "Selection digest: ${selection_ref##*:sha256:}" "$reports/quality.md"
+grep -Fq 'Entry "dashboard-create"' "$reports/quality.md"
+grep -Fq 'Entry "dashboard-remove"' "$reports/quality.md"
+grep -Fq 'Entry "cli-list"' "$reports/quality.md"
+[[ -f "$reports/quality.md.selection.json" ]] || fail "quality runner did not write a sealed selection input"
+
+echo '== source spec and frozen snapshot =='
 DARK_FACTORY_ROOT="$root" bash "$source_runner" docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/source.md"
 grep -Fq "Selection digest: ${selection_ref##*:sha256:}" "$reports/source.md"
 grep -Fq 'Entry "dashboard-create"' "$reports/source.md"
@@ -188,7 +220,7 @@ grep -Fq 'Entry "cli-list"' "$reports/source.md"
 [[ -f "$reports/source.md.selection.json" ]] || fail "source runner did not write an external selection input"
 while IFS= read -r snapshot; do [[ ! -e "$snapshot" ]] || fail "source review snapshot survived cleanup"; done <"$snapshots"
 git -C "$repo" diff --exit-code
-pass 'source runner preserves all selected identities in a frozen disposable snapshot'
+pass 'source quality and spec runners preserve all selected identities in frozen disposable snapshots'
 
 echo '== installed Codex wrappers =='
 DARK_FACTORY_ROOT="$root/codex-plugin" DARK_FACTORY_REVIEW_DIR="$reports/codex-work" \
@@ -206,15 +238,25 @@ for report in "$reports/claude"/*-review.md; do
   grep -Fq "Selection digest: ${selection_ref##*:sha256:}" "$report"
   grep -Fq 'Entry "cli-list"' "$report"
 done
-pass 'tmux reports reject a missing selection digest and retain the sealed identities'
+[[ $(wc -l <"$tmux_cwds") -eq 2 ]] || fail 'tmux did not start both reviewers in a snapshot'
+while IFS= read -r cwd; do [[ ! -e "$cwd" ]] || fail "tmux review snapshot survived cleanup"; done <"$tmux_cwds"
+pass 'tmux reviewers use a frozen selected-input snapshot and retain sealed identities'
 
-if FAKE_TMUX_SWAP_DIGEST=1 CLAUDE_REVIEW_STARTUP_DELAY=0 CLAUDE_REVIEW_TIMEOUT_SECONDS=5 \
+if TMPDIR="$scratch" FAKE_TMUX_SWAP_DIGEST=1 CLAUDE_REVIEW_STARTUP_DELAY=0 CLAUDE_REVIEW_TIMEOUT_SECONDS=5 \
   DARK_FACTORY_ROOT="$root/codex-plugin" bash "$tmux_runner" docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/claude-swapped" \
   >"$scratch/swapped.out" 2>"$scratch/swapped.err"; then
   fail 'tmux transport accepted a swapped selection digest'
 fi
-grep -Fq 'missing_selection_digest' "$scratch/swapped.err"
+grep -Fq 'quality: selection_header' "$scratch/swapped.err"
 pass 'a reviewer report with a swapped selection digest is rejected'
+
+if TMPDIR="$scratch" FAKE_TMUX_SWAP_IDENTITY=1 CLAUDE_REVIEW_STARTUP_DELAY=0 CLAUDE_REVIEW_TIMEOUT_SECONDS=5 \
+  DARK_FACTORY_ROOT="$root/codex-plugin" bash "$tmux_runner" docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/claude-identity-swapped" \
+  >"$scratch/identity-swapped.out" 2>"$scratch/identity-swapped.err"; then
+  fail 'tmux transport accepted a changed selected identity with the same digest'
+fi
+grep -Fq 'quality: selection_header' "$scratch/identity-swapped.err"
+pass 'a reviewer report with the same digest but changed selected identity is rejected'
 
 echo '== copied skill location =='
 copied="$scratch/copied/df-code-review"
@@ -229,6 +271,8 @@ echo '== closed input failures =='
 before=$(wc -l <"$workers")
 expect_failure 'legacy four-position QA-path ABI is rejected' "$before" \
   bash "$source_runner" docs/prd.md recipes/shared.md "$base_ref" "$reports/legacy.md"
+expect_failure 'legacy two-position quality ABI is rejected' "$before" \
+  bash "$quality_runner" "$base_ref" "$reports/quality-legacy.md"
 expect_failure 'missing selection ref is rejected before a reviewer starts' "$before" \
   env DARK_FACTORY_ROOT="$root" bash "$source_runner" docs/prd.md "review-selection:sha256:$(printf '0%.0s' {1..64})" "$repo" "$base_ref" "$reports/missing.md"
 expect_failure 'substituted PRD path is rejected before a reviewer starts' "$before" \

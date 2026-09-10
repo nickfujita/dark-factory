@@ -242,10 +242,12 @@ remediation commit exists.
 **Codex Quality (Standard and High-consequence):**
 ```bash
 quality_script="$DF_ROOT/skills/df-code-review/scripts/run_codex_quality_review.sh"
-[[ -f "$quality_script" ]] || { echo "ERROR: no Claude quality wrapper under $DF_ROOT" >&2; exit 1; }
+[[ -f "$quality_script" ]] || { echo "ERROR: no Codex quality wrapper under $DF_ROOT" >&2; exit 1; }
 review_dir="<REVIEW_ROOT from Step 1>"
 base_ref="<base_ref from Step 1>"
-bash "$quality_script" "$base_ref" "$review_dir/codex-quality-review.md"
+DARK_FACTORY_ROOT="$DF_ROOT" bash "$quality_script" \
+  "$PRD_PATH" "$SELECTION_REF" "$REPO_ROOT" "$base_ref" \
+  "$review_dir/codex-quality-review.md"
 ```
 
 **Codex Spec (High-consequence only):**
