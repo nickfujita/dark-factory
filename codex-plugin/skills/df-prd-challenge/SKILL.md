@@ -158,9 +158,10 @@ capped loop run indefinitely. A delta verification is a reviewer dispatch and
 it costs one.
 
 ```bash
-node scripts/df-role.mjs preflight --run "<run-id>" --lane "<lane>" \
+df_root="<Dark Factory root reported by the session hook>"
+node "$df_root/scripts/df-role.mjs" preflight --run "<run-id>" --lane "<lane>" \
   --repo-root "<consumer-root>" --responsibility discovery_reviewers
-seq=$(bash scripts/df-state.sh reserve "<run-id>" discovery_reviewers "prd challenge discovery, codex leg")
+seq=$(bash "$df_root/scripts/df-state.sh" reserve "<run-id>" discovery_reviewers "prd challenge discovery, codex leg")
 ```
 
 A refused reservation (exit 3) means the dispatch does not happen. The store

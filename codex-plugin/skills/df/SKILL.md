@@ -72,7 +72,8 @@ Invoke each stage skill explicitly and pass artifact paths forward. Never rely o
 At run entry, after initializing run state, prepare the role plan once:
 
 ```bash
-node scripts/df-role.mjs prepare-run \
+df_root="<Dark Factory root reported by the session hook>"
+node "$df_root/scripts/df-role.mjs" prepare-run \
   --run "<run-id>" --harness codex --repo-root "<consumer-root>"
 ```
 

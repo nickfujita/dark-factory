@@ -447,9 +447,21 @@ assert_root_inventory_instructions 'Codex tree' "$repo_root/codex-plugin/skills"
 sync_root="$work/sync-layout"
 copied_source_skill="$sync_root/claude-skills/df-qa-validation"
 copied_codex_skill="$sync_root/codex-skills/df-qa-validation"
+copied_source_router="$sync_root/claude-skills/df"
+copied_codex_router="$sync_root/codex-skills/df"
+copied_source_code_review="$sync_root/claude-skills/df-code-review"
+copied_codex_code_review="$sync_root/codex-skills/df-code-review"
+copied_source_prd_challenge="$sync_root/claude-skills/df-prd-challenge"
+copied_codex_prd_challenge="$sync_root/codex-skills/df-prd-challenge"
 mkdir -p "$(dirname "$copied_source_skill")" "$(dirname "$copied_codex_skill")"
 cp -a "$repo_root/skills/df-qa-validation" "$copied_source_skill"
 cp -a "$repo_root/codex-plugin/skills/df-qa-validation" "$copied_codex_skill"
+cp -a "$repo_root/skills/df" "$copied_source_router"
+cp -a "$repo_root/codex-plugin/skills/df" "$copied_codex_router"
+cp -a "$repo_root/skills/df-code-review" "$copied_source_code_review"
+cp -a "$repo_root/codex-plugin/skills/df-code-review" "$copied_codex_code_review"
+cp -a "$repo_root/skills/df-prd-challenge" "$copied_source_prd_challenge"
+cp -a "$repo_root/codex-plugin/skills/df-prd-challenge" "$copied_codex_prd_challenge"
 
 source_hook_line="$(sh "$repo_root/scripts/df-session-hook.sh" | tail -1)"
 source_hook_root="${source_hook_line#The dark-factory root here is }"
@@ -461,6 +473,8 @@ source_inventory="$source_hook_root/references/role-callers-inventory.md"
 codex_inventory="$codex_hook_root/references/role-callers-inventory.md"
 source_qa_from_hook="$source_hook_root/skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
 codex_qa_from_hook="$codex_hook_root/skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
+source_prepare_from_hook="$source_hook_root/scripts/df-role.mjs"
+codex_prepare_from_hook="$codex_hook_root/scripts/df-role.mjs"
 if [[ "$source_hook_root" == "$repo_root" && "$codex_hook_root" == "$repo_root/codex-plugin" ]] \
   && [[ -f "$source_inventory" && -f "$codex_inventory" ]] \
   && cmp -s "$source_inventory" "$codex_inventory" \
@@ -476,6 +490,41 @@ if [[ "$source_hook_root" == "$repo_root" && "$codex_hook_root" == "$repo_root/c
   ok 'copied source and Codex skills resolve inventory and wrappers from hook roots'
 else
   bad 'copied source and Codex skills resolve inventory and wrappers from hook roots'
+fi
+
+copied_role_helpers_ok=1
+for copied_skill in "$copied_source_router" "$copied_codex_router"; do
+  rg -Fq 'df_root="<Dark Factory root reported by the session hook>"' "$copied_skill/SKILL.md" \
+    && rg -Fq 'node "$df_root/scripts/df-role.mjs" prepare-run' "$copied_skill/SKILL.md" \
+    || copied_role_helpers_ok=0
+done
+for copied_skill in "$copied_source_code_review" "$copied_codex_code_review" \
+  "$copied_source_prd_challenge" "$copied_codex_prd_challenge"; do
+  rg -Fq 'df_root="<Dark Factory root reported by the session hook>"' "$copied_skill/SKILL.md" \
+    && rg -Fq 'node "$df_root/scripts/df-role.mjs" preflight' "$copied_skill/SKILL.md" \
+    && rg -Fq 'bash "$df_root/scripts/df-state.sh" reserve' "$copied_skill/SKILL.md" \
+    || copied_role_helpers_ok=0
+done
+if [[ "$copied_role_helpers_ok" == 1 && -f "$source_prepare_from_hook" && -f "$codex_prepare_from_hook" ]]; then
+  ok 'copied source and Codex skill instructions root-qualify role helpers'
+else
+  bad 'copied source and Codex skill instructions root-qualify role helpers'
+fi
+
+sync_router_runs="$work/sync-router-runs"
+(cd "$consumer" && DF_STATE_ROOT="$sync_router_runs" bash "$source_hook_root/scripts/df-state.sh" init sync-router-source standard 8 120 sync-router-test >/dev/null)
+source_prepare_json="$(cd "$consumer" && DF_STATE_ROOT="$sync_router_runs" node "$source_prepare_from_hook" prepare-run \
+  --run sync-router-source --harness claude --repo-root "$consumer")"
+(cd "$consumer" && DF_STATE_ROOT="$sync_router_runs" bash "$codex_hook_root/scripts/df-state.sh" init sync-router-codex standard 8 120 sync-router-test >/dev/null)
+codex_prepare_json="$(cd "$consumer" && DF_STATE_ROOT="$sync_router_runs" node "$codex_prepare_from_hook" prepare-run \
+  --run sync-router-codex --harness codex --repo-root "$consumer")"
+if [[ "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).harness)' "$source_prepare_json")" == claude ]] \
+  && [[ "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).harness)' "$codex_prepare_json")" == codex ]] \
+  && [[ -f "$sync_router_runs/sync-router-source/work/role-plan.json" ]] \
+  && [[ -f "$sync_router_runs/sync-router-codex/work/role-plan.json" ]]; then
+  ok 'hook-root role helpers prepare both copied routers from a consumer cwd'
+else
+  bad 'hook-root role helpers prepare both copied routers from a consumer cwd'
 fi
 
 assert_single_success 'source copied-layout QA instruction' bash "$source_qa_from_hook" "$prd" "$input" "$consumer/sync-source-qa.md" \

@@ -96,9 +96,10 @@ Every reviewer dispatch preflights its frozen role, then reserves a seq through
 it lands:
 
 ```bash
-node scripts/df-role.mjs preflight --run "<run-id>" --lane "<lane>" \
+df_root="<Dark Factory root reported by the session hook>"
+node "$df_root/scripts/df-role.mjs" preflight --run "<run-id>" --lane "<lane>" \
   --repo-root "<consumer-root>" --responsibility discovery_reviewers
-seq=$(bash scripts/df-state.sh reserve "<run-id>" discovery_reviewers "code review discovery, in-session leg")
+seq=$(bash "$df_root/scripts/df-state.sh" reserve "<run-id>" discovery_reviewers "code review discovery, in-session leg")
 ```
 
 Reserving covers the discovery reviewers, every delta-verification leg, any

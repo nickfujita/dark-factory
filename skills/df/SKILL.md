@@ -69,7 +69,8 @@ Your first todo actions are the matched playbook's steps, copied in verbatim, be
 At run entry, after initializing run state, prepare the role plan once:
 
 ```bash
-node scripts/df-role.mjs prepare-run \
+df_root="<Dark Factory root reported by the session hook>"
+node "$df_root/scripts/df-role.mjs" prepare-run \
   --run "<run-id>" --harness claude --repo-root "<consumer-root>"
 ```
 
