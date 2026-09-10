@@ -272,6 +272,13 @@ and hashes before an atomic no-clobber publication. A reader validates the
 stored repository root before source hashes and never falls back to `latest` or
 current map discovery.
 
+`verification-selection.schema.json` validates the wire shape and scalar
+constraints that JSON Schema can express. It is not a selection reader: only
+the shared helper validates medium membership, selected-recipe identity,
+canonical ordering and bytes, source files, and real run-store containment.
+Selection references additionally reject `.` and `..` run IDs even though the
+generic state helper accepts a broader run identifier grammar.
+
 Acceptance expands each selected entry into entry-point legs by reading the
 sealed recipe. It writes new evidence under
 `<run-dir>/acceptance/<selection-digest>/`. Existing committed acceptance

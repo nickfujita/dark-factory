@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://dark-factory.dev/schemas/verification-selection-v1.json",
   "title": "Dark Factory sealed verification selection",
-  "description": "This root schema validates the canonical, content-addressed object stored beneath an external df run. Draft definitions below are caller-authored inputs and deliberately exclude the sealer-owned repoRoot. Runtime validation additionally verifies real repository containment, regular files, source hashes, run ownership, and canonical JSON bytes.",
+  "description": "This root schema validates the sealed object's expressible scalar and union rules. Draft definitions below are caller-authored inputs and deliberately exclude the sealer-owned repoRoot. Schema-only validation is insufficient to consume a selection: the shared df-selection.mjs validator additionally enforces cross-field media membership and identity uniqueness, canonical array and byte order, real repository/state containment, regular files, source hashes, and run ownership.",
   "oneOf": [
     { "$ref": "#/$defs/sealedUserFacing" },
     { "$ref": "#/$defs/sealedNoUserRoute" }
@@ -14,12 +14,12 @@
     },
     "nonblank": {
       "type": "string",
-      "pattern": "^\\S(?:.*\\S)?$"
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])\\S(?:[\\s\\S]*\\S)?$"
     },
     "repoPath": {
       "type": "string",
       "description": "Canonical POSIX path relative to the supplied repository root. Runtime rejects traversal, absolute paths, non-regular files, and symlink escapes.",
-      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*//)(?!.*(?:^|/)\\.(?:/|$))(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000-\\u001F]+$"
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*//)(?!.*(?:^|/)\\.(?:/|$))(?!.*(?:^|/)\\.\\.(?:/|$))\\S(?:[\\s\\S]*\\S)?$"
     },
     "sealedRepoRoot": {
       "type": "string",
@@ -66,7 +66,7 @@
       "properties": {
         "schemaVersion": { "const": 1 },
         "kind": { "const": "user-facing" },
-        "runId": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "runId": { "type": "string", "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$" },
         "featureSlug": { "$ref": "#/$defs/nonblank" },
         "prdPath": { "$ref": "#/$defs/repoPath" },
         "prdSha256": { "$ref": "#/$defs/digest" },
@@ -83,7 +83,7 @@
       "properties": {
         "schemaVersion": { "const": 1 },
         "kind": { "const": "no-user-route" },
-        "runId": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "runId": { "type": "string", "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$" },
         "featureSlug": { "$ref": "#/$defs/nonblank" },
         "prdPath": { "$ref": "#/$defs/repoPath" },
         "prdSha256": { "$ref": "#/$defs/digest" },
@@ -92,21 +92,21 @@
       }
     },
     "draftSelection": {
-      "description": "A caller-authored draft accepted by sealSelection. This is not a stored selection and must not contain repoRoot.",
+      "description": "A caller-authored draft accepted by sealSelection. This is not a stored selection and must not contain repoRoot. Cross-field membership, identity uniqueness, and canonical ordering require the shared executable validator.",
       "oneOf": [
         { "$ref": "#/$defs/draftUserFacing" },
         { "$ref": "#/$defs/draftNoUserRoute" }
       ]
     },
     "sealedUserFacing": {
-      "description": "Canonical stored user-facing selection. repoRoot binds this selection to one concrete consuming repository/worktree.",
+      "description": "Canonical stored user-facing selection. repoRoot binds this selection to one concrete consuming repository/worktree. Schema-only validation is insufficient; consumers must call openSelection or materializeSelection.",
       "type": "object",
       "additionalProperties": false,
       "required": ["schemaVersion", "kind", "runId", "featureSlug", "prdPath", "prdSha256", "catalogLink", "declaredMedia", "entries", "repoRoot"],
       "properties": {
         "schemaVersion": { "const": 1 },
         "kind": { "const": "user-facing" },
-        "runId": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "runId": { "type": "string", "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$" },
         "featureSlug": { "$ref": "#/$defs/nonblank" },
         "prdPath": { "$ref": "#/$defs/repoPath" },
         "prdSha256": { "$ref": "#/$defs/digest" },
@@ -117,14 +117,14 @@
       }
     },
     "sealedNoUserRoute": {
-      "description": "Canonical stored no-user-route selection. repoRoot binds this selection to one concrete consuming repository/worktree.",
+      "description": "Canonical stored no-user-route selection. repoRoot binds this selection to one concrete consuming repository/worktree. Schema-only validation is insufficient; consumers must call openSelection or materializeSelection.",
       "type": "object",
       "additionalProperties": false,
       "required": ["schemaVersion", "kind", "runId", "featureSlug", "prdPath", "prdSha256", "reason", "entries", "repoRoot"],
       "properties": {
         "schemaVersion": { "const": 1 },
         "kind": { "const": "no-user-route" },
-        "runId": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "runId": { "type": "string", "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$" },
         "featureSlug": { "$ref": "#/$defs/nonblank" },
         "prdPath": { "$ref": "#/$defs/repoPath" },
         "prdSha256": { "$ref": "#/$defs/digest" },

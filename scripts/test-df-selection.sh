@@ -30,6 +30,10 @@ assert_contains() { # description needle file
   if grep -Fq -- "$2" "$3"; then pass "$1"; else fail "$1 (missing '$2')"; fi
 }
 
+assert_absent() { # description path
+  if [ ! -e "$2" ]; then pass "$1"; else fail "$1 (unexpected path '$2')"; fi
+}
+
 expect_failure() { # description command...
   local description=$1 output code
   shift
@@ -159,6 +163,8 @@ if (mode === "symlink") {
 }
 if (mode === "extra") doc.unexpected = true;
 if (mode === "sealed-root") doc.repoRoot = "/not-caller-authored";
+if (mode === "control") doc.entries[0].id = "bad\u0001id";
+if (mode === "noncanonical-path") doc.entries[0].recipePath = "./recipes/api-create.md";
 if (mode === "concurrent") doc.featureSlug = "concurrent-synthetic-feature";
 writeFileSync(destination, JSON.stringify(doc, null, 2));
 NODE
@@ -166,6 +172,7 @@ NODE
 
 echo "== setup synthetic consuming repositories =="
 mkdir -p "$REPO/docs" "$REPO/skills" "$REPO/recipes" "$REPO/links" "$OTHER_REPO"
+printf 'Synthetic root PRD content for external-state fixtures.\n' >"$REPO/prd.md"
 printf 'Synthetic PRD content.\n' >"$REPO/docs/prd.md"
 printf 'Synthetic verification skill.\n' >"$REPO/skills/verification.md"
 printf 'Drive the synthetic API create route.\n' >"$REPO/recipes/api-create.md"
@@ -252,6 +259,33 @@ expect_failure "latest is not a valid selection ref" node "$ROOT_SELECTION" insp
 expect_failure "malformed digest cannot select a path" node "$ROOT_SELECTION" inspect --ref selection-run:sha256:not-a-digest --repo-root "$REPO"
 expect_failure "a different repository cannot inspect this run" node "$ROOT_SELECTION" inspect --ref "$BASE_REF" --repo-root "$OTHER_REPO"
 
+echo "== schema and shared-validator contract =="
+node - "$ROOT/references/verification-selection.schema.json" >"$TMP/schema-contract.out" <<'NODE'
+const { readFileSync } = require("node:fs");
+const schema = JSON.parse(readFileSync(process.argv[2]));
+const matches = (definition, value) => new RegExp(schema.$defs[definition].pattern, "u").test(value);
+const scalarContract =
+  !matches("nonblank", "bad\u0001value") &&
+  !matches("nonblank", "trailing ") &&
+  matches("nonblank", "valid value") &&
+  !matches("repoPath", "./recipes/check.md") &&
+  matches("repoPath", "recipes/check.md") &&
+  !new RegExp(schema.$defs.sealedUserFacing.properties.runId.pattern, "u").test(".") &&
+  !new RegExp(schema.$defs.sealedUserFacing.properties.runId.pattern, "u").test("..") &&
+  new RegExp(schema.$defs.sealedUserFacing.properties.runId.pattern, "u").test("valid-run") &&
+  schema.description.includes("Schema-only validation is insufficient");
+if (!scalarContract) process.exit(1);
+console.log("SCHEMA_EXPRESSIBLE_SCALARS=passed");
+console.log("SCHEMA_REQUIRES_SHARED_VALIDATOR=passed");
+NODE
+assert_contains "shipped schema rejects expressible scalar violations" "SCHEMA_EXPRESSIBLE_SCALARS=passed" "$TMP/schema-contract.out"
+assert_contains "shipped schema documents shared-validator requirement" "SCHEMA_REQUIRES_SHARED_VALIDATOR=passed" "$TMP/schema-contract.out"
+for mode in control noncanonical-path duplicate-identity undeclared; do
+  mutate_draft "$TMP/base.json" "$TMP/contract-$mode.json" "$mode"
+  expect_failure "root runtime rejects contract case: $mode" node "$ROOT_SELECTION" seal --run selection-run --draft "$TMP/contract-$mode.json" --repo-root "$REPO"
+  expect_failure "Codex runtime rejects contract case: $mode" node "$CODEX_SELECTION" seal --run selection-run --draft "$TMP/contract-$mode.json" --repo-root "$REPO"
+done
+
 echo "== sealed repository association =="
 COLLISION_A=$TMP/project-a
 COLLISION_B=$TMP/project_a
@@ -285,6 +319,46 @@ SHARED_REF=$(selection_ref "$TMP/shared.out")
 expect_failure "explicit shared DF_STATE_ROOT cannot cross repository binding" env DF_STATE_ROOT="$SHARED_STATE" node "$ROOT_SELECTION" inspect --ref "$SHARED_REF" --repo-root "$SHARED_B"
 assert_contains "explicit shared state names the repository binding" "selection.repoRoot" "$LAST_FAILURE"
 
+echo "== run-directory containment =="
+DOT_PARENT=$TMP/dot-state-parent
+DOT_STATE=$DOT_PARENT/selection-state
+write_no_route_draft "$TMP/dotdot.json" "$REPO" ..
+write_no_route_draft "$TMP/dot.json" "$REPO" .
+DF_STATE_ROOT="$DOT_STATE" bash "$STATE" init .. standard 1 10 "synthetic dot-dot state fixture" >/dev/null 2>&1
+DF_STATE_ROOT="$DOT_STATE" bash "$STATE" init . standard 1 10 "synthetic dot state fixture" >/dev/null 2>&1
+expect_failure "root CLI rejects --run .. before state lookup" env DF_STATE_ROOT="$DOT_STATE" node "$ROOT_SELECTION" seal --run .. --draft "$TMP/dotdot.json" --repo-root "$REPO"
+expect_failure "Codex CLI rejects --run . before state lookup" env DF_STATE_ROOT="$DOT_STATE" node "$CODEX_SELECTION" seal --run . --draft "$TMP/dot.json" --repo-root "$REPO"
+assert_absent "dot-dot seal writes no selection outside configured state root" "$DOT_PARENT/verification-selections"
+assert_absent "dot seal writes no selection at configured state root" "$DOT_STATE/verification-selections"
+DOT_DIGEST=0000000000000000000000000000000000000000000000000000000000000000
+expect_failure "root CLI rejects textual dot-dot ref" env DF_STATE_ROOT="$DOT_STATE" node "$ROOT_SELECTION" inspect --ref "..:sha256:$DOT_DIGEST" --repo-root "$REPO"
+expect_failure "Codex CLI rejects textual dot ref" env DF_STATE_ROOT="$DOT_STATE" node "$CODEX_SELECTION" inspect --ref ".:sha256:$DOT_DIGEST" --repo-root "$REPO"
+DF_STATE_ROOT="$DOT_STATE" node --input-type=module - "$ROOT_SELECTION" "$CODEX_SELECTION" "$REPO" >"$TMP/dot-object-refs.out" <<'NODE'
+import { pathToFileURL } from "node:url";
+const [rootHelper, codexHelper, repoRoot] = process.argv.slice(2);
+const digest = "0".repeat(64);
+for (const [name, helper, runId] of [["ROOT", rootHelper, ".."], ["CODEX", codexHelper, "."]]) {
+  const library = await import(pathToFileURL(helper));
+  try {
+    library.openSelection({ ref: { runId, digest }, repoRoot });
+    process.exit(1);
+  } catch {}
+  console.log(`${name}_OBJECT_DOT_REF=passed`);
+}
+NODE
+assert_contains "root API rejects object dot-dot ref" "ROOT_OBJECT_DOT_REF=passed" "$TMP/dot-object-refs.out"
+assert_contains "Codex API rejects object dot ref" "CODEX_OBJECT_DOT_REF=passed" "$TMP/dot-object-refs.out"
+
+SYMLINK_STATE=$TMP/symlink-state
+OUTSIDE_STATE=$TMP/outside-state
+mkdir -p "$SYMLINK_STATE"
+DF_STATE_ROOT="$OUTSIDE_STATE" bash "$STATE" init escape-run standard 1 10 "synthetic outside run fixture" >/dev/null 2>&1
+ln -s "$OUTSIDE_STATE/escape-run" "$SYMLINK_STATE/escape-run"
+write_no_route_draft "$TMP/escape-run.json" "$REPO" escape-run
+expect_failure "root CLI rejects a symlinked run directory" env DF_STATE_ROOT="$SYMLINK_STATE" node "$ROOT_SELECTION" seal --run escape-run --draft "$TMP/escape-run.json" --repo-root "$REPO"
+expect_failure "Codex CLI rejects a symlinked run directory" env DF_STATE_ROOT="$SYMLINK_STATE" node "$CODEX_SELECTION" inspect --ref "escape-run:sha256:$DOT_DIGEST" --repo-root "$REPO"
+assert_absent "symlinked run writes no selection outside configured state root" "$OUTSIDE_STATE/escape-run/verification-selections"
+
 echo "== source-drift failure is fail-closed =="
 ORIGINAL_PRD=$(<"$REPO/docs/prd.md")
 ORIGINAL_SKILL=$(<"$REPO/skills/verification.md")
@@ -310,6 +384,16 @@ echo "== immutable atomic publication =="
 BASE_DIGEST=${BASE_REF##*:sha256:}
 SEALED_FILE=$RUN_DIR/verification-selections/$BASE_DIGEST.json
 ORIGINAL_SEALED=$(<"$SEALED_FILE")
+node - "$SEALED_FILE" <<'NODE'
+const { readFileSync, writeFileSync } = require("node:fs");
+const file = process.argv[2];
+writeFileSync(file, `${JSON.stringify(JSON.parse(readFileSync(file)), null, 2)}\n`);
+NODE
+expect_failure "root runtime rejects noncanonical stored selection bytes" node "$ROOT_SELECTION" inspect --ref "$BASE_REF" --repo-root "$REPO"
+assert_contains "root noncanonical selection failure names canonical bytes" "not canonical JSON" "$LAST_FAILURE"
+expect_failure "Codex runtime rejects noncanonical stored selection bytes" node "$CODEX_SELECTION" inspect --ref "$BASE_REF" --repo-root "$REPO"
+assert_contains "Codex noncanonical selection failure names canonical bytes" "not canonical JSON" "$LAST_FAILURE"
+printf '%s' "$ORIGINAL_SEALED" >"$SEALED_FILE"
 printf '{}' >"$SEALED_FILE"
 expect_failure "tampered sealed content is rejected" node "$ROOT_SELECTION" inspect --ref "$BASE_REF" --repo-root "$REPO"
 expect_failure "sealing never overwrites differing content at an existing digest" node "$ROOT_SELECTION" seal --run selection-run --draft "$TMP/base.json" --repo-root "$REPO"

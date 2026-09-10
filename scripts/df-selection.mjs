@@ -52,8 +52,8 @@ function digest(value, field) {
 }
 
 function runId(value, field) {
-  if (typeof value !== "string" || !RUN_ID_PATTERN.test(value)) {
-    fail(`${field}: must match [A-Za-z0-9._-]+`);
+  if (typeof value !== "string" || !RUN_ID_PATTERN.test(value) || value === "." || value === "..") {
+    fail(`${field}: must match [A-Za-z0-9._-]+ and cannot be . or ..`);
   }
   return value;
 }
@@ -342,18 +342,47 @@ function parseRunTsv(runDirectory, expectedRunId, requireActive) {
   }
 }
 
+function statePath(repoRoot, argumentsList, field) {
+  const result = spawnSync("bash", [STATE_HELPER, "path", ...argumentsList], { cwd: repoRoot, encoding: "utf8" });
+  if (result.status !== 0) fail(`${field}: could not locate external state (${result.stderr.trim() || "df-state path failed"})`);
+  const output = result.stdout.trim();
+  if (output.length === 0 || output.includes("\n")) fail(`${field}: df-state returned an invalid path`);
+  return resolve(repoRoot, output);
+}
+
+function configuredStateRoot(repoRoot) {
+  const stateRoot = statePath(repoRoot, [], "state store");
+  let canonicalStateRoot;
+  try {
+    if (!statSync(stateRoot).isDirectory()) fail(`state store: expected a directory at ${stateRoot}`);
+    canonicalStateRoot = realpathSync(stateRoot);
+  } catch (error) {
+    if (error instanceof SelectionError) throw error;
+    fail(`state store: does not exist at ${stateRoot}`);
+  }
+  return { stateRoot, canonicalStateRoot };
+}
+
 function runDirectoryFor(repoRoot, id, requireActive) {
   runId(id, "runId");
-  const result = spawnSync("bash", [STATE_HELPER, "path", id], { cwd: repoRoot, encoding: "utf8" });
-  if (result.status !== 0) fail(`run '${id}': could not locate external state (${result.stderr.trim() || "df-state path failed"})`);
-  const output = result.stdout.trim();
-  if (output.length === 0 || output.includes("\n")) fail(`run '${id}': df-state returned an invalid run directory`);
-  const runDirectory = resolve(repoRoot, output);
+  const { stateRoot, canonicalStateRoot } = configuredStateRoot(repoRoot);
+  const runDirectory = statePath(repoRoot, [id], `run '${id}'`);
+  const expectedRunDirectory = resolve(stateRoot, id);
+  if (runDirectory !== expectedRunDirectory) {
+    fail(`run '${id}': df-state path is not the direct named child of its configured state root`);
+  }
   let resolvedRunDirectory;
   try {
+    if (!lstatSync(runDirectory).isDirectory()) {
+      fail(`run '${id}': state entry must be a direct non-symlink directory`);
+    }
     resolvedRunDirectory = realpathSync(runDirectory);
-  } catch {
+  } catch (error) {
+    if (error instanceof SelectionError) throw error;
     fail(`run '${id}': does not exist in this repository's external state store`);
+  }
+  if (dirname(resolvedRunDirectory) !== canonicalStateRoot) {
+    fail(`run '${id}': resolved state entry escapes its configured state root`);
   }
   parseRunTsv(resolvedRunDirectory, id, requireActive);
   return resolvedRunDirectory;
