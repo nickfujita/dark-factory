@@ -239,7 +239,7 @@ type SelectionEntry = Readonly<{
   negativeRequirementIds: readonly string[];
 }>;
 
-type VerificationSelection =
+type SelectionDraft =
   | Readonly<{
       schemaVersion: 1;
       kind: "user-facing";
@@ -248,6 +248,7 @@ type VerificationSelection =
       prdPath: string;
       prdSha256: string;
       catalogLink: Readonly<{ path: string; sha256: string }> | null;
+      declaredMedia: readonly [Medium, ...Medium[]];
       entries: readonly [SelectionEntry, ...SelectionEntry[]];
     }>
   | Readonly<{
@@ -260,6 +261,12 @@ type VerificationSelection =
       reason: string;
       entries: readonly [];
     }>;
+
+// The sealer derives this from its validated repoRoot argument. Draft JSON
+// cannot supply it, so a run's evidence remains bound to one worktree.
+type VerificationSelection = SelectionDraft & Readonly<{
+  repoRoot: string; // Canonical absolute repository root.
+}>;
 
 type SelectionRef = Readonly<{
   runId: string;
@@ -292,11 +299,22 @@ function materializeSelection(input: {
 }
 ```
 
-Canonicalization sorts entries by medium, recipe path, and sub-feature and sorts
+Coverage supplies `declaredMedia` from the project's own declared input set; it
+does not infer media from directory names. The draft is caller-authored, while
+the sealer adds the canonical absolute `repoRoot` after validating its argument.
+Canonicalization uses locale-independent raw string order for declared media,
+entries by medium, recipe path, and sub-feature (with null first), and
 requirement IDs inside each entry. The sealer validates all referenced files
-and hashes before an atomic rename. A reader validates the content digest and
-all referenced content hashes before returning entries. It never falls back to
-`latest` or current map discovery.
+and hashes before an atomic no-clobber publication. A reader validates the
+stored repository root before source hashes and never falls back to `latest` or
+current map discovery.
+
+`verification-selection.schema.json` validates the wire shape and scalar
+constraints that JSON Schema can express. It is not a selection reader: only
+the shared helper validates medium membership, selected-recipe identity,
+canonical ordering and bytes, source files, and real run-store containment.
+Selection references additionally reject `.` and `..` run IDs even though the
+generic state helper accepts a broader run identifier grammar.
 
 Acceptance expands each selected entry into entry-point legs by reading the
 sealed recipe. It writes new evidence under
@@ -309,8 +327,10 @@ The CLI maps `seal --run --draft --repo-root` to `sealSelection` and
 `materialize --ref --repo-root --consumer --format` calls
 `materializeSelection`. Its consumer is exactly `qa-validation`, `dev-verify`,
 `code-review`, or `acceptance`. JSON format emits the returned entry array;
-paths format emits those entries' recipe identities. Neither format rediscovers
-recipes. The input reference is `ref` in every API.
+paths format emits one JSON tuple `[medium, recipePath, subFeature]` per line,
+so it preserves distinct selected sub-features. Neither format rediscovers
+recipes. The CLI parses its textual ref; the public APIs receive a
+`SelectionRef` object in every `ref` argument.
 
 ### Project-owned catalog and migration checks
 
