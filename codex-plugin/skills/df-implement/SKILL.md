@@ -5,7 +5,7 @@ description: "Implementation stage for routed work. Executes the plan task by ta
 
 # df-implement
 
-Every background runner follows `../df/references/role-callers-inventory.md`.
+Every background runner follows `../../references/role-callers-inventory.md`.
 Preflight its frozen role before reservation, then use that target natively.
 
 Execute the implementation plan. You own the design and the program. Delegate the code-writing. Review every diff yourself. The economy is a fresh implementer per task from an extracted brief, one independent review per task with two verdicts, and a capped fix loop. On one measured feature it cost about 1.5x and caught five faults that passed a 16.7k-test suite. It is the pipeline's one measured win. Keep it intact.

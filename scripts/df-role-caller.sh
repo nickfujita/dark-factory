@@ -139,12 +139,12 @@ preflight_json="$(node "$role_helper" preflight \
 allowed_kinds_json="$(printf '%s\n' "${allowed_kinds[@]}" | node -e '
   const chunks = [];
   process.stdin.on("data", (chunk) => chunks.push(chunk));
-  process.stdin.on("end", () => process.stdout.write(JSON.stringify(chunks.join("").trim().split("\\n").filter(Boolean))));
+  process.stdin.on("end", () => process.stdout.write(JSON.stringify(chunks.join("").trim().split("\n").filter(Boolean))));
 ')"
 allowed_transports_json="$(printf '%s\n' "${allowed_transports[@]}" | node -e '
   const chunks = [];
   process.stdin.on("data", (chunk) => chunks.push(chunk));
-  process.stdin.on("end", () => process.stdout.write(JSON.stringify(chunks.join("").trim().split("\\n").filter(Boolean))));
+  process.stdin.on("end", () => process.stdout.write(JSON.stringify(chunks.join("").trim().split("\n").filter(Boolean))));
 ')"
 
 node - "$preflight_json" "$allowed_kinds_json" "$allowed_transports_json" "$dispatch_count" <<'NODE'

@@ -77,7 +77,7 @@ node scripts/df-role.mjs prepare-run \
 ```
 
 Before each background dispatch, use the frozen plan as specified in
-`references/role-callers-inventory.md`. Preflight the declared responsibility,
+`../../references/role-callers-inventory.md`. Preflight the declared responsibility,
 check that the native or transport interface can represent its target, then
 reserve each actual worker. A shell runner owns that reservation itself, so do
 not reserve it again in skill prose. The documented Luna limitation needs an

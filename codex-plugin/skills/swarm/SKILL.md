@@ -5,7 +5,7 @@ description: "Fan out N parallel workers, drain them, and return one report. Use
 
 # Swarm
 
-Every background runner follows `../df/references/role-callers-inventory.md`.
+Every background runner follows `../../references/role-callers-inventory.md`.
 Preflight its frozen role before reservation, then use that target natively.
 
 Fan out N parallel workers. They may cover separate slices, race the same brief, or mix both. The parent waits, aggregates, and returns one report. No raw dumps.

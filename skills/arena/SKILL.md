@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Arena
 
-Every background runner follows `../df/references/role-callers-inventory.md`.
+Every background runner follows `../../references/role-callers-inventory.md`.
 Preflight its frozen role before reservation, then use that target natively.
 
 Fan out N parallel attempts at the same task. Read every candidate end to end. Pick the strongest as the base. Graft the best ideas from the others into it. Verify the synthesized result.

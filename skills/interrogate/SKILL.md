@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Interrogate
 
-Every background runner follows `../df/references/role-callers-inventory.md`.
+Every background runner follows `../../references/role-callers-inventory.md`.
 Preflight its frozen role before reservation, then use that target natively.
 
 Spawn one reviewer per model family, Claude and Codex, to adversarially review code changes. Each reviewer gets the same prompt and rubric. The adversarial signal comes from model diversity, not assigned personas. The families differ in blind spots, priors, and reasoning patterns. Agreement across families is high-confidence signal; lone-family findings are worth reading but lower confidence.

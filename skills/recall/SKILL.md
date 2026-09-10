@@ -5,7 +5,7 @@ description: "Reconstruct recent working context from the df trail (run state fi
 
 # Recall
 
-Every background runner follows `../df/references/role-callers-inventory.md`.
+Every background runner follows `../../references/role-callers-inventory.md`.
 Preflight its frozen role before reservation, then use that target natively.
 
 **Before you start or resume work, rebuild the user's recent working context and hand back a tight capsule of where things stand now and what to do next.** Use for "recall my work on X", "catch me up", "what have I been working on", or "where did I leave off".

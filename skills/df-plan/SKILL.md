@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # df-plan
 
-Every background runner follows `../df/references/role-callers-inventory.md`.
+Every background runner follows `../../references/role-callers-inventory.md`.
 Preflight its frozen role before reservation, then use that target natively.
 
 **You own the plan, not the code. The plan is the deliverable. Do not implement.** The plan is a checklist df-implement runs box by box and the operator audits from the evidence. Write every task so a cheap model can implement it by transcription. Exact paths, exact signatures, verbatim code. A task that needs judgment to fill in is a task you have not finished writing.

@@ -63,8 +63,8 @@ run_lane="$(awk -F '\t' 'NR == 2 { print $2 }' "$run_dir/run.tsv")"
 [[ "$run_lane" == "$lane" ]] || die "lane '$lane' does not match active run '$run_id' lane '$run_lane'"
 
 preflight_json="$(node "$role_helper" preflight --run "$run_id" --responsibility "$responsibility" --lane "$lane" --repo-root "$repo_root")"
-kinds_json="$(printf '%s\n' "${allowed_kinds[@]}" | node -e 'let b="";process.stdin.on("data",c=>b+=c);process.stdin.on("end",()=>process.stdout.write(JSON.stringify(b.trim().split("\\n").filter(Boolean))))')"
-transports_json="$(printf '%s\n' "${allowed_transports[@]}" | node -e 'let b="";process.stdin.on("data",c=>b+=c);process.stdin.on("end",()=>process.stdout.write(JSON.stringify(b.trim().split("\\n").filter(Boolean))))')"
+kinds_json="$(printf '%s\n' "${allowed_kinds[@]}" | node -e 'let b="";process.stdin.on("data",c=>b+=c);process.stdin.on("end",()=>process.stdout.write(JSON.stringify(b.trim().split("\n").filter(Boolean))))')"
+transports_json="$(printf '%s\n' "${allowed_transports[@]}" | node -e 'let b="";process.stdin.on("data",c=>b+=c);process.stdin.on("end",()=>process.stdout.write(JSON.stringify(b.trim().split("\n").filter(Boolean))))')"
 node - "$preflight_json" "$kinds_json" "$transports_json" "$dispatch_count" <<'NODE'
 const [raw, kindsRaw, transportsRaw, countRaw] = process.argv.slice(2);
 let result;
