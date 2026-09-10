@@ -30,6 +30,12 @@
     "schemaVersion",
     "roles"
   ],
+  "dispatchConstraints": {
+    "nonFloorPinnedTargets": "cap-at-session",
+    "namedAgentFloors": [
+      "df-reviewer-recheck"
+    ]
+  },
   "roles": {
     "claude": {
       "session_router": {

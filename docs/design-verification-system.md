@@ -28,7 +28,7 @@ $ node scripts/df-role.mjs preflight \
     --run example-run \
     --responsibility design_runners \
     --lane standard
-{"harness":"codex","responsibility":"design_runners","lane":"standard","target":{"kind":"named-agent","agent":"terra_xhigh"},"provenance":[{"kind":"shipped","path":"<plugin-root>/references/model-policy.json"}],"validatedNamedAgents":["terra_xhigh"]}
+{"harness":"codex","responsibility":"design_runners","lane":"standard","target":{"kind":"named-agent","agent":"terra_xhigh"},"provenance":[{"kind":"shipped","path":"<plugin-root>/references/model-policy.json"}],"dispatchConstraints":{"nonFloorPinnedTargets":"cap-at-session","namedAgentFloors":["df-reviewer-recheck"]},"validatedNamedAgents":["terra_xhigh"]}
 ```
 
 Machine defaults come from
@@ -123,12 +123,32 @@ type PolicySource = Readonly<{
   path: string;
 }>;
 
+type DispatchConstraints = Readonly<{
+  nonFloorPinnedTargets: "cap-at-session";
+  namedAgentFloors: readonly ["df-reviewer-recheck"];
+}>;
+
+type NamedAgentBinding =
+  | Readonly<{
+      harness: Harness;
+      agent: string;
+      status: "bound";
+      path: string;
+      sha256: string;
+    }>
+  | Readonly<{
+      harness: Harness;
+      agent: string;
+      status: "missing" | "ambiguous";
+    }>;
+
 type ResolvedRole = Readonly<{
   harness: Harness;
   responsibility: Responsibility;
   lane: Lane;
   target: RoleTarget;
   provenance: readonly PolicySource[];
+  dispatchConstraints: DispatchConstraints;
 }>;
 
 type FrozenRolePlan = Readonly<{
@@ -138,8 +158,10 @@ type FrozenRolePlan = Readonly<{
   harness: Harness;
   responsibilities: readonly Responsibility[];
   lanes: readonly Lane[];
+  dispatchConstraints: DispatchConstraints;
   policyDigest: string;
   resolutions: readonly ResolvedRole[];
+  namedAgentBindings: readonly NamedAgentBinding[];
   planDigest: string;
 }>;
 ```
@@ -186,7 +208,10 @@ The frozen plan prevents restart-time configuration drift. `resolve` reads only
 that plan. `preflight` checks named agents immediately before reservation
 because a definition can disappear after initialization. Missing agents stop
 before `df-state reserve`. A parallel target is a nonempty ordered group of
-leaf targets. Groups cannot nest.
+leaf targets. Groups cannot nest. The plan also freezes the session cap for
+non-floor pins, the only named-agent floor, and each selected definition's
+canonical path and file digest. Preflight refuses a changed definition or one
+that was missing or ambiguous when preparation ran.
 
 ### Verification selection contract
 

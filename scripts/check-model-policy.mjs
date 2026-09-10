@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateNamedAgents, validatePolicy } from "./df-role.mjs";
@@ -8,7 +8,7 @@ import { validateNamedAgents, validatePolicy } from "./df-role.mjs";
 const SCRIPT_DIR = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const PLUGIN_ROOT = resolve(SCRIPT_DIR, "..");
 const DEFAULT_POLICY = join(PLUGIN_ROOT, "references", "model-policy.json");
-const SKILL_TREES = [join(PLUGIN_ROOT, "skills"), join(PLUGIN_ROOT, "codex-plugin", "skills")];
+const ACTIVE_SKILL_TREE = join(PLUGIN_ROOT, "skills");
 
 function fail(message) {
   throw new Error(`check-model-policy: ${message}`);
@@ -44,6 +44,7 @@ function readPolicy(policyPath) {
 }
 
 function collectFiles(directory) {
+  if (!existsSync(directory)) fail(`required active skill tree is missing: ${directory}`);
   const output = [];
   const walk = (current) => {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
@@ -60,7 +61,10 @@ function verifyRoleReferences(policy) {
   const known = new Set(policy.responsibilities);
   const matcher = /<!--\s*df-role:\s*([a-z][a-z0-9_]*)\s*-->/g;
   const unknown = [];
-  for (const tree of SKILL_TREES) {
+  const skillTrees = [ACTIVE_SKILL_TREE];
+  const siblingCodexTree = join(PLUGIN_ROOT, "codex-plugin", "skills");
+  if (existsSync(siblingCodexTree)) skillTrees.push(siblingCodexTree);
+  for (const tree of skillTrees) {
     for (const file of collectFiles(tree)) {
       const content = readFileSync(file, "utf8");
       for (const match of content.matchAll(matcher)) {

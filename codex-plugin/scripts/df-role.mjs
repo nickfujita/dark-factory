@@ -2,7 +2,7 @@
 
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +28,11 @@ const REQUIRED_RESPONSIBILITIES = [
   "discovery_context",
   "escalation"
 ];
+const REQUIRED_LANES = ["quick", "standard", "high-consequence"];
+const REQUIRED_DISPATCH_CONSTRAINTS = {
+  nonFloorPinnedTargets: "cap-at-session",
+  namedAgentFloors: ["df-reviewer-recheck"]
+};
 const KNOWN_TARGET_KINDS = ["session", "named-agent", "native-model", "cli", "transport", "parallel"];
 const NATIVE_MODELS = ["sonnet", "opus"];
 const TRANSPORTS = ["codex-cli", "claude-tmux"];
@@ -179,9 +184,20 @@ function validateRoleMap(roleMap, policy, sourcePath, field, complete) {
   }
 }
 
+function validateDispatchConstraints(constraints, sourcePath, field) {
+  if (!isObject(constraints)) configFail(sourcePath, field, "must be an object");
+  assertKeys(constraints, ["nonFloorPinnedTargets", "namedAgentFloors"], sourcePath, field);
+  if (constraints.nonFloorPinnedTargets !== REQUIRED_DISPATCH_CONSTRAINTS.nonFloorPinnedTargets) {
+    configFail(sourcePath, `${field}.nonFloorPinnedTargets`, "must be cap-at-session");
+  }
+  if (stableJson(constraints.namedAgentFloors) !== stableJson(REQUIRED_DISPATCH_CONSTRAINTS.namedAgentFloors)) {
+    configFail(sourcePath, `${field}.namedAgentFloors`, "must name df-reviewer-recheck as the only named-agent floor");
+  }
+}
+
 export function validatePolicy(policy, sourcePath = SHIPPED_POLICY_PATH) {
   if (!isObject(policy)) configFail(sourcePath, "$", "must be an object");
-  const rootKeys = ["schemaVersion", "responsibilities", "lanes", "overridePrecedence", "allowedProjectKeys", "roles"];
+  const rootKeys = ["schemaVersion", "responsibilities", "lanes", "overridePrecedence", "allowedProjectKeys", "dispatchConstraints", "roles"];
   assertKeys(policy, rootKeys, sourcePath, "$");
   for (const key of rootKeys) {
     if (!own(policy, key)) configFail(sourcePath, key, "is required");
@@ -195,7 +211,7 @@ export function validatePolicy(policy, sourcePath = SHIPPED_POLICY_PATH) {
     configFail(sourcePath, "responsibilities", "must declare every supported responsibility in the shipped order");
   }
   const lanes = requireArray(policy.lanes, sourcePath, "lanes");
-  if (stableJson(lanes) !== stableJson(["quick", "standard", "high-consequence"])) {
+  if (stableJson(lanes) !== stableJson(REQUIRED_LANES)) {
     configFail(sourcePath, "lanes", "must declare quick, standard, and high-consequence in that order");
   }
   if (stableJson(policy.overridePrecedence) !== stableJson(["shipped", "machine", "project"])) {
@@ -204,6 +220,7 @@ export function validatePolicy(policy, sourcePath = SHIPPED_POLICY_PATH) {
   if (stableJson(policy.allowedProjectKeys) !== stableJson(["schemaVersion", "roles"])) {
     configFail(sourcePath, "allowedProjectKeys", "must be schemaVersion and roles");
   }
+  validateDispatchConstraints(policy.dispatchConstraints, sourcePath, "dispatchConstraints");
   validateRoleMap(policy.roles, policy, sourcePath, "roles", true);
   return policy;
 }
@@ -251,7 +268,14 @@ function buildResolutions(policyLayer, machineLayer, projectLayer, harness) {
           provenance.push({ kind, path: layer.path });
         }
       }
-      resolutions.push({ harness, responsibility, lane, target: stable(target), provenance });
+      resolutions.push({
+        harness,
+        responsibility,
+        lane,
+        target: stable(target),
+        provenance,
+        dispatchConstraints: stable(policyLayer.value.dispatchConstraints)
+      });
     }
   }
   return resolutions;
@@ -330,15 +354,16 @@ function validatePlanTarget(target, field) {
 
 function validateFrozenPlan(plan, runId, repoRoot) {
   if (!isObject(plan)) fail("role plan must be an object");
-  const keys = ["schemaVersion", "runId", "repoRoot", "harness", "responsibilities", "lanes", "policyDigest", "resolutions", "planDigest"];
+  const keys = ["schemaVersion", "runId", "repoRoot", "harness", "responsibilities", "lanes", "dispatchConstraints", "policyDigest", "resolutions", "namedAgentBindings", "planDigest"];
   for (const key of keys) if (!own(plan, key)) fail(`role plan is missing ${key}`);
   if (plan.schemaVersion !== PLAN_SCHEMA_VERSION || plan.runId !== runId || plan.repoRoot !== repoRoot || !HARNESSES.includes(plan.harness)) {
     fail("role plan does not match the requested run, repository, or harness");
   }
-  if (!Array.isArray(plan.responsibilities) || !Array.isArray(plan.lanes) || !Array.isArray(plan.resolutions)) fail("role plan has malformed matrix fields");
-  if (stableJson(plan.lanes) !== stableJson(["quick", "standard", "high-consequence"]) || plan.responsibilities.length === 0) {
+  if (!Array.isArray(plan.responsibilities) || !Array.isArray(plan.lanes) || !Array.isArray(plan.resolutions) || !Array.isArray(plan.namedAgentBindings)) fail("role plan has malformed matrix fields");
+  if (stableJson(plan.responsibilities) !== stableJson(REQUIRED_RESPONSIBILITIES) || stableJson(plan.lanes) !== stableJson(REQUIRED_LANES)) {
     fail("role plan has an invalid responsibility-by-lane matrix");
   }
+  validateDispatchConstraints(plan.dispatchConstraints, "role plan", "dispatchConstraints");
   const expectedRows = plan.responsibilities.length * plan.lanes.length;
   if (plan.resolutions.length !== expectedRows) fail("role plan has an incomplete responsibility-by-lane matrix");
   const seen = new Set();
@@ -350,12 +375,37 @@ function validateFrozenPlan(plan, runId, repoRoot) {
     if (seen.has(matrixKey)) fail("role plan has duplicate responsibility-by-lane rows");
     seen.add(matrixKey);
     validatePlanTarget(resolution.target, `resolutions.${resolution.responsibility}.${resolution.lane}.target`);
+    validateDispatchConstraints(resolution.dispatchConstraints, "role plan", `resolutions.${resolution.responsibility}.${resolution.lane}.dispatchConstraints`);
     for (const source of resolution.provenance) {
       if (!isObject(source) || !["shipped", "machine", "project"].includes(source.kind) || typeof source.path !== "string" || source.path.length === 0) {
         fail("role plan has malformed provenance");
       }
     }
   }
+  const expectedBindings = new Set();
+  for (const resolution of plan.resolutions) {
+    for (const agent of namedAgents(resolution.target)) expectedBindings.add(`${resolution.harness}\u0000${agent}`);
+  }
+  const seenBindings = new Set();
+  for (const binding of plan.namedAgentBindings) {
+    if (!isObject(binding) || binding.harness !== plan.harness || typeof binding.agent !== "string" || !["bound", "missing", "ambiguous"].includes(binding.status)) {
+      fail("role plan has a malformed named-agent binding");
+    }
+    const key = `${binding.harness}\u0000${binding.agent}`;
+    if (!expectedBindings.has(key) || seenBindings.has(key)) fail("role plan has an invalid named-agent binding correspondence");
+    seenBindings.add(key);
+    if (binding.status === "bound") {
+      if (typeof binding.path !== "string" || binding.path.length === 0 || typeof binding.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(binding.sha256)) {
+        fail("role plan has a malformed bound named-agent identity");
+      }
+      if (Object.keys(binding).some((keyName) => !["harness", "agent", "status", "path", "sha256"].includes(keyName))) {
+        fail("role plan has a malformed bound named-agent identity");
+      }
+    } else if (Object.keys(binding).some((keyName) => !["harness", "agent", "status"].includes(keyName))) {
+      fail("role plan has a malformed unavailable named-agent binding");
+    }
+  }
+  if (seenBindings.size !== expectedBindings.size) fail("role plan has an incomplete named-agent binding correspondence");
   if (typeof plan.policyDigest !== "string" || !/^[a-f0-9]{64}$/.test(plan.policyDigest) || typeof plan.planDigest !== "string" || !/^[a-f0-9]{64}$/.test(plan.planDigest)) {
     fail("role plan has an invalid digest");
   }
@@ -503,30 +553,78 @@ function definitionNames(harness, content) {
   return match ? [match[1].trim()] : [];
 }
 
-export function validateNamedAgents(harness, target) {
-  const wanted = [...new Set(namedAgents(target))];
+function findNamedAgentDefinitions(harness, agent) {
   const directories = agentDirectories(harness);
-  for (const agent of wanted) {
-    const definitions = [];
-    for (const directory of directories) {
-      for (const entry of readdirSync(directory, { withFileTypes: true })) {
-        if (!entry.isFile()) continue;
-        const extension = harness === "claude" ? ".md" : ".toml";
-        if (!entry.name.endsWith(extension)) continue;
-        const definitionPath = join(directory, entry.name);
-        let content;
+  const definitions = new Map();
+  for (const directory of directories) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (!entry.isFile()) continue;
+      const extension = harness === "claude" ? ".md" : ".toml";
+      if (!entry.name.endsWith(extension)) continue;
+      const definitionPath = join(directory, entry.name);
+      let content;
+      try {
+        content = readFileSync(definitionPath, "utf8");
+      } catch {
+        continue;
+      }
+      if (definitionNames(harness, content).includes(agent)) {
         try {
-          content = readFileSync(definitionPath, "utf8");
+          const canonicalPath = realpathSync(definitionPath);
+          definitions.set(canonicalPath, { path: canonicalPath, content });
         } catch {
-          continue;
+          // The file changed while it was being inspected. Treat it as absent.
         }
-        if (definitionNames(harness, content).includes(agent)) definitions.push(definitionPath);
       }
     }
+  }
+  return [...definitions.values()].sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function bindingFor(harness, agent) {
+  const definitions = findNamedAgentDefinitions(harness, agent);
+  if (definitions.length === 0) return { harness, agent, status: "missing" };
+  if (definitions.length > 1) return { harness, agent, status: "ambiguous" };
+  return {
+    harness,
+    agent,
+    status: "bound",
+    path: definitions[0].path,
+    sha256: createHash("sha256").update(definitions[0].content).digest("hex")
+  };
+}
+
+function bindingsFor(harness, resolutions) {
+  const agents = new Set();
+  for (const resolution of resolutions) namedAgents(resolution.target).forEach((agent) => agents.add(agent));
+  return [...agents].sort().map((agent) => bindingFor(harness, agent));
+}
+
+export function validateNamedAgents(harness, target) {
+  const wanted = [...new Set(namedAgents(target))];
+  for (const agent of wanted) {
+    const definitions = findNamedAgentDefinitions(harness, agent);
     if (definitions.length === 0) fail(`named agent ${agent} is missing for harness ${harness}`);
     if (definitions.length > 1) fail(`named agent ${agent} is ambiguous for harness ${harness}`);
   }
   return wanted;
+}
+
+function validateFrozenNamedAgentBindings(plan, target) {
+  for (const agent of [...new Set(namedAgents(target))]) {
+    const binding = plan.namedAgentBindings.find((candidate) => candidate.harness === plan.harness && candidate.agent === agent);
+    if (!binding) fail(`role plan is missing the frozen binding for named agent ${agent}`);
+    if (binding.status === "missing") fail(`named agent ${agent} was missing when the role plan was frozen`);
+    if (binding.status === "ambiguous") fail(`named agent ${agent} was ambiguous when the role plan was frozen`);
+    const definitions = findNamedAgentDefinitions(plan.harness, agent);
+    if (definitions.length === 0) fail(`named agent ${agent} is missing for harness ${plan.harness}`);
+    if (definitions.length > 1) fail(`named agent ${agent} is ambiguous for harness ${plan.harness}`);
+    const current = definitions[0];
+    const currentHash = createHash("sha256").update(current.content).digest("hex");
+    if (current.path !== binding.path || currentHash !== binding.sha256) {
+      fail(`named agent ${agent} no longer matches the frozen definition identity`);
+    }
+  }
 }
 
 export async function prepareRunRolePlan({ runId, harness, repoRoot }) {
@@ -551,6 +649,7 @@ export async function prepareRunRolePlan({ runId, harness, repoRoot }) {
     const machineLayer = readOptionalOverride(machineConfigPath(), policyLayer.value);
     const projectLayer = readOptionalOverride(join(canonicalRoot, ".agents", "dark-factory.json"), policyLayer.value);
     const resolutions = buildResolutions(policyLayer, machineLayer, projectLayer, harness);
+    const namedAgentBindings = bindingsFor(harness, resolutions);
     const withoutPlanDigest = {
       schemaVersion: PLAN_SCHEMA_VERSION,
       runId,
@@ -558,8 +657,10 @@ export async function prepareRunRolePlan({ runId, harness, repoRoot }) {
       harness,
       responsibilities: policyLayer.value.responsibilities,
       lanes: policyLayer.value.lanes,
+      dispatchConstraints: policyLayer.value.dispatchConstraints,
       policyDigest: sha256(resolutions),
-      resolutions
+      resolutions,
+      namedAgentBindings
     };
     const plan = { ...withoutPlanDigest, planDigest: sha256(withoutPlanDigest) };
     validateFrozenPlan(plan, runId, canonicalRoot);
@@ -581,8 +682,15 @@ export function resolveFrozenRole({ runId, responsibility, lane, repoRoot = proc
 }
 
 export function preflightFrozenRole({ runId, responsibility, lane, repoRoot = process.cwd() }) {
-  const resolution = resolveFrozenRole({ runId, responsibility, lane, repoRoot });
-  const agents = validateNamedAgents(resolution.harness, resolution.target);
+  assertRunId(runId);
+  const canonicalRoot = canonicalRepoRoot(repoRoot);
+  const runDir = statePathFor(canonicalRoot, runId);
+  validateRunState(runDir, runId, canonicalRoot);
+  const plan = readFrozenPlan(runDir, runId, canonicalRoot);
+  if (!plan) fail(`role plan has not been prepared for ${runId}`);
+  const resolution = findResolution(plan, responsibility, lane);
+  validateFrozenNamedAgentBindings(plan, resolution.target);
+  const agents = [...new Set(namedAgents(resolution.target))];
   return { ...resolution, validatedNamedAgents: agents };
 }
 

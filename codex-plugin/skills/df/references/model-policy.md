@@ -9,6 +9,11 @@ an existing native harness model such as `sonnet` or `opus`. `named-agent`
 selects a locally defined agent. `cli` uses the harness CLI without model or
 effort flags, and `transport` selects the other harness's approved transport.
 
+The policy's `dispatchConstraints` caps every non-floor pinned target at the
+operator session. `df-reviewer-recheck` is the only named-agent floor. Machine
+and project overrides select declared targets only. They cannot add a floor,
+effort flag, or command.
+
 The high-consequence Claude `design_runners` target is an ordered `parallel`
 group. It runs `opus` and the inherited session target. Parallel groups cannot
 be empty or contain another group.
@@ -29,3 +34,9 @@ validated during preflight, immediately before the caller reserves work.
 reads that plan without reopening override files. `preflight` reads the same
 plan and validates every named-agent leaf. A1 supplies these commands only;
 caller migration belongs to A2.
+
+Preparation freezes each selected named definition's canonical path and full
+file SHA-256 without copying its instructions. It records missing or ambiguous
+definitions as unavailable bindings. Preflight refuses an unavailable binding,
+a changed path or file, or a definition that appears after preparation. Start a
+new run to use a changed definition.
