@@ -170,12 +170,16 @@ case "$1" in
     digest=$(sed -n 's#^- Selection digest: ##p' "$FAKE_TMUX_STATE/$name" | head -n 1)
     [[ -n "$output" && -n "$done_file" && -n "$digest" ]]
     if [[ "${FAKE_TMUX_SWAP_DIGEST:-0}" == 1 ]]; then digest="$(printf '0%.0s' {1..64})"; fi
+    selection_input="$(dirname "$output")/selection-input.json"
+    if [[ "${FAKE_TMUX_REWRITE_INPUT:-0}" == 1 ]]; then
+      sed -i 's/"id": "cli-list"/"id": "cli-list-replaced"/' "$selection_input"
+    fi
     if [[ "$prompt" == *'Claude Quality'* ]]; then header='## Findings — Claude Quality'; else header='## Findings — Claude Spec'; fi
     mkdir -p "$(dirname "$output")" "$(dirname "$done_file")"
     {
       echo '## Sealed verification selection'
       sed -n '/^Sealed verification selection\./,/^Produce findings/p' "$FAKE_TMUX_STATE/$name" | sed '$d' | sed "s#^- Selection digest: .*#- Selection digest: $digest#" | {
-        if [[ "${FAKE_TMUX_SWAP_IDENTITY:-0}" == 1 ]]; then
+        if [[ "${FAKE_TMUX_SWAP_IDENTITY:-0}" == 1 || "${FAKE_TMUX_REWRITE_INPUT:-0}" == 1 ]]; then
           sed 's#Entry "cli-list"#Entry "cli-list-replaced"#'
         else
           cat
@@ -257,6 +261,19 @@ if TMPDIR="$scratch" FAKE_TMUX_SWAP_IDENTITY=1 CLAUDE_REVIEW_STARTUP_DELAY=0 CLA
 fi
 grep -Fq 'quality: selection_header' "$scratch/identity-swapped.err"
 pass 'a reviewer report with the same digest but changed selected identity is rejected'
+
+if TMPDIR="$scratch" FAKE_TMUX_REWRITE_INPUT=1 CLAUDE_REVIEW_STARTUP_DELAY=0 CLAUDE_REVIEW_TIMEOUT_SECONDS=5 \
+  DARK_FACTORY_ROOT="$root/codex-plugin" bash "$tmux_runner" docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/claude-input-rewritten" \
+  >"$scratch/input-rewritten.out" 2>"$scratch/input-rewritten.err"; then
+  fail 'tmux transport accepted a matching rewrite of the prepared input and report header'
+fi
+grep -Fq 'quality: selection_header' "$scratch/input-rewritten.err"
+node "$root/scripts/df-code-review-selection.mjs" verify \
+  --prd-path docs/prd.md \
+  --selection-ref "$selection_ref" \
+  --repo-root "$repo" >/dev/null \
+  || fail 'original selection seal became invalid during prepared-input rewrite case'
+pass 'a matching rewrite of the prepared input and report header is rejected against the seal'
 
 echo '== copied skill location =='
 copied="$scratch/copied/df-code-review"

@@ -137,7 +137,7 @@ function validateReportHeader(bundle, reportPath) {
   }
   const expected = reportHeaderFor(bundle);
   if (!report.startsWith(expected)) {
-    fail("report-path: sealed selection header does not exactly match the prepared review input");
+    fail("report-path: sealed selection header does not exactly match the current sealed selection");
   }
 }
 
@@ -190,8 +190,15 @@ async function main() {
     return;
   }
   if (command === "validate-report-header") {
-    requireOptions(command, values, ["input-path", "report-path"]);
-    validateReportHeader(readBundle(values["input-path"]), values["report-path"]);
+    requireOptions(command, values, ["prd-path", "selection-ref", "repo-root", "report-path"]);
+    // Report authority comes from B1, not the caller-writable bundle used to
+    // construct prompts and snapshots.
+    const sealed = await loadSelection({
+      prdPath: values["prd-path"],
+      selectionRef: values["selection-ref"],
+      repoRoot: values["repo-root"],
+    });
+    validateReportHeader(bundleFor(sealed), values["report-path"]);
     process.stdout.write("STATUS=valid\n");
     return;
   }

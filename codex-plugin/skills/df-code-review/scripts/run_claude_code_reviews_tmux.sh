@@ -138,7 +138,9 @@ validate_report() {
     echo "invalid missing_findings_header"; return 0
   fi
   if ! node "$selection_tool" validate-report-header \
-    --input-path "$selection_input" \
+    --prd-path "$prd_path" \
+    --selection-ref "$selection_ref" \
+    --repo-root "$repo_root" \
     --report-path "$report" >/dev/null; then
     echo "invalid selection_header"; return 0
   fi
