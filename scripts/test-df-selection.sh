@@ -165,6 +165,9 @@ if (mode === "extra") doc.unexpected = true;
 if (mode === "sealed-root") doc.repoRoot = "/not-caller-authored";
 if (mode === "control") doc.entries[0].id = "bad\u0001id";
 if (mode === "noncanonical-path") doc.entries[0].recipePath = "./recipes/api-create.md";
+if (mode === "trailing-slash") doc.entries[0].recipePath = "recipes/";
+if (mode === "line-separator-traversal") doc.entries[0].recipePath = "prefix\u2028/../escape.md";
+if (mode === "paragraph-separator-double-slash") doc.entries[0].recipePath = "prefix\u2029//double.md";
 if (mode === "concurrent") doc.featureSlug = "concurrent-synthetic-feature";
 writeFileSync(destination, JSON.stringify(doc, null, 2));
 NODE
@@ -269,6 +272,10 @@ const scalarContract =
   !matches("nonblank", "trailing ") &&
   matches("nonblank", "valid value") &&
   !matches("repoPath", "./recipes/check.md") &&
+  !matches("repoPath", "recipes/") &&
+  !matches("repoPath", "prefix\u2028/../escape.md") &&
+  !matches("repoPath", "prefix\u2029//double.md") &&
+  matches("repoPath", "prefix\u2028internal/check.md") &&
   matches("repoPath", "recipes/check.md") &&
   !new RegExp(schema.$defs.sealedUserFacing.properties.runId.pattern, "u").test(".") &&
   !new RegExp(schema.$defs.sealedUserFacing.properties.runId.pattern, "u").test("..") &&
@@ -280,7 +287,7 @@ console.log("SCHEMA_REQUIRES_SHARED_VALIDATOR=passed");
 NODE
 assert_contains "shipped schema rejects expressible scalar violations" "SCHEMA_EXPRESSIBLE_SCALARS=passed" "$TMP/schema-contract.out"
 assert_contains "shipped schema documents shared-validator requirement" "SCHEMA_REQUIRES_SHARED_VALIDATOR=passed" "$TMP/schema-contract.out"
-for mode in control noncanonical-path duplicate-identity undeclared; do
+for mode in control noncanonical-path trailing-slash line-separator-traversal paragraph-separator-double-slash duplicate-identity undeclared; do
   mutate_draft "$TMP/base.json" "$TMP/contract-$mode.json" "$mode"
   expect_failure "root runtime rejects contract case: $mode" node "$ROOT_SELECTION" seal --run selection-run --draft "$TMP/contract-$mode.json" --repo-root "$REPO"
   expect_failure "Codex runtime rejects contract case: $mode" node "$CODEX_SELECTION" seal --run selection-run --draft "$TMP/contract-$mode.json" --repo-root "$REPO"
