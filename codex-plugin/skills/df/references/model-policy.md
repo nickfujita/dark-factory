@@ -1,31 +1,31 @@
 # Model policy
 
-The per-role model table the df router resolves against. Two rules govern every lookup.
+[`references/model-policy.json`](../../../references/model-policy.json) is the
+normative role policy. It declares every harness, responsibility, and lane.
+This document explains the contract and does not repeat a default table.
 
-Inherit is the default. The session model is the operator's usage throttle. A role marked `inherit` omits the spawn's model field and runs on the session model, deliberate downgrades included.
+`session` inherits the operator's current session model. `native-model` names
+an existing native harness model such as `sonnet` or `opus`. `named-agent`
+selects a locally defined agent. `cli` uses the harness CLI without model or
+effort flags, and `transport` selects the other harness's approved transport.
 
-A pinned role never runs above the current session model unless it is a designated floor. Floors are the only pins allowed to exceed a throttled session, because their job is to keep a review meaningful. `df-reviewer-recheck` is the only floor today, marked `# floor` below.
+The high-consequence Claude `design_runners` target is an ordered `parallel`
+group. It runs `opus` and the inherited session target. Parallel groups cannot
+be empty or contain another group.
 
-A value is `inherit`, a model name, or an agent-definition name. The Claude Agent tool cannot set effort per spawn, so a role that needs a pinned effort resolves to an agent definition.
+Machine overrides live at
+`${XDG_CONFIG_HOME:-$HOME/.config}/dark-factory/config.json`. A tracked
+`.agents/dark-factory.json` project override wins over that file. Both files
+accept only `schemaVersion` and `roles`, and they can override declared role
+targets only. They cannot provide commands, credentials, catalog paths, or run
+state.
 
-```yaml
-claude:
-  session_router: inherit
-  menial_scoped_investigation: sonnet
-  implementation_delegate: opus
-  judgment_delegate: inherit
-  investigation_synthesizer: opus
-  design_runners: [opus, inherit]  # standard lane runs one, high-consequence two
-  discovery_reviewers: inherit
-  recheck_leaf_reviewers: df-reviewer-recheck  # agent definition; floor
-  eval_graders: sonnet
-  cross_model_review: codex-cli  # the other family; resolves per the codex section
+The Codex implementation role names `luna_max`. When the documented Luna
+spawn limitation applies, an operator may explicitly select `terra_xhigh`; the
+resolver never silently substitutes another agent. Named-agent definitions are
+validated during preflight, immediately before the caller reserves work.
 
-codex:
-  orchestrator: inherit
-  implementation_delegate: luna_max  # terra_xhigh while the Luna spawn bug stands
-  discovery_context: terra_xhigh
-  escalation: sol_high  # trigger is a change to a trust boundary or invariant, never reading near one
-  persona_reviewers_cli: operator-default-no-effort-flag
-  cross_model_review: claude-tmux
-```
+`prepare-run` freezes every lane in the external run's role plan. `resolve`
+reads that plan without reopening override files. `preflight` reads the same
+plan and validates every named-agent leaf. A1 supplies these commands only;
+caller migration belongs to A2.

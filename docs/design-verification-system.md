@@ -21,18 +21,14 @@ STATUS=ready
 ```
 
 Before each dispatch, the caller resolves one responsibility from that frozen
-plan. Resolution verifies the named local agent before the caller reserves a
-dispatch.
+plan, then preflights its named local agents before reserving a dispatch.
 
 ```console
-$ node scripts/df-role.mjs resolve \
+$ node scripts/df-role.mjs preflight \
     --run example-run \
     --responsibility design_runners \
     --lane standard
-KIND=named-agent
-AGENT=terra_xhigh
-SOURCE=shipped
-STATUS=ready
+{"harness":"codex","responsibility":"design_runners","lane":"standard","target":{"kind":"named-agent","agent":"terra_xhigh"},"provenance":[{"kind":"shipped","path":"<plugin-root>/references/model-policy.json"}],"validatedNamedAgents":["terra_xhigh"]}
 ```
 
 Machine defaults come from
@@ -107,13 +103,20 @@ type Responsibility =
   | "recheck_leaf_reviewers"
   | "eval_graders"
   | "persona_reviewers_cli"
-  | "cross_model_review";
+  | "cross_model_review"
+  | "discovery_context"
+  | "escalation";
 
-type RoleTarget =
+type LeafRoleTarget =
   | { kind: "session" }
   | { kind: "named-agent"; agent: string }
+  | { kind: "native-model"; model: "sonnet" | "opus" }
   | { kind: "cli"; model: string | null; effort: string | null }
   | { kind: "transport"; name: string };
+
+type RoleTarget =
+  | LeafRoleTarget
+  | { kind: "parallel"; targets: readonly [LeafRoleTarget, ...LeafRoleTarget[]] };
 
 type PolicySource = Readonly<{
   kind: "shipped" | "machine" | "project";
@@ -131,9 +134,13 @@ type ResolvedRole = Readonly<{
 type FrozenRolePlan = Readonly<{
   schemaVersion: 1;
   runId: string;
+  repoRoot: string;
   harness: Harness;
+  responsibilities: readonly Responsibility[];
+  lanes: readonly Lane[];
   policyDigest: string;
   resolutions: readonly ResolvedRole[];
+  planDigest: string;
 }>;
 ```
 
@@ -175,9 +182,11 @@ The role plan has no singular lane field. Preparation freezes the full
 responsibility-by-lane matrix for its harness. Resolution and preflight require
 an explicit lane and reject a missing matrix row before reservation.
 
-The frozen plan prevents restart-time configuration drift. Availability is
-still checked immediately before reservation because an agent definition can
-disappear after initialization. Missing agents stop before `df-state reserve`.
+The frozen plan prevents restart-time configuration drift. `resolve` reads only
+that plan. `preflight` checks named agents immediately before reservation
+because a definition can disappear after initialization. Missing agents stop
+before `df-state reserve`. A parallel target is a nonempty ordered group of
+leaf targets. Groups cannot nest.
 
 ### Verification selection contract
 
