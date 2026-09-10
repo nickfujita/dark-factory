@@ -220,12 +220,80 @@ new_run malformed-state
 printf 'not a run state\n' >"$DF_STATE_ROOT/malformed-state/run.tsv"
 expect_fail_contains "malformed external run state is rejected" "malformed run.tsv" \
   prepare malformed-state codex
+
+new_run invalid-dispatch-outcome
+printf '1\t2026-01-01T00:00:00Z\trole\tpurpose\t-\tinvalid\n' >>"$DF_STATE_ROOT/invalid-dispatch-outcome/dispatches.tsv"
+before_invalid_outcome="$(dispatch_count invalid-dispatch-outcome)"
+expect_fail_contains "invalid dispatch outcomes are rejected before preparation" "malformed dispatch state" \
+  prepare invalid-dispatch-outcome codex
+after_invalid_outcome="$(dispatch_count invalid-dispatch-outcome)"
+if [[ "$before_invalid_outcome" == "$after_invalid_outcome" ]]; then
+  pass "invalid dispatch outcomes do not add a reservation"
+else
+  fail "invalid dispatch outcomes do not add a reservation" "before=$before_invalid_outcome after=$after_invalid_outcome"
+fi
+
+new_run duplicate-dispatch-sequence
+printf '1\t2026-01-01T00:00:00Z\trole\tpurpose\t-\tpending\n1\t2026-01-01T00:00:01Z\trole\tpurpose\t-\tpending\n' >>"$DF_STATE_ROOT/duplicate-dispatch-sequence/dispatches.tsv"
+before_duplicate_sequence="$(dispatch_count duplicate-dispatch-sequence)"
+expect_fail_contains "duplicate dispatch sequences are rejected before preparation" "malformed dispatch state" \
+  prepare duplicate-dispatch-sequence codex
+after_duplicate_sequence="$(dispatch_count duplicate-dispatch-sequence)"
+if [[ "$before_duplicate_sequence" == "$after_duplicate_sequence" ]]; then
+  pass "duplicate dispatch sequences do not add a reservation"
+else
+  fail "duplicate dispatch sequences do not add a reservation" "before=$before_duplicate_sequence after=$after_duplicate_sequence"
+fi
+
+new_run missing-dispatch-parent
+printf '1\t2026-01-01T00:00:00Z\trole\tpurpose\t2\tpending\n' >>"$DF_STATE_ROOT/missing-dispatch-parent/dispatches.tsv"
+before_missing_parent="$(dispatch_count missing-dispatch-parent)"
+expect_fail_contains "missing dispatch parents are rejected before preparation" "malformed dispatch state" \
+  prepare missing-dispatch-parent codex
+after_missing_parent="$(dispatch_count missing-dispatch-parent)"
+if [[ "$before_missing_parent" == "$after_missing_parent" ]]; then
+  pass "missing dispatch parents do not add a reservation"
+else
+  fail "missing dispatch parents do not add a reservation" "before=$before_missing_parent after=$after_missing_parent"
+fi
+
 write_machine_override '{"schemaVersion":1,"unexpected":true}'
 new_run unknown-field
 expect_fail_contains "unknown field names its config source" "$XDG_CONFIG_HOME/dark-factory/config.json" \
   prepare unknown-field codex
 expect_fail_contains "unknown field names the exact field" "unexpected" \
   prepare unknown-field codex
+
+write_machine_override '{"schemaVersion":1,"roles":{"codex":{"design_runners":{"standard":{"kind":"native-model","model":"opus"}}}}}'
+new_run codex-native-machine
+before_machine_native="$(dispatch_count codex-native-machine)"
+expect_fail_contains "Codex native machine overrides name their source" "$XDG_CONFIG_HOME/dark-factory/config.json" \
+  prepare codex-native-machine codex
+expect_fail_contains "Codex native machine overrides name their field" "roles.codex.design_runners.standard.kind" \
+  prepare codex-native-machine codex
+after_machine_native="$(dispatch_count codex-native-machine)"
+if [[ "$before_machine_native" == "$after_machine_native" ]]; then
+  pass "Codex native machine overrides do not add a reservation"
+else
+  fail "Codex native machine overrides do not add a reservation" "before=$before_machine_native after=$after_machine_native"
+fi
+
+clear_overrides
+mkdir -p "$PROJECT/.agents"
+printf '%s\n' '{"schemaVersion":1,"roles":{"codex":{"design_runners":{"standard":{"kind":"native-model","model":"opus"}}}}}' >"$PROJECT/.agents/dark-factory.json"
+new_run codex-native-project
+before_project_native="$(dispatch_count codex-native-project)"
+expect_fail_contains "Codex native project overrides name their source" "$PROJECT/.agents/dark-factory.json" \
+  prepare codex-native-project codex
+expect_fail_contains "Codex native project overrides name their field" "roles.codex.design_runners.standard.kind" \
+  prepare codex-native-project codex
+after_project_native="$(dispatch_count codex-native-project)"
+if [[ "$before_project_native" == "$after_project_native" ]]; then
+  pass "Codex native project overrides do not add a reservation"
+else
+  fail "Codex native project overrides do not add a reservation" "before=$before_project_native after=$after_project_native"
+fi
+clear_overrides
 
 write_machine_override '{"schemaVersion":1,"roles":{"codex":{"design_runners":{"standard":{"kind":"named-agent","agent":"missing_named_agent"}}}}}'
 new_run missing-agent
@@ -286,6 +354,32 @@ else
 fi
 
 clear_overrides
+new_run live-aged-lock
+live_lock="$DF_STATE_ROOT/live-aged-lock/work/role-plan.lock"
+mkdir -p "$live_lock"
+printf 'pid=%s\tts=2026-01-01T00:00:00Z\n' "$$" >"$live_lock/owner"
+touch -d '2 minutes ago' "$live_lock"
+timeout 1 node "$ROLE" prepare-run --run live-aged-lock --harness codex --repo-root "$PROJECT" >"$WORK/live-aged-lock.json" 2>"$WORK/live-aged-lock.err"
+live_lock_rc=$?
+if [[ $live_lock_rc -eq 124 && -f "$live_lock/owner" && ! -f "$DF_STATE_ROOT/live-aged-lock/work/role-plan.json" ]]; then
+  pass "a live aged role-plan lock is not preempted"
+else
+  fail "a live aged role-plan lock is not preempted" "exit=$live_lock_rc owner=$(test -f "$live_lock/owner" && printf present || printf missing)"
+fi
+
+new_run dead-lock-recovery
+dead_lock="$DF_STATE_ROOT/dead-lock-recovery/work/role-plan.lock"
+mkdir -p "$dead_lock"
+printf 'pid=999999\tts=2026-01-01T00:00:00Z\n' >"$dead_lock/owner"
+touch -d '2 minutes ago' "$dead_lock"
+dead_lock_plan="$(prepare dead-lock-recovery codex)"
+if [[ -f "$DF_STATE_ROOT/dead-lock-recovery/work/role-plan.json" && ! -d "$dead_lock" && -n "$dead_lock_plan" ]]; then
+  pass "a dead role-plan lock owner is recovered"
+else
+  fail "a dead role-plan lock owner is recovered" "$dead_lock_plan"
+fi
+
+clear_overrides
 mkdir -p "$WORK/concurrent-config-a/dark-factory" "$WORK/concurrent-config-b/dark-factory"
 printf '%s\n' '{"schemaVersion":1,"roles":{"codex":{"design_runners":{"standard":{"kind":"named-agent","agent":"terra_xhigh"}}}}}' >"$WORK/concurrent-config-a/dark-factory/config.json"
 printf '%s\n' '{"schemaVersion":1,"roles":{"codex":{"design_runners":{"standard":{"kind":"named-agent","agent":"sol_high"}}}}}' >"$WORK/concurrent-config-b/dark-factory/config.json"
@@ -333,6 +427,25 @@ fs.writeFileSync(path, JSON.stringify(plan));
 ' "$DF_STATE_ROOT/truncated-plan/work/role-plan.json"
 expect_fail_contains "self-consistent truncated plans are rejected as incomplete" "invalid responsibility-by-lane matrix" \
   resolve truncated-plan design_runners standard
+
+new_run frozen-codex-native-target
+expect_ok "prepare writes a Codex plan for target compatibility validation" prepare frozen-codex-native-target codex
+node -e '
+const crypto = require("crypto");
+const fs = require("fs");
+const stable = (value) => Array.isArray(value) ? value.map(stable) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])])) : value;
+const digest = (value) => crypto.createHash("sha256").update(JSON.stringify(stable(value))).digest("hex");
+const path = process.argv[1];
+const plan = JSON.parse(fs.readFileSync(path, "utf8"));
+const row = plan.resolutions.find((item) => item.responsibility === "design_runners" && item.lane === "high-consequence");
+row.target = { kind: "parallel", targets: [{ kind: "native-model", model: "opus" }, { kind: "session" }] };
+plan.policyDigest = digest(plan.resolutions);
+delete plan.planDigest;
+plan.planDigest = digest(plan);
+fs.writeFileSync(path, JSON.stringify(plan));
+' "$DF_STATE_ROOT/frozen-codex-native-target/work/role-plan.json"
+expect_fail_contains "frozen Codex plans reject native targets inside parallel groups" "native-model targets require the Claude harness" \
+  resolve frozen-codex-native-target design_runners high-consequence
 
 new_run corrupted-plan
 expect_ok "prepare writes a plan for corruption validation" prepare corrupted-plan codex

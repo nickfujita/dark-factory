@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,7 +38,7 @@ const NATIVE_MODELS = ["sonnet", "opus"];
 const TRANSPORTS = ["codex-cli", "claude-tmux"];
 const PLAN_SCHEMA_VERSION = 1;
 const LOCK_WAIT_MS = 10_000;
-const STALE_LOCK_MS = 30_000;
+const NO_OWNER_GRACE_MS = 5_000;
 
 class RolePolicyError extends Error {}
 
@@ -106,7 +106,7 @@ function parseJsonFile(sourcePath, label) {
   }
 }
 
-function validateTarget(target, sourcePath, field, allowParallel = true) {
+function validateTarget(target, harness, sourcePath, field, allowParallel = true) {
   if (!isObject(target)) configFail(sourcePath, field, "must be an object");
   const kind = requireString(target.kind, sourcePath, `${field}.kind`);
   if (!KNOWN_TARGET_KINDS.includes(kind)) {
@@ -126,6 +126,9 @@ function validateTarget(target, sourcePath, field, allowParallel = true) {
   }
   if (kind === "native-model") {
     assertKeys(target, ["kind", "model"], sourcePath, field);
+    if (harness !== "claude") {
+      configFail(sourcePath, `${field}.kind`, "native-model targets require the Claude harness");
+    }
     const model = requireString(target.model, sourcePath, `${field}.model`);
     if (!NATIVE_MODELS.includes(model)) {
       configFail(sourcePath, `${field}.model`, "is not a shipped native model");
@@ -149,7 +152,7 @@ function validateTarget(target, sourcePath, field, allowParallel = true) {
   assertKeys(target, ["kind", "targets"], sourcePath, field);
   const targets = requireArray(target.targets, sourcePath, `${field}.targets`);
   if (targets.length === 0) configFail(sourcePath, `${field}.targets`, "must not be empty");
-  targets.forEach((leaf, index) => validateTarget(leaf, sourcePath, `${field}.targets.${index}`, false));
+  targets.forEach((leaf, index) => validateTarget(leaf, harness, sourcePath, `${field}.targets.${index}`, false));
 }
 
 function validateRoleMap(roleMap, policy, sourcePath, field, complete) {
@@ -178,7 +181,7 @@ function validateRoleMap(roleMap, policy, sourcePath, field, complete) {
           if (complete) configFail(sourcePath, laneField, "missing required lane mapping");
           continue;
         }
-        validateTarget(laneMap[lane], sourcePath, laneField);
+        validateTarget(laneMap[lane], harness, sourcePath, laneField);
       }
     }
   }
@@ -332,8 +335,19 @@ function validateRunState(runDir, runId, repoRoot) {
     fail(`external run ${runId} has malformed run state`);
   }
   const dispatchRows = readFileSync(dispatchFile, "utf8").trimEnd().split("\n");
-  if (dispatchRows[0] !== "seq\tts\trole\tpurpose\tparent_seq\toutcome" || dispatchRows.some((line, index) => index > 0 && line.split("\t").length !== 6)) {
+  if (dispatchRows[0] !== "seq\tts\trole\tpurpose\tparent_seq\toutcome") {
     fail(`external run ${runId} has malformed dispatch state`);
+  }
+  const outcomes = new Set(["pending", "ok", "failed", "expired"]);
+  for (let index = 1; index < dispatchRows.length; index += 1) {
+    const fields = dispatchRows[index].split("\t");
+    const expectedSequence = index;
+    if (fields.length !== 6 || fields[0] !== String(expectedSequence) || !outcomes.has(fields[5])) {
+      fail(`external run ${runId} has malformed dispatch state`);
+    }
+    if (fields[4] !== "-" && (!/^[1-9][0-9]*$/.test(fields[4]) || Number(fields[4]) >= expectedSequence)) {
+      fail(`external run ${runId} has malformed dispatch state`);
+    }
   }
   if (row[4] !== "-") {
     try {
@@ -348,8 +362,8 @@ function planPathFor(runDir) {
   return join(runDir, "work", "role-plan.json");
 }
 
-function validatePlanTarget(target, field) {
-  validateTarget(target, "role plan", field);
+function validatePlanTarget(target, harness, field) {
+  validateTarget(target, harness, "role plan", field);
 }
 
 function validateFrozenPlan(plan, runId, repoRoot) {
@@ -374,7 +388,7 @@ function validateFrozenPlan(plan, runId, repoRoot) {
     const matrixKey = `${resolution.responsibility}\u0000${resolution.lane}`;
     if (seen.has(matrixKey)) fail("role plan has duplicate responsibility-by-lane rows");
     seen.add(matrixKey);
-    validatePlanTarget(resolution.target, `resolutions.${resolution.responsibility}.${resolution.lane}.target`);
+    validatePlanTarget(resolution.target, plan.harness, `resolutions.${resolution.responsibility}.${resolution.lane}.target`);
     validateDispatchConstraints(resolution.dispatchConstraints, "role plan", `resolutions.${resolution.responsibility}.${resolution.lane}.dispatchConstraints`);
     for (const source of resolution.provenance) {
       if (!isObject(source) || !["shipped", "machine", "project"].includes(source.kind) || typeof source.path !== "string" || source.path.length === 0) {
@@ -433,6 +447,80 @@ function sleep(milliseconds) {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds));
 }
 
+function ownerPid(owner) {
+  const match = /^pid=([1-9][0-9]*)(?:\t|$)/.exec(owner);
+  return match ? Number(match[1]) : null;
+}
+
+function processIsAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code !== "ESRCH";
+  }
+}
+
+function readPlanLockOwner(lockPath, name = "owner") {
+  try {
+    return readFileSync(join(lockPath, name), "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function lockIsPastOwnerlessGrace(lockPath) {
+  try {
+    return Date.now() - lstatSync(lockPath).mtimeMs >= NO_OWNER_GRACE_MS;
+  } catch {
+    return false;
+  }
+}
+
+function isOwnerlessLock(lockPath) {
+  return !existsSync(join(lockPath, "owner"));
+}
+
+function removeClaim(lockPath, claim) {
+  const claimPath = join(lockPath, "reclaim");
+  try {
+    if (readFileSync(claimPath, "utf8") === claim) rmSync(claimPath, { force: true });
+  } catch {
+    // The lock directory was reclaimed by another contender.
+  }
+}
+
+function reclaimPlanLock(lockPath) {
+  const claim = `pid=${process.pid}\tts=${new Date().toISOString()}\ttoken=${randomUUID()}\n`;
+  try {
+    writeFileSync(join(lockPath, "reclaim"), claim, { encoding: "utf8", flag: "wx", mode: 0o600 });
+  } catch {
+    const existingClaim = readPlanLockOwner(lockPath, "reclaim");
+    const claimant = existingClaim ? ownerPid(existingClaim) : null;
+    if (claimant && !processIsAlive(claimant)) removeClaim(lockPath, existingClaim);
+    return false;
+  }
+  let renamed = false;
+  try {
+    const owner = readPlanLockOwner(lockPath);
+    const pid = owner ? ownerPid(owner) : null;
+    if ((owner && (!pid || processIsAlive(pid))) || (!owner && (!isOwnerlessLock(lockPath) || !lockIsPastOwnerlessGrace(lockPath)))) {
+      return false;
+    }
+    const stalePath = `${lockPath}.stale.${process.pid}.${randomUUID()}`;
+    renameSync(lockPath, stalePath);
+    renamed = true;
+    rmSync(join(stalePath, "owner"), { force: true });
+    rmSync(join(stalePath, "reclaim"), { force: true });
+    rmdirSync(stalePath);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (!renamed) removeClaim(lockPath, claim);
+  }
+}
+
 async function acquirePlanLock(runDir) {
   const lockPath = join(runDir, "work", "role-plan.lock");
   const deadline = Date.now() + LOCK_WAIT_MS;
@@ -440,24 +528,15 @@ async function acquirePlanLock(runDir) {
   while (Date.now() < deadline) {
     try {
       mkdirSync(lockPath);
-      writeFileSync(join(lockPath, "owner"), `${process.pid}\n`, { mode: 0o600 });
-      return lockPath;
+      const owner = `pid=${process.pid}\tts=${new Date().toISOString()}\ttoken=${randomUUID()}\n`;
+      writeFileSync(join(lockPath, "owner"), owner, { mode: 0o600 });
+      return { path: lockPath, owner };
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
-      let lockStat;
-      try {
-        lockStat = lstatSync(lockPath);
-      } catch {
-        continue;
-      }
-      if (Date.now() - lockStat.mtimeMs > STALE_LOCK_MS) {
-        const stalePath = `${lockPath}.stale.${process.pid}`;
-        try {
-          renameSync(lockPath, stalePath);
-          rmSync(stalePath, { recursive: true, force: true });
-        } catch {
-          // Another contender reclaimed the stale lock first.
-        }
+      const owner = readPlanLockOwner(lockPath);
+      const pid = owner ? ownerPid(owner) : null;
+      if ((owner && pid && !processIsAlive(pid)) || (!owner && isOwnerlessLock(lockPath) && lockIsPastOwnerlessGrace(lockPath))) {
+        reclaimPlanLock(lockPath);
       }
       await sleep(25);
     }
@@ -465,8 +544,16 @@ async function acquirePlanLock(runDir) {
   fail(`could not acquire the role-plan lock for ${runDir}`);
 }
 
-function releasePlanLock(lockPath) {
-  rmSync(lockPath, { recursive: true, force: true });
+function releasePlanLock(lock) {
+  try {
+    if (readPlanLockOwner(lock.path) !== lock.owner) return;
+    const releasedPath = `${lock.path}.released.${process.pid}.${randomUUID()}`;
+    renameSync(lock.path, releasedPath);
+    rmSync(join(releasedPath, "owner"), { force: true });
+    rmdirSync(releasedPath);
+  } catch {
+    // A reclaimed or interrupted lock is left for the next contender to inspect.
+  }
 }
 
 function writePlanAtomically(planPath, plan) {

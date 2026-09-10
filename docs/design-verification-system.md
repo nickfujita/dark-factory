@@ -166,6 +166,9 @@ type FrozenRolePlan = Readonly<{
 }>;
 ```
 
+`native-model` targets are valid only for the Claude harness. A `parallel`
+target contains only leaf targets, so groups cannot nest.
+
 ```ts
 function prepareRunRolePlan(input: {
   runId: string;

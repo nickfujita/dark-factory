@@ -5,7 +5,8 @@ normative role policy. It declares every harness, responsibility, and lane.
 This document explains the contract and does not repeat a default table.
 
 `session` inherits the operator's current session model. `native-model` names
-an existing native harness model such as `sonnet` or `opus`. `named-agent`
+an existing Claude model such as `sonnet` or `opus`. Only Claude mappings can
+use it. `named-agent`
 selects a locally defined agent. `cli` uses the harness CLI without model or
 effort flags, and `transport` selects the other harness's approved transport.
 
