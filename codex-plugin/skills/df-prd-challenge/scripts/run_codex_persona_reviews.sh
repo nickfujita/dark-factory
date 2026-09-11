@@ -4,10 +4,12 @@ set -euo pipefail
 # run_codex_persona_reviews.sh — the three PRD challenge persona reviews.
 #
 # Usage:
-#   run_codex_persona_reviews.sh start  <prd-path> <out-dir>
+#   run_codex_persona_reviews.sh start <prd-path> <out-dir> \
+#       --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
 #   run_codex_persona_reviews.sh status <out-dir>
 #   run_codex_persona_reviews.sh wait   <out-dir> [max_wait_seconds]
-#   run_codex_persona_reviews.sh <prd-path> <out-dir>     # legacy: start + wait
+#   run_codex_persona_reviews.sh <prd-path> <out-dir> \
+#       --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
 #
 # The reviews run DETACHED with a wide window and are polled, because a hard
 # foreground timeout kills healthy rounds mid-exploration on a large PRD.
@@ -39,7 +41,6 @@ set -euo pipefail
 #   CODEX_WAIT_SLICE_SECONDS=480   default blocking time for one `wait` call
 #   CODEX_POLL_SECONDS=20          poll interval inside a slice
 #   CODEX_MIN_BODY_BYTES=400       minimum accepted body when findings are claimed
-#   CODEX_REASONING_EFFORT=xhigh   codex model_reasoning_effort
 #   CODEX_REVIEW_MODE=discovery|verification
 #   CODEX_REVIEW_DELTA_FILE=<path> remediation delta, required for verification
 #   CODEX_REVIEW_FORCE=1           allow reusing a non-empty existing out-dir
@@ -48,9 +49,12 @@ WINDOW_SECONDS="${CODEX_WINDOW_SECONDS:-3600}"
 WAIT_SLICE_SECONDS="${CODEX_WAIT_SLICE_SECONDS:-480}"
 POLL_SECONDS="${CODEX_POLL_SECONDS:-20}"
 MIN_BODY_BYTES="${CODEX_MIN_BODY_BYTES:-400}"
-REASONING_EFFORT="${CODEX_REASONING_EFFORT:-xhigh}"
 REVIEW_MODE="${CODEX_REVIEW_MODE:-discovery}"
 DELTA_FILE="${CODEX_REVIEW_DELTA_FILE:-}"
+
+plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+role_caller="$plugin_root/scripts/df-role-caller.sh"
+state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$plugin_root/scripts/df-state.sh}"
 
 PERSONA_SLUGS=(user-advocate technical-feasibility scope-complexity)
 PERSONA_NAMES=("Skeptical User Advocate" "Technical Feasibility Reviewer" "Scope & Complexity Challenger")
@@ -59,10 +63,12 @@ PERSONA_SECTIONS=("Persona 1: Skeptical User Advocate" "Persona 2: Technical Fea
 usage() {
   cat <<'USAGE'
 Usage:
-  run_codex_persona_reviews.sh start  <prd-path> <out-dir>
+  run_codex_persona_reviews.sh start <prd-path> <out-dir> \
+      --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
   run_codex_persona_reviews.sh status <out-dir>
   run_codex_persona_reviews.sh wait   <out-dir> [max_wait_seconds]
-  run_codex_persona_reviews.sh <prd-path> <out-dir>     # legacy: start + wait
+  run_codex_persona_reviews.sh <prd-path> <out-dir> \
+      --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>
 
 The caller's contract is the status file printed by `status` / `wait`:
   STATE=running|complete|partial|failed|limit|timeout
@@ -266,8 +272,24 @@ run_one_persona() {
   local stderr_log="$out_dir/$slug.stderr.log"
   local status_path="$out_dir/$slug.status"
   local pgid_file="$out_dir/$slug.pgid"
+  local df_run df_lane frozen_target dispatch_receipt dispatch_seq resolved_target
+  df_run="$(read_field "$run_meta" DF_RUN)"
+  df_lane="$(read_field "$run_meta" DF_LANE)"
+  frozen_target="$(read_field "$run_meta" ROLE_TARGET_JSON)"
+  dispatch_receipt="$(bash "$role_caller" reserve \
+    --run "$df_run" --lane "$df_lane" --repo-root "$repo_root" \
+    --responsibility persona_reviewers_cli --purpose "prd persona $slug" \
+    --allow-kind cli)"
+  dispatch_seq="$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(receipt.seqs[0]);' "$dispatch_receipt")"
+  resolved_target="$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(JSON.stringify(receipt.preflight.target));' "$dispatch_receipt")"
 
-  write_kv "$status_path" "STATE=running" "MODE=$REVIEW_MODE" "PERSONA=$name"
+  write_kv "$status_path" "STATE=running" "MODE=$REVIEW_MODE" "PERSONA=$name" "DISPATCH_SEQ=$dispatch_seq"
+  if [[ "$resolved_target" != "$frozen_target" ]]; then
+    write_kv "$status_path" "STATE=failed" "MODE=$REVIEW_MODE" "PERSONA=$name" \
+      "DISPATCH_SEQ=$dispatch_seq" "REASON=frozen_role_identity_changed"
+    (cd "$repo_root" && bash "$state_helper" complete "$df_run" "$dispatch_seq" failed) >/dev/null 2>&1 || true
+    return 1
+  fi
 
   local prompt
   prompt="$(persona_prompt "$section" "$prd_rel" "$persona_text")"
@@ -283,7 +305,6 @@ run_one_persona() {
   # findings, and then reports success.
   ${launcher[@]+"${launcher[@]}"} codex exec \
     --sandbox "$sandbox_mode" \
-    --config "model_reasoning_effort=$REASONING_EFFORT" \
     -C "$review_tree" \
     "$prompt" \
     <"/dev/null" \
@@ -353,7 +374,12 @@ run_one_persona() {
 
   write_kv "$status_path" \
     "STATE=$state" "MODE=$REVIEW_MODE" "PERSONA=$name" "EXIT=$codex_exit" \
-    "BODY_BYTES=$bytes" "FINDINGS=$findings" "REASON=$reason"
+    "BODY_BYTES=$bytes" "FINDINGS=$findings" "REASON=$reason" "DISPATCH_SEQ=$dispatch_seq"
+  local dispatch_outcome=failed
+  if [[ "$state" == complete ]]; then dispatch_outcome=ok
+  elif [[ "$state" == timeout ]]; then dispatch_outcome=expired
+  fi
+  (cd "$repo_root" && bash "$state_helper" complete "$df_run" "$dispatch_seq" "$dispatch_outcome") >/dev/null 2>&1 || true
 }
 
 # Roll the three per-persona status files up into the run-level state. Used both
@@ -453,6 +479,7 @@ worker() {
 cmd_start() {
   local prd_path="$1"
   dir_for "$2"
+  local df_run="$3" df_lane="$4" df_repo_root="$5"
 
   if ! command -v codex >/dev/null 2>&1; then
     echo "Error: codex CLI is not installed or not in PATH." >&2
@@ -460,7 +487,7 @@ cmd_start() {
   fi
 
   local repo_root
-  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  repo_root="$(cd "$df_repo_root" && pwd -P)"
   if [[ "$prd_path" != /* ]]; then prd_path="$repo_root/$prd_path"; fi
   if [[ ! -f "$prd_path" ]]; then
     echo "Error: PRD file not found at $prd_path" >&2
@@ -503,9 +530,15 @@ cmd_start() {
   for slug in "${PERSONA_SLUGS[@]}"; do
     rm -f "$out_dir/$slug.body.md" "$out_dir/$slug.stderr.log" "$out_dir/$slug.status"
   done
+  local frozen_preflight frozen_target
+  frozen_preflight="$(bash "$role_caller" preflight \
+    --run "$df_run" --lane "$df_lane" --repo-root "$repo_root" \
+    --responsibility persona_reviewers_cli --allow-kind cli)"
+  frozen_target="$(node -e 'const result = JSON.parse(process.argv[1]); process.stdout.write(JSON.stringify(result.target));' "$frozen_preflight")"
   write_kv "$run_meta" \
     "PRD=$prd_path" "REL=$prd_rel" "REPO_ROOT=$repo_root" "MODE=$REVIEW_MODE" \
-    "WINDOW_SECONDS=$WINDOW_SECONDS" "STARTED_EPOCH=$(date -u +%s)"
+    "WINDOW_SECONDS=$WINDOW_SECONDS" "STARTED_EPOCH=$(date -u +%s)" \
+    "DF_RUN=$df_run" "DF_LANE=$df_lane" "ROLE_TARGET_JSON=$frozen_target"
   # Status is written BEFORE the worker launches so a poller can never observe
   # a missing status file.
   write_kv "$run_status" "STATE=running" "MODE=$REVIEW_MODE" "PERSONAS_OK=0/3"
@@ -581,6 +614,15 @@ reap_if_over_window() {
     fi
     write_kv "$run_status" "STATE=$agg_state" "MODE=$REVIEW_MODE" \
       "PERSONAS_OK=$agg_ok/3" "LIMIT_HITS=$agg_limit" "REASON=$agg_reason"
+    local df_run dispatch_seq persona_state
+    df_run="$(read_field "$run_meta" DF_RUN)"
+    for slug in "${PERSONA_SLUGS[@]}"; do
+      dispatch_seq="$(read_field "$out_dir/$slug.status" DISPATCH_SEQ)"
+      persona_state="$(read_field "$out_dir/$slug.status" STATE)"
+      if [[ "$persona_state" == running && -n "$dispatch_seq" && -n "$df_run" ]]; then
+        (cd "$snap_repo" && bash "$state_helper" complete "$df_run" "$dispatch_seq" expired) >/dev/null 2>&1 || true
+      fi
+    done
   fi
 }
 
@@ -631,8 +673,8 @@ case "$1" in
     ;;
   start)
     shift
-    [[ $# -eq 2 ]] || { usage >&2; exit 1; }
-    cmd_start "$1" "$2"
+    [[ $# -eq 8 && "$3" == --df-run && "$5" == --df-lane && "$7" == --df-repo-root ]] || { usage >&2; exit 1; }
+    cmd_start "$1" "$2" "$4" "$6" "$8"
     ;;
   status)
     shift
@@ -648,8 +690,8 @@ case "$1" in
     usage
     ;;
   *)
-    [[ $# -eq 2 ]] || { usage >&2; exit 1; }
-    cmd_start "$1" "$2" >/dev/null
+    [[ $# -eq 8 && "$3" == --df-run && "$5" == --df-lane && "$7" == --df-repo-root ]] || { usage >&2; exit 1; }
+    cmd_start "$1" "$2" "$4" "$6" "$8" >/dev/null
     cmd_wait "$2" "$((WINDOW_SECONDS + 180))"
     ;;
 esac

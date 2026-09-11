@@ -6,12 +6,12 @@
 #
 # Usage:
 #   df-codex-exec.sh start <name> --cd <dir> --brief <file> \
-#       --model <model> --effort <effort> \
+#       --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root> \
 #       [--sandbox read-only|workspace-write|danger-full-access]
 #   df-codex-exec.sh start <name> --cd <dir> --brief <file> \
-#       --model <model> --effort <effort> \
+#       --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root> \
 #       --dangerously-bypass-approvals-and-sandbox
-#   df-codex-exec.sh resume <name> --prompt <file> [--model M] [--effort E]
+#   df-codex-exec.sh resume <name> --prompt <file>
 #   df-codex-exec.sh status <name>
 #   df-codex-exec.sh transcript <name>
 #
@@ -46,8 +46,9 @@ shift 2
 workdir=''
 brief=''
 prompt=''
-model=''
-effort=''
+df_run=''
+df_lane=''
+df_repo_root=''
 sandbox=''
 dangerous_bypass='false'
 security_option_seen='false'
@@ -69,14 +70,19 @@ while [[ $# -gt 0 ]]; do
       prompt=$2
       shift 2
       ;;
-    --model)
-      [[ $# -ge 2 ]] || die '--model needs a value'
-      model=$2
+    --df-run)
+      [[ $# -ge 2 ]] || die '--df-run needs a value'
+      df_run=$2
       shift 2
       ;;
-    --effort)
-      [[ $# -ge 2 ]] || die '--effort needs a value'
-      effort=$2
+    --df-lane)
+      [[ $# -ge 2 ]] || die '--df-lane needs a value'
+      df_lane=$2
+      shift 2
+      ;;
+    --df-repo-root)
+      [[ $# -ge 2 ]] || die '--df-repo-root needs a path'
+      df_repo_root=$2
       shift 2
       ;;
     --sandbox)
@@ -104,6 +110,113 @@ done
 state_root=${DF_CODEX_STATE_ROOT:-${XDG_STATE_HOME:-${HOME:-/tmp}/.local/state}/dark-factory/codex}
 session_dir=$state_root/$session_name
 meta=$session_dir/meta
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+role_caller="$script_dir/df-role-caller.sh"
+state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$script_dir/df-state.sh}"
+
+preflight_target() {
+  local preflight target status
+  preflight="$(bash "$role_caller" preflight \
+    --run "$df_run" --lane "$df_lane" --repo-root "$df_repo_root" \
+    --responsibility cross_model_review \
+    --allow-kind transport --allow-transport codex-cli)"
+  status=$?
+  if (( status != 0 )); then
+    printf 'df-codex-exec: frozen-role preflight failed\n' >&2
+    return "$status"
+  fi
+  target="$(node -e '
+    try {
+      const result = JSON.parse(process.argv[1]);
+      if (!result || typeof result !== "object" || !result.target || typeof result.target !== "object") throw new Error();
+      process.stdout.write(JSON.stringify(result.target));
+    } catch {
+      process.stderr.write("df-codex-exec: role preflight returned an invalid target receipt\n");
+      process.exit(1);
+    }
+  ' "$preflight")"
+  status=$?
+  (( status == 0 )) || return "$status"
+  [[ -n "$target" ]] || { printf 'df-codex-exec: role preflight returned an empty target\n' >&2; return 1; }
+  printf '%s\n' "$target"
+}
+
+reserve_turn() {
+  local receipt parsed current_target seq recovery_seq status
+
+  current_target="$(preflight_target)"
+  status=$?
+  (( status == 0 )) || return "$status"
+  if [[ "$current_target" != "$META_ROLE_TARGET" ]]; then
+    printf 'df-codex-exec: frozen role identity changed; start a new durable Codex session\n' >&2
+    return 1
+  fi
+
+  receipt="$(bash "$role_caller" reserve \
+    --run "$df_run" --lane "$df_lane" --repo-root "$df_repo_root" \
+    --responsibility cross_model_review --purpose "durable Codex turn $1" \
+    --allow-kind transport --allow-transport codex-cli)"
+  status=$?
+  if (( status != 0 )); then
+    printf 'df-codex-exec: dispatch reservation failed\n' >&2
+    return "$status"
+  fi
+
+  parsed="$(node -e '
+    try {
+      const receipt = JSON.parse(process.argv[1]);
+      if (!receipt || typeof receipt !== "object" ||
+          !receipt.preflight || typeof receipt.preflight !== "object" ||
+          !receipt.preflight.target || typeof receipt.preflight.target !== "object" ||
+          !Array.isArray(receipt.seqs) || receipt.seqs.length !== 1 ||
+          !/^[1-9][0-9]*$/.test(String(receipt.seqs[0]))) throw new Error();
+      process.stdout.write(`${JSON.stringify(receipt.preflight.target)}\n${receipt.seqs[0]}`);
+    } catch {
+      process.stderr.write("df-codex-exec: reservation helper returned an invalid receipt\n");
+      process.exit(1);
+    }
+  ' "$receipt")"
+  status=$?
+  if (( status != 0 )); then
+    recovery_seq="$(node -e '
+      try {
+        const receipt = JSON.parse(process.argv[1]);
+        if (Array.isArray(receipt.seqs) && receipt.seqs.length === 1 && /^[1-9][0-9]*$/.test(String(receipt.seqs[0]))) {
+          process.stdout.write(String(receipt.seqs[0]));
+        }
+      } catch {}
+    ' "$receipt" 2>/dev/null)"
+    [[ -z "$recovery_seq" ]] || complete_turn "$recovery_seq" failed
+    return "$status"
+  fi
+  current_target=${parsed%%$'\n'*}
+  seq=${parsed#*$'\n'}
+  if [[ "$current_target" != "$META_ROLE_TARGET" ]]; then
+    complete_turn "$seq" failed
+    printf 'df-codex-exec: frozen role identity changed; start a new durable Codex session\n' >&2
+    return 1
+  fi
+  printf '%s\n' "$seq"
+}
+
+complete_turn() {
+  local seq=$1 outcome=$2
+  (cd "$df_repo_root" && bash "$state_helper" complete "$df_run" "$seq" "$outcome") >/dev/null 2>&1 || true
+}
+
+active_turn_seq=''
+close_active_turn() {
+  local exit_code=$?
+  if [[ -n "$active_turn_seq" ]]; then
+    local outcome=failed
+    [[ "$exit_code" -eq 0 ]] && outcome=ok
+    complete_turn "$active_turn_seq" "$outcome"
+    active_turn_seq=''
+  fi
+  return "$exit_code"
+}
+trap close_active_turn EXIT
+trap 'exit 143' TERM INT
 
 next_turn() {
   local highest=0 file turn
@@ -121,10 +234,26 @@ load_meta() {
   # Values were written with printf %q below.
   # shellcheck disable=SC1090
   source "$meta"
-  [[ -n "$model" ]] || model=$META_MODEL
-  [[ -n "$effort" ]] || effort=$META_EFFORT
+  [[ -n "${META_DIR:-}" ]] || die "legacy session '$session_name' has no META_DIR; start a new session"
+  [[ -n "${META_DF_RUN:-}" ]] || die "legacy session '$session_name' has no META_DF_RUN; start a new session"
+  [[ -n "${META_DF_LANE:-}" ]] || die "legacy session '$session_name' has no META_DF_LANE; start a new session"
+  [[ -n "${META_DF_REPO_ROOT:-}" ]] || die "legacy session '$session_name' has no META_DF_REPO_ROOT; start a new session"
+  [[ -n "${META_ROLE_TARGET:-}" ]] || die "legacy session '$session_name' has no META_ROLE_TARGET; start a new session"
+  node -e '
+    try {
+      const target = JSON.parse(process.argv[1]);
+      if (!target || typeof target !== "object") throw new Error();
+    } catch {
+      process.stderr.write("df-codex-exec: persisted META_ROLE_TARGET is invalid; start a new session\n");
+      process.exit(1);
+    }
+  ' "$META_ROLE_TARGET" || exit $?
   workdir=$META_DIR
+  df_run=$META_DF_RUN
+  df_lane=$META_DF_LANE
+  df_repo_root=$META_DF_REPO_ROOT
   if [[ -n "${META_DANGEROUS_BYPASS+x}" ]]; then
+    [[ -n "${META_SANDBOX:-}" ]] || die "session '$session_name' has no META_SANDBOX; start a new session"
     sandbox=$META_SANDBOX
     dangerous_bypass=$META_DANGEROUS_BYPASS
   else
@@ -171,7 +300,12 @@ run_turn() {
   local last=$session_dir/turn-$turn.last.md
   local stderr_log=$session_dir/turn-$turn.stderr.log
   local -a codex_args
+  local dispatch_seq
 
+  dispatch_seq="$(reserve_turn "$turn")"
+  local reserve_status=$?
+  (( reserve_status == 0 )) || return "$reserve_status"
+  active_turn_seq=$dispatch_seq
   printf '%s\n' "$$" > "$session_dir/turn-$turn.pid"
   date -u +%FT%TZ > "$session_dir/turn-$turn.started"
 
@@ -180,8 +314,6 @@ run_turn() {
     --json
     --skip-git-repo-check
     -C "$workdir"
-    -m "$model"
-    -c "model_reasoning_effort=\"$effort\""
     -o "$last"
   )
   if [[ "$dangerous_bypass" == 'true' ]]; then
@@ -200,6 +332,10 @@ run_turn() {
   printf '%s\n' "$exit_code" > "$session_dir/turn-$turn.exit"
   rm -f "$session_dir/turn-$turn.pid"
   record_thread_id "$events"
+  local outcome=ok
+  [[ "$exit_code" -eq 0 ]] || outcome=failed
+  complete_turn "$dispatch_seq" "$outcome"
+  active_turn_seq=''
 
   printf 'session=%s turn=%s exit=%s thread=%s\n' \
     "$session_name" "$turn" "$exit_code" "$(cat "$session_dir/thread.id" 2>/dev/null || printf unknown)"
@@ -248,12 +384,13 @@ run_turn_with_retry() {
 case "$command_name" in
   start)
     [[ -n "$workdir" && -n "$brief" ]] || die 'start needs --cd and --brief'
+    [[ -n "$df_run" && -n "$df_lane" && -n "$df_repo_root" ]] \
+      || die 'start needs --df-run, --df-lane, and --df-repo-root'
     [[ -d "$workdir" ]] || die "no such directory: $workdir"
     [[ -f "$brief" ]] || die "no such brief: $brief"
     workdir=$(cd "$workdir" && pwd -P)
+    df_repo_root=$(cd "$df_repo_root" && pwd -P)
     [[ "$brief" == /* ]] || brief=$PWD/$brief
-    [[ -n "$model" ]] || die 'start needs --model; never inherit it silently'
-    [[ -n "$effort" ]] || die 'start needs --effort; never inherit it silently'
     [[ ! -f "$meta" ]] || die "session '$session_name' already exists; use resume" 2
     [[ -z "$prompt" ]] || die 'start does not accept --prompt'
     [[ "$dangerous_bypass" == 'true' || -z "$sandbox" ]] || case "$sandbox" in
@@ -261,9 +398,12 @@ case "$command_name" in
       *) die "unsupported sandbox mode: $sandbox" ;;
     esac
     [[ -n "$sandbox" ]] || sandbox='workspace-write'
+    META_ROLE_TARGET="$(preflight_target)"
+    preflight_status=$?
+    (( preflight_status == 0 )) || exit "$preflight_status"
     mkdir -p "$session_dir"
-    printf 'META_DIR=%q\nMETA_MODEL=%q\nMETA_EFFORT=%q\nMETA_SANDBOX=%q\nMETA_DANGEROUS_BYPASS=%q\nMETA_BRIEF=%q\n' \
-      "$workdir" "$model" "$effort" "$sandbox" "$dangerous_bypass" "$brief" > "$meta"
+    printf 'META_DIR=%q\nMETA_DF_RUN=%q\nMETA_DF_LANE=%q\nMETA_DF_REPO_ROOT=%q\nMETA_ROLE_TARGET=%q\nMETA_SANDBOX=%q\nMETA_DANGEROUS_BYPASS=%q\nMETA_BRIEF=%q\n' \
+      "$workdir" "$df_run" "$df_lane" "$df_repo_root" "$META_ROLE_TARGET" "$sandbox" "$dangerous_bypass" "$brief" > "$meta"
     cp "$brief" "$session_dir/turn-1.prompt.md"
     run_turn_with_retry 1 "$brief" start
     ;;
@@ -271,7 +411,7 @@ case "$command_name" in
     [[ -n "$prompt" && -f "$prompt" ]] || die 'resume needs --prompt <file>'
     [[ "$prompt" == /* ]] || prompt=$PWD/$prompt
     [[ -z "$workdir" && -z "$brief" ]] || die 'resume does not accept --cd or --brief'
-    [[ "$security_option_seen" == 'false' ]] || die 'resume keeps the session sandbox fixed; security options belong on start'
+    [[ "$security_option_seen" == 'false' && -z "$df_run$df_lane$df_repo_root" ]] || die 'resume keeps its frozen role and sandbox; those options belong on start'
     load_meta
     assert_idle
     thread_id=$(cat "$session_dir/thread.id" 2>/dev/null || true)
@@ -281,15 +421,15 @@ case "$command_name" in
     run_turn_with_retry "$turn" "$prompt" resume "$thread_id"
     ;;
   status)
-    [[ -z "$workdir$brief$prompt$model$effort$sandbox" && "$security_option_seen" == 'false' ]] \
+    [[ -z "$workdir$brief$prompt$df_run$df_lane$df_repo_root$sandbox" && "$security_option_seen" == 'false' ]] \
       || die 'status accepts only a session name'
     load_meta
     thread_id=$(cat "$session_dir/thread.id" 2>/dev/null || printf unknown)
     turn=$(( $(next_turn) - 1 ))
     running='no'
     active_wrapper_pid >/dev/null && running='yes'
-    printf 'session=%s dir=%s model=%s effort=%s thread=%s turns=%s running=%s\n' \
-      "$session_name" "$workdir" "$model" "$effort" "$thread_id" "$turn" "$running"
+    printf 'session=%s dir=%s role=%s lane=%s thread=%s turns=%s running=%s\n' \
+      "$session_name" "$workdir" "$df_run" "$df_lane" "$thread_id" "$turn" "$running"
     for ((i=1; i<=turn; i++)); do
       printf '  turn %s: exit=%s started=%s last=%s\n' \
         "$i" \
@@ -299,7 +439,7 @@ case "$command_name" in
     done
     ;;
   transcript)
-    [[ -z "$workdir$brief$prompt$model$effort$sandbox" && "$security_option_seen" == 'false' ]] \
+    [[ -z "$workdir$brief$prompt$df_run$df_lane$df_repo_root$sandbox" && "$security_option_seen" == 'false' ]] \
       || die 'transcript accepts only a session name'
     load_meta
     thread_id=$(cat "$session_dir/thread.id" 2>/dev/null || true)

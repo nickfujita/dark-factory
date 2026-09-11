@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: run_codex_spec_review.sh <prd-path> <selection-ref> <repo-root> <base-ref> <output-path>
+# Usage: run_codex_spec_review.sh <prd-path> <selection-ref> <repo-root> \
+#   <base-ref> <output-path> --df-run <run-id> --df-lane <lane> \
+#   --df-repo-root <consumer-root>
 # Runs a Codex CLI spec compliance review of the branch diff against the PRD
 # and sealed recipe selection. Codex reads the files and computes the diff
 # internally. The selection identities are explicit review input.
@@ -18,8 +20,8 @@ set -euo pipefail
 # created for this review and deleted after. The status output says which mode
 # actually ran.
 
-if [[ $# -ne 5 ]]; then
-  echo "Usage: run_codex_spec_review.sh <prd-path> <selection-ref> <repo-root> <base-ref> <output-path>" >&2
+if [[ $# -ne 11 ]]; then
+  echo "Usage: run_codex_spec_review.sh <prd-path> <selection-ref> <repo-root> <base-ref> <output-path> --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>" >&2
   exit 1
 fi
 
@@ -38,13 +40,39 @@ else
   echo "Error: cannot find df-code-review-selection.mjs. Invoke this wrapper from the Dark Factory installation or checkout named by the session hook." >&2
   exit 1
 fi
+df_root="$(cd "$df_root" && pwd -P)"
 selection_tool="$df_root/scripts/df-code-review-selection.mjs"
+role_caller="$df_root/scripts/df-role-caller.sh"
+state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$df_root/scripts/df-state.sh}"
 
 prd_path="$1"
 selection_ref="$2"
 repo_root="$3"
 base_ref="$4"
 out_path="$5"
+shift 5
+
+df_run=''
+df_lane=''
+df_repo_root=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --df-run) df_run=$2; shift 2 ;;
+    --df-lane) df_lane=$2; shift 2 ;;
+    --df-repo-root) df_repo_root=$2; shift 2 ;;
+    *) echo "Error: unknown role-dispatch option '$1'" >&2; exit 1 ;;
+  esac
+done
+[[ -n "$df_run" && -n "$df_lane" && -n "$df_repo_root" ]] || {
+  echo "Error: --df-run, --df-lane, and --df-repo-root are required." >&2
+  exit 1
+}
+repo_root="$(cd "$repo_root" && pwd -P)"
+df_repo_root="$(cd "$df_repo_root" && pwd -P)"
+if [[ "$repo_root" != "$df_repo_root" ]]; then
+  echo "Error: repo-root and --df-repo-root must name the same consumer checkout." >&2
+  exit 1
+fi
 
 MIN_BODY_BYTES="${CODEX_MIN_BODY_BYTES:-400}"
 
@@ -90,7 +118,18 @@ cleanup_snapshot() {
   rm -rf "$snapshot_dir"
   snapshot_dir=""
 }
-trap cleanup_snapshot EXIT
+dispatch_seq=''
+complete_dispatch() {
+  local exit_code=$?
+  if [[ -n "$dispatch_seq" ]]; then
+    local outcome=ok
+    [[ "$exit_code" -eq 0 ]] || outcome=failed
+    (cd "$repo_root" && bash "$state_helper" complete "$df_run" "$dispatch_seq" "$outcome") >/dev/null 2>&1 || true
+  fi
+  cleanup_snapshot
+  return "$exit_code"
+}
+trap complete_dispatch EXIT
 
 if ! unshare --net true 2>/dev/null; then
   snapshot_dir="$(mktemp -d "${TMPDIR:-/tmp}/df-review-snapshot.XXXXXX")"
@@ -177,10 +216,15 @@ validate_body() {
 # the PRD and sealed selection and how to get the diff. stdin
 # is closed: a reviewer that blocks on stdin produces a header and no
 # findings, then reports success.
+dispatch_receipt="$(bash "$role_caller" reserve \
+  --run "$df_run" --lane "$df_lane" --repo-root "$repo_root" \
+  --responsibility cross_model_review --purpose 'code review spec' \
+  --allow-kind transport --allow-transport codex-cli)"
+dispatch_seq="$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(receipt.seqs[0]);' "$dispatch_receipt")"
+
 codex_exit=0
 codex exec \
   --sandbox "$sandbox_mode" \
-  --config model_reasoning_effort=xhigh \
   -C "$review_tree" \
   "You are an independent spec compliance reviewer. Verify that the implementation
 satisfies the approved PRD and every identity in the sealed verification selection.

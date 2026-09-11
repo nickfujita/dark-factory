@@ -6,6 +6,13 @@ disable-model-invocation: true
 
 # Code Review
 
+For every shell caller, use the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md` and invoke its runtime
+wrapper under `<df-root>`, never from a copied global skill directory.
+Native discovery and second-opinion calls use `discovery_reviewers`; fresh
+delta-verification calls use `recheck_leaf_reviewers`. This parent owns each
+native leaf's terminal completion under the inventory's native contract.
+
 Review a feature branch in **one whole-branch discovery pass on a frozen tree**,
 then verify the remediation and stop. There is no round loop. Fixes are applied
 autonomously — the user is not asked to approve findings one by one. Chains to
@@ -87,12 +94,13 @@ work now is the dispatch budget plus a shape that runs discovery exactly once.
 
 ## Dispatch reservations
 
-Every reviewer dispatch reserves a seq through `$DF_ROOT/scripts/df-state.sh` **before**
-it spawns, and the reservation is spent the moment it lands:
-
-```bash
-seq=$(bash "$DF_ROOT/scripts/df-state.sh" reserve "<run-id>" discovery_reviewers "code review discovery, claude leg")
-```
+Every reviewer dispatch follows the executable native or shell contract in
+`$DF_ROOT/references/role-callers-inventory.md`. Native callers preflight the
+responsibility, verify the returned target, reserve through the canonical
+caller, record the selected identity with the receipt, and complete every seq
+with a terminal outcome. Shell wrappers own the same lifecycle internally.
+Never split preflight from a direct state reservation; that bypasses frozen
+target selection and leaves completion ownership ambiguous.
 
 Reserving covers the discovery reviewers, every delta-verification leg, any
 retry after a crashed run, the second-opinion pass, the flag-flip pass, and
@@ -187,7 +195,9 @@ where `<timestamp>` is `YYYY-MM-DDTHH-MM-SSZ` (UTC).
 ## Step 2: The discovery pass
 
 **One pass. Every reviewer the lane calls for, in parallel, in a single
-message, all reading `REVIEW_SHA`.** Reserve each dispatch first.
+message, all reading `REVIEW_SHA`.** Preflight `discovery_reviewers`, inspect
+the returned native target, then reserve one sequence per reviewer before the
+child calls.
 
 Sub-agents do not inherit shell variables or context. State the concrete diff
 path (`<REVIEW_ROOT>/branch-diff.txt`), `REVIEW_SHA`, `PRD_PATH`, selection
@@ -247,21 +257,24 @@ review_dir="<REVIEW_ROOT from Step 1>"
 base_ref="<base_ref from Step 1>"
 DARK_FACTORY_ROOT="$DF_ROOT" bash "$quality_script" \
   "$PRD_PATH" "$SELECTION_REF" "$REPO_ROOT" "$base_ref" \
-  "$review_dir/codex-quality-review.md"
+  "$review_dir/codex-quality-review.md" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "$REPO_ROOT"
 ```
 
 **Codex Spec (High-consequence only):**
 ```bash
 spec_script="$DF_ROOT/skills/df-code-review/scripts/run_codex_spec_review.sh"
-[[ -f "$spec_script" ]] || { echo "ERROR: no Claude spec wrapper under $DF_ROOT" >&2; exit 1; }
+[[ -f "$spec_script" ]] || { echo "ERROR: no Codex spec wrapper under $DF_ROOT" >&2; exit 1; }
 review_dir="<REVIEW_ROOT from Step 1>"
 base_ref="<base_ref from Step 1>"
 DARK_FACTORY_ROOT="$DF_ROOT" bash "$spec_script" \
   "$PRD_PATH" "$SELECTION_REF" "$REPO_ROOT" "$base_ref" \
-  "$review_dir/codex-spec-review.md"
+  "$review_dir/codex-spec-review.md" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "$REPO_ROOT"
 ```
 
-Both scripts are fail-closed: an empty or structurally invalid review is a
+Both scripts own frozen-role preflight, reservation, and completion. They are
+fail-closed: an empty or structurally invalid review is a
 non-zero exit and **no reviewer opinion**, never a clean result. Read the
 stderr log next to the output rather than guessing.
 
@@ -328,7 +341,8 @@ gets, who verifies, the verdict block, and how to read the result.
 
 In short. Assemble the delta (each finding as raised, its disposition and
 reason, the fix diff, the test evidence, plus `git diff <REVIEW_SHA>..HEAD` and
-the fixed unresolved list). Reserve a dispatch per verifying leg. Send it back
+the fixed unresolved list). Preflight `recheck_leaf_reviewers` and reserve a
+dispatch per fresh native verifying leg. Send it back
 to the reviewer that raised the findings, in its thread where the harness can
 continue one; where it cannot — the CLI legs are fresh processes every time —
 dispatch an in-session reviewer at `RECHECK_TIER` with the original finding text

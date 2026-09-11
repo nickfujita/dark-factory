@@ -5,9 +5,15 @@ description: "Spawn N parallel candidates at the same task, pick a base, graft t
 
 # Arena
 
+Every background runner uses the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md`, then invoke required
+runtime wrappers under `<df-root>`, never from a copied global skill directory.
+Candidate calls use `design_runners`; this parent owns terminal completion for
+each leaf. Follow the inventory's native contract before every child call.
+
 Fan out N parallel attempts at the same task. Read every candidate end to end. Pick the strongest as the base. Graft the best ideas from the others into it. Verify the synthesized result.
 
-The arena is token-expensive by design and gated accordingly. It runs only in the High-consequence lane, only when the operator invokes it by hand, and never as a default step of any playbook. df-design owns routine design exploration; the arena is for work where one attempt at a non-trivial artifact would lock in the wrong shape, and the operator has judged the redundancy worth paying for. Inside a df run, reserve every candidate and the judge through `scripts/df-state.sh` before spawning; they are nested dispatches against the run's budget. The script lands in this same wave; until it is on disk, write the reservation lines to the run state file by hand, still before spawning.
+The arena is token-expensive by design and gated accordingly. It runs only in the High-consequence lane, only when the operator invokes it by hand, and never as a default step of any playbook. df-design owns routine design exploration; the arena is for work where one attempt at a non-trivial artifact would lock in the wrong shape, and the operator has judged the redundancy worth paying for. Inside a df run, use the inventory's native contract for every candidate. The cross-family judge uses its listed shell transport. These nested dispatches count against the run budget.
 
 Principle names in this skill cite `../df/references/principles.md`.
 
@@ -28,7 +34,7 @@ The N candidates receive the same prompt, so the prompt is the contract. Get it 
 
 1. State the artifact each candidate is producing.
 2. Derive the rubric. State what success looks like for *this* task, then turn it into 3 to 6 concrete gradeable criteria. Concrete: `Adds a --dry-run flag that skips writes`. Vague: `code is correct`. The rubric is the picker's tool in Phase D; candidates only see the task.
-3. Pick the runners. The panel resolves through the `design_runners` role in `../df/references/model-policy.md`, never a hardcoded slug; the arena runs in the High-consequence lane, so the role's full panel runs. The operator may name extra arms when the arena covers multiple design directions, and the same model N times is right when the work is generation-bound rather than judgment-sensitive.
+3. Pick the runners. The panel resolves through the `design_runners` responsibility in `../df/references/model-policy.md`, never a hardcoded slug; the arena runs in the High-consequence lane, so the role's full ordered panel runs. The operator may name extra arms when the arena covers multiple design directions. Each extra native call needs its own declared policy responsibility; do not invent a target at this site.
 4. Assign output paths. Each candidate writes to its own git worktree, per the separate-before-serializing-shared-state principle; N candidates writing to one path is shared mutable state. A per-candidate subdirectory under the session scratchpad serves only for artifacts that do not live in the repo.
 
 ## Phase B: Fan out

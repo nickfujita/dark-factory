@@ -40,10 +40,12 @@ git -C "$repo" add app.txt
 git -C "$repo" -c user.name='Fixture Author' -c user.email='fixture@example.invalid' commit -qm feature
 base_ref=$(git -C "$repo" rev-parse HEAD~1)
 
-node - "$repo" "$scratch/selection.json" "$scratch/no-route.json" <<'NODE'
+claude_run=review-selection-claude
+codex_run=review-selection-codex
+node - "$repo" "$scratch/selection-claude.json" "$scratch/selection-codex.json" "$scratch/no-route.json" <<'NODE'
 const { createHash } = require("node:crypto");
 const { readFileSync, writeFileSync } = require("node:fs");
-const [repo, selectionPath, noRoutePath] = process.argv.slice(2);
+const [repo, claudePath, codexPath, noRoutePath] = process.argv.slice(2);
 const hash = (path) => createHash("sha256").update(readFileSync(`${repo}/${path}`)).digest("hex");
 const entry = (id, medium, skillPath, recipePath, subFeature, requirements, negatives) => ({
   id,
@@ -56,10 +58,9 @@ const entry = (id, medium, skillPath, recipePath, subFeature, requirements, nega
   requirementIds: requirements,
   negativeRequirementIds: negatives,
 });
-writeFileSync(selectionPath, JSON.stringify({
+const selection = {
   schemaVersion: 1,
   kind: "user-facing",
-  runId: "review-selection",
   featureSlug: "synthetic-review",
   prdPath: "docs/prd.md",
   prdSha256: hash("docs/prd.md"),
@@ -70,11 +71,13 @@ writeFileSync(selectionPath, JSON.stringify({
     entry("dashboard-remove", "dashboard", "skills/dashboard.md", "recipes/shared.md", "remove", [], ["NEG-001"]),
     entry("cli-list", "cli-agent", "skills/cli.md", "recipes/cli.md", null, ["REQ-002"], []),
   ],
-}, null, 2));
+};
+writeFileSync(claudePath, JSON.stringify({ ...selection, runId: "review-selection-claude" }, null, 2));
+writeFileSync(codexPath, JSON.stringify({ ...selection, runId: "review-selection-codex" }, null, 2));
 writeFileSync(noRoutePath, JSON.stringify({
   schemaVersion: 1,
   kind: "no-user-route",
-  runId: "review-selection",
+  runId: "review-selection-claude",
   featureSlug: "synthetic-no-route",
   prdPath: "docs/prd.md",
   prdSha256: hash("docs/prd.md"),
@@ -83,10 +86,15 @@ writeFileSync(noRoutePath, JSON.stringify({
 }, null, 2));
 NODE
 
-(cd "$repo" && bash "$root/scripts/df-state.sh" init review-selection standard 20 120 "synthetic code review") >/dev/null
-selection_ref=$(node "$root/scripts/df-selection.mjs" seal --run review-selection --draft "$scratch/selection.json" --repo-root "$repo" | awk -F= '/^SELECTION_REF=/{print $2}')
-no_route_ref=$(node "$root/scripts/df-selection.mjs" seal --run review-selection --draft "$scratch/no-route.json" --repo-root "$repo" | awk -F= '/^SELECTION_REF=/{print $2}')
-[[ -n "$selection_ref" && -n "$no_route_ref" ]] || fail "synthetic selections did not seal"
+for run in "$claude_run" "$codex_run"; do
+  (cd "$repo" && bash "$root/scripts/df-state.sh" init "$run" standard 20 120 "synthetic code review") >/dev/null
+done
+node "$root/scripts/df-role.mjs" prepare-run --run "$claude_run" --harness claude --repo-root "$repo" >/dev/null
+node "$root/codex-plugin/scripts/df-role.mjs" prepare-run --run "$codex_run" --harness codex --repo-root "$repo" >/dev/null
+selection_ref_claude=$(node "$root/scripts/df-selection.mjs" seal --run "$claude_run" --draft "$scratch/selection-claude.json" --repo-root "$repo" | awk -F= '/^SELECTION_REF=/{print $2}')
+selection_ref_codex=$(node "$root/scripts/df-selection.mjs" seal --run "$codex_run" --draft "$scratch/selection-codex.json" --repo-root "$repo" | awk -F= '/^SELECTION_REF=/{print $2}')
+no_route_ref=$(node "$root/scripts/df-selection.mjs" seal --run "$claude_run" --draft "$scratch/no-route.json" --repo-root "$repo" | awk -F= '/^SELECTION_REF=/{print $2}')
+[[ -n "$selection_ref_claude" && -n "$selection_ref_codex" && -n "$no_route_ref" ]] || fail "synthetic selections did not seal"
 
 workers="$scratch/workers"
 snapshots="$scratch/snapshots"
@@ -208,16 +216,20 @@ codex_runner="$root/codex-plugin/skills/df-code-review/scripts/run_codex_subagen
 tmux_runner="$root/codex-plugin/skills/df-code-review/scripts/run_claude_code_reviews_tmux.sh"
 
 echo '== source quality and frozen snapshot =='
-DARK_FACTORY_ROOT="$root" bash "$quality_runner" docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/quality.md"
-grep -Fq "Selection digest: ${selection_ref##*:sha256:}" "$reports/quality.md"
+DARK_FACTORY_ROOT="$root" bash "$quality_runner" \
+  docs/prd.md "$selection_ref_claude" "$repo" "$base_ref" "$reports/quality.md" \
+  --df-run "$claude_run" --df-lane standard --df-repo-root "$repo"
+grep -Fq "Selection digest: ${selection_ref_claude##*:sha256:}" "$reports/quality.md"
 grep -Fq 'Entry "dashboard-create"' "$reports/quality.md"
 grep -Fq 'Entry "dashboard-remove"' "$reports/quality.md"
 grep -Fq 'Entry "cli-list"' "$reports/quality.md"
 [[ -f "$reports/quality.md.selection.json" ]] || fail "quality runner did not write a sealed selection input"
 
 echo '== source spec and frozen snapshot =='
-DARK_FACTORY_ROOT="$root" bash "$source_runner" docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/source.md"
-grep -Fq "Selection digest: ${selection_ref##*:sha256:}" "$reports/source.md"
+DARK_FACTORY_ROOT="$root" bash "$source_runner" \
+  docs/prd.md "$selection_ref_claude" "$repo" "$base_ref" "$reports/source.md" \
+  --df-run "$claude_run" --df-lane standard --df-repo-root "$repo"
+grep -Fq "Selection digest: ${selection_ref_claude##*:sha256:}" "$reports/source.md"
 grep -Fq 'Entry "dashboard-create"' "$reports/source.md"
 grep -Fq 'Entry "dashboard-remove"' "$reports/source.md"
 grep -Fq 'Entry "cli-list"' "$reports/source.md"
@@ -228,18 +240,21 @@ pass 'source quality and spec runners preserve all selected identities in frozen
 
 echo '== installed Codex wrappers =='
 DARK_FACTORY_ROOT="$root/codex-plugin" DARK_FACTORY_REVIEW_DIR="$reports/codex-work" \
-  bash "$codex_runner" docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/codex"
+  bash "$codex_runner" docs/prd.md "$selection_ref_codex" "$repo" "$base_ref" "$reports/codex" \
+  --df-run "$codex_run" --df-lane standard --df-repo-root "$repo"
 for report in "$reports/codex"/*-review.md; do
-  grep -Fq "Selection digest: ${selection_ref##*:sha256:}" "$report"
+  grep -Fq "Selection digest: ${selection_ref_codex##*:sha256:}" "$report"
   grep -Fq 'Entry "dashboard-remove"' "$report"
 done
 pass 'Codex multi-review wrapper keeps every selected identity in each report header'
 
 echo '== tmux transport =='
 CLAUDE_REVIEW_STARTUP_DELAY=0 CLAUDE_REVIEW_TIMEOUT_SECONDS=5 \
-  DARK_FACTORY_ROOT="$root/codex-plugin" bash "$tmux_runner" docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/claude"
+  DARK_FACTORY_ROOT="$root/codex-plugin" bash "$tmux_runner" \
+  docs/prd.md "$selection_ref_codex" "$repo" "$base_ref" "$reports/claude" \
+  --df-run "$codex_run" --df-lane standard --df-repo-root "$repo"
 for report in "$reports/claude"/*-review.md; do
-  grep -Fq "Selection digest: ${selection_ref##*:sha256:}" "$report"
+  grep -Fq "Selection digest: ${selection_ref_codex##*:sha256:}" "$report"
   grep -Fq 'Entry "cli-list"' "$report"
 done
 [[ $(wc -l <"$tmux_cwds") -eq 2 ]] || fail 'tmux did not start both reviewers in a snapshot'
@@ -247,7 +262,8 @@ while IFS= read -r cwd; do [[ ! -e "$cwd" ]] || fail "tmux review snapshot survi
 pass 'tmux reviewers use a frozen selected-input snapshot and retain sealed identities'
 
 if TMPDIR="$scratch" FAKE_TMUX_SWAP_DIGEST=1 CLAUDE_REVIEW_STARTUP_DELAY=0 CLAUDE_REVIEW_TIMEOUT_SECONDS=5 \
-  DARK_FACTORY_ROOT="$root/codex-plugin" bash "$tmux_runner" docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/claude-swapped" \
+  DARK_FACTORY_ROOT="$root/codex-plugin" bash "$tmux_runner" docs/prd.md "$selection_ref_codex" "$repo" "$base_ref" "$reports/claude-swapped" \
+  --df-run "$codex_run" --df-lane standard --df-repo-root "$repo" \
   >"$scratch/swapped.out" 2>"$scratch/swapped.err"; then
   fail 'tmux transport accepted a swapped selection digest'
 fi
@@ -255,7 +271,8 @@ grep -Fq 'quality: selection_header' "$scratch/swapped.err"
 pass 'a reviewer report with a swapped selection digest is rejected'
 
 if TMPDIR="$scratch" FAKE_TMUX_SWAP_IDENTITY=1 CLAUDE_REVIEW_STARTUP_DELAY=0 CLAUDE_REVIEW_TIMEOUT_SECONDS=5 \
-  DARK_FACTORY_ROOT="$root/codex-plugin" bash "$tmux_runner" docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/claude-identity-swapped" \
+  DARK_FACTORY_ROOT="$root/codex-plugin" bash "$tmux_runner" docs/prd.md "$selection_ref_codex" "$repo" "$base_ref" "$reports/claude-identity-swapped" \
+  --df-run "$codex_run" --df-lane standard --df-repo-root "$repo" \
   >"$scratch/identity-swapped.out" 2>"$scratch/identity-swapped.err"; then
   fail 'tmux transport accepted a changed selected identity with the same digest'
 fi
@@ -263,14 +280,15 @@ grep -Fq 'quality: selection_header' "$scratch/identity-swapped.err"
 pass 'a reviewer report with the same digest but changed selected identity is rejected'
 
 if TMPDIR="$scratch" FAKE_TMUX_REWRITE_INPUT=1 CLAUDE_REVIEW_STARTUP_DELAY=0 CLAUDE_REVIEW_TIMEOUT_SECONDS=5 \
-  DARK_FACTORY_ROOT="$root/codex-plugin" bash "$tmux_runner" docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/claude-input-rewritten" \
+  DARK_FACTORY_ROOT="$root/codex-plugin" bash "$tmux_runner" docs/prd.md "$selection_ref_codex" "$repo" "$base_ref" "$reports/claude-input-rewritten" \
+  --df-run "$codex_run" --df-lane standard --df-repo-root "$repo" \
   >"$scratch/input-rewritten.out" 2>"$scratch/input-rewritten.err"; then
   fail 'tmux transport accepted a matching rewrite of the prepared input and report header'
 fi
 grep -Fq 'quality: selection_header' "$scratch/input-rewritten.err"
 node "$root/scripts/df-code-review-selection.mjs" verify \
   --prd-path docs/prd.md \
-  --selection-ref "$selection_ref" \
+  --selection-ref "$selection_ref_codex" \
   --repo-root "$repo" >/dev/null \
   || fail 'original selection seal became invalid during prepared-input rewrite case'
 pass 'a matching rewrite of the prepared input and report header is rejected against the seal'
@@ -280,8 +298,9 @@ copied="$scratch/copied/df-code-review"
 mkdir -p "$scratch/copied"
 cp -a "$root/skills/df-code-review" "$copied"
 DARK_FACTORY_ROOT="$root" bash "$copied/scripts/run_codex_spec_review.sh" \
-  docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/copied.md"
-grep -Fq "Selection digest: ${selection_ref##*:sha256:}" "$reports/copied.md"
+  docs/prd.md "$selection_ref_claude" "$repo" "$base_ref" "$reports/copied.md" \
+  --df-run "$claude_run" --df-lane standard --df-repo-root "$repo"
+grep -Fq "Selection digest: ${selection_ref_claude##*:sha256:}" "$reports/copied.md"
 pass 'copied skill wrapper resolves helpers through the session-hook root'
 
 echo '== closed input failures =='
@@ -291,13 +310,16 @@ expect_failure 'legacy four-position QA-path ABI is rejected' "$before" \
 expect_failure 'legacy two-position quality ABI is rejected' "$before" \
   bash "$quality_runner" "$base_ref" "$reports/quality-legacy.md"
 expect_failure 'missing selection ref is rejected before a reviewer starts' "$before" \
-  env DARK_FACTORY_ROOT="$root" bash "$source_runner" docs/prd.md "review-selection:sha256:$(printf '0%.0s' {1..64})" "$repo" "$base_ref" "$reports/missing.md"
+  env DARK_FACTORY_ROOT="$root" bash "$source_runner" docs/prd.md "$claude_run:sha256:$(printf '0%.0s' {1..64})" "$repo" "$base_ref" "$reports/missing.md" \
+  --df-run "$claude_run" --df-lane standard --df-repo-root "$repo"
 expect_failure 'substituted PRD path is rejected before a reviewer starts' "$before" \
-  env DARK_FACTORY_ROOT="$root" bash "$source_runner" docs/not-prd.md "$selection_ref" "$repo" "$base_ref" "$reports/wrong-prd.md"
+  env DARK_FACTORY_ROOT="$root" bash "$source_runner" docs/not-prd.md "$selection_ref_claude" "$repo" "$base_ref" "$reports/wrong-prd.md" \
+  --df-run "$claude_run" --df-lane standard --df-repo-root "$repo"
 
 echo '== explicit no-user-route =='
 FAKE_NO_ROUTE=1 DARK_FACTORY_ROOT="$root" bash "$source_runner" \
-  docs/prd.md "$no_route_ref" "$repo" "$base_ref" "$reports/no-route.md"
+  docs/prd.md "$no_route_ref" "$repo" "$base_ref" "$reports/no-route.md" \
+  --df-run "$claude_run" --df-lane standard --df-repo-root "$repo"
 grep -Fq 'No-user-route reason: This synthetic change has no user-facing route.' "$reports/no-route.md"
 grep -Fq 'Selected entries: 0' "$reports/no-route.md"
 unset FAKE_NO_ROUTE
@@ -306,7 +328,9 @@ pass 'no-user-route seal remains explicit with zero selected entries'
 echo '== source drift =='
 before=$(wc -l <"$workers")
 if FAKE_REVIEW_DRIFT=1 DARK_FACTORY_ROOT="$root" bash "$source_runner" \
-  docs/prd.md "$selection_ref" "$repo" "$base_ref" "$reports/drift.md" >"$scratch/drift.out" 2>"$scratch/drift.err"; then
+  docs/prd.md "$selection_ref_claude" "$repo" "$base_ref" "$reports/drift.md" \
+  --df-run "$claude_run" --df-lane standard --df-repo-root "$repo" \
+  >"$scratch/drift.out" 2>"$scratch/drift.err"; then
   fail 'changed selected recipe was accepted'
 fi
 [[ $(wc -l <"$workers") -eq $((before + 1)) ]] || fail 'drift fixture did not reach exactly one fake worker'

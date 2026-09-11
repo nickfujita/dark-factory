@@ -5,6 +5,13 @@ description: "Codex-native code review for a feature branch: one whole-branch di
 
 # Code Review
 
+For every shell caller, use the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md` and invoke its runtime
+wrapper under `<df-root>`, never from a copied global skill directory.
+Native discovery and second-opinion calls use `discovery_reviewers`; fresh
+delta-verification calls use `recheck_leaf_reviewers`. This parent owns each
+native leaf's terminal completion under the inventory's native contract.
+
 Review a feature branch in **one whole-branch discovery pass on a frozen tree**,
 then verify the remediation and stop. There is no round loop. Fixes are applied
 autonomously — the user is not asked to approve findings one by one. Returns
@@ -87,12 +94,13 @@ exactly once.
 
 ## Dispatch reservations
 
-Every reviewer dispatch reserves a seq through `$DF_ROOT/scripts/df-state.sh` **before**
-it spawns, and the reservation is spent the moment it lands:
-
-```bash
-seq=$(bash "$DF_ROOT/scripts/df-state.sh" reserve "<run-id>" discovery_reviewers "code review discovery, in-session leg")
-```
+Every reviewer dispatch follows the executable native or shell contract in
+`$DF_ROOT/references/role-callers-inventory.md`. Native callers preflight the
+responsibility, verify the returned target, reserve through the canonical
+caller, record the selected identity with the receipt, and complete every seq
+with a terminal outcome. Shell wrappers own the same lifecycle internally.
+Never split preflight from a direct state reservation; that bypasses frozen
+target selection and leaves completion ownership ambiguous.
 
 Reserving covers the discovery reviewers, every delta-verification leg, any
 retry after a crashed run, the second-opinion pass, the flag-flip pass, and
@@ -189,7 +197,9 @@ where `<timestamp>` is `YYYY-MM-DDTHH-MM-SSZ` (UTC).
 ## Step 2: The discovery pass
 
 **One pass. Every reviewer the lane calls for, in parallel, in a single
-message, all reading `REVIEW_SHA`.** Reserve each dispatch first.
+message, all reading `REVIEW_SHA`.** Preflight `discovery_reviewers`, inspect
+the returned native target, then reserve one sequence per reviewer before the
+child calls.
 
 Subagents do not inherit shell variables or context. State the concrete diff
 path (`<REVIEW_ROOT>/branch-diff.txt`), `REVIEW_SHA`, `PRD_PATH`, selection
@@ -237,9 +247,13 @@ base_ref="<base_ref from Step 1>"
 out_dir="$review_dir/code-subagents"
 mkdir -p "$out_dir"
 DARK_FACTORY_ROOT="$DF_ROOT" DARK_FACTORY_REVIEW_DIR="$review_dir" \
-  bash "$script_path" "$PRD_PATH" "$SELECTION_REF" "$REPO_ROOT" "$base_ref" "$out_dir"
+  bash "$script_path" "$PRD_PATH" "$SELECTION_REF" "$REPO_ROOT" "$base_ref" "$out_dir" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "$REPO_ROOT"
 echo "OUTPUT_DIR=$out_dir"
 ```
+
+The fallback runner owns its three preflights, reservations, and completions.
+Do not reserve those CLI reviewer legs in advance.
 
 Read every markdown file in `$review_dir/code-subagents/` before synthesis.
 
@@ -258,8 +272,8 @@ one was the cross-family leg.
 Launch the Claude Code reviewers through the tmux helper with
 **`timeout: 1800000`**. The helper starts a real interactive `claude` session
 with two tmux windows (`quality` and `spec`), sends the review prompts into
-them, and waits for completion sentinels before returning. Reserve one
-dispatch per window before it runs.
+them, and waits for completion sentinels before returning. It preflights both
+transport legs, then owns one reservation per window and their completion.
 
 ```bash
 script_path="$DF_ROOT/skills/df-code-review/scripts/run_claude_code_reviews_tmux.sh"
@@ -268,7 +282,8 @@ review_dir="<REVIEW_ROOT from Step 1>"
 base_ref="<base_ref from Step 1>"
 mkdir -p "$review_dir/claude"
 DARK_FACTORY_ROOT="$DF_ROOT" bash "$script_path" \
-  "$PRD_PATH" "$SELECTION_REF" "$REPO_ROOT" "$base_ref" "$review_dir/claude"
+  "$PRD_PATH" "$SELECTION_REF" "$REPO_ROOT" "$base_ref" "$review_dir/claude" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "$REPO_ROOT"
 ```
 
 Do not use `claude -p`, `--print`, SDK mode, stdout piping, or any
@@ -352,7 +367,8 @@ gets, who verifies, the verdict block, and how to read the result.
 
 In short. Assemble the delta (each finding as raised, its disposition and
 reason, the fix diff, the test evidence, plus `git diff <REVIEW_SHA>..HEAD` and
-the fixed unresolved list). Reserve a dispatch per verifying leg. Send it back
+the fixed unresolved list). Preflight `recheck_leaf_reviewers` and reserve a
+dispatch per fresh native verifying leg. Send it back
 to the reviewer that raised the findings, in its thread where the harness can
 continue one; where it cannot — the CLI legs are fresh processes every time —
 dispatch a fresh in-session Codex subagent with the original finding text

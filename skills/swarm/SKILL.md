@@ -6,6 +6,13 @@ disable-model-invocation: true
 
 # Swarm
 
+Every background runner uses the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md`, then invoke required
+runtime wrappers under `<df-root>`, never from a copied global skill directory.
+Read-only calls use `menial_scoped_investigation`; writing calls use
+`implementation_delegate`. This parent follows the inventory's native contract
+and owns every terminal completion.
+
 Fan out N parallel workers. They may cover separate slices, race the same brief, or mix both. The parent waits, aggregates, and returns one report. No raw dumps.
 
 Principle names in this skill cite `../df/references/principles.md`.
@@ -24,10 +31,10 @@ Open a todo list with one entry per phase before launching anything.
 1. State the done predicate and the artifact or report the swarm must return.
 2. Choose the shape. Partition into slices, race N workers on identical briefs, or mix both. For a race or mixed shape, declare the selection rule before spawning: `first pass`, `rank all`, or `best-of`.
 3. Set N from the user or derive it from the shape. N is total workers. Concurrency is capped separately at 3; a larger N runs as a rolling window.
-4. Resolve worker models through roles in `../df/references/model-policy.md`, never a hardcoded slug. Read-only coverage, verification, and exploration slices run the menial investigation tier. Workers that write code run the implementation-delegate role. A model race names each arm's role or family up front.
+4. Resolve worker targets through exact responsibilities in `../df/references/model-policy.md`, never a hardcoded slug. Read-only coverage, verification, and exploration slices use `menial_scoped_investigation`. Workers that write code use `implementation_delegate`. A model race names each arm's declared responsibility up front.
 5. Give each writing worker its own writable output, per the separate-before-serializing-shared-state principle. A worktree, a branch, or its own subdirectory under the session scratchpad. Read-only workers get a read-only instruction instead.
 6. For verification coverage, when the repo's verification skill carries a feature map, slice by feature-map entry so every slice traces to a named feature and the gaps are enumerable.
-7. Inside a df run, reserve every worker through `scripts/df-state.sh` before spawning; swarm workers are nested dispatches and count against the run's budget. The script lands in this same wave; until it is on disk, write the reservation lines to the run state file by hand, still before spawning.
+7. Inside a df run, use the inventory's native contract before every worker call; swarm workers are nested dispatches and count against the run's budget. Do not edit run-state files by hand.
 
 ## Phase B: Fan out
 

@@ -5,6 +5,13 @@ description: "Planning stage for routed work. Turns the settled requirements and
 
 # df-plan
 
+Every background runner uses the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md`, then invoke required
+runtime wrappers under `<df-root>`, never from a copied global skill directory.
+Every planning explorer call uses `menial_scoped_investigation`; this parent
+owns terminal completion for each leaf. Follow the inventory's native contract
+before every child call.
+
 **You own the plan, not the code. The plan is the deliverable. Do not implement.** The plan is a checklist df-implement runs box by box and the operator audits from the evidence. Write every task so a cheap model can implement it by transcription. Exact paths, exact signatures, verbatim code. A task that needs judgment to fill in is a task you have not finished writing.
 
 The spec is the binding authority and the plan is its argument. Every task traces to a spec requirement, and a requirement with no task is a gap.
@@ -31,7 +38,7 @@ A non-visual question about timing, behavior, or whether an API works gets a pro
 
 ## Explore in subagents
 
-Spawn read-only explorers as background native Codex subagents, on the menial investigation role from `../df/references/model-policy.md` (the guard-the-context-window principle). Each returns file pointers, conventions, test commands, and entry points. No inlined dumps.
+Spawn read-only explorers as background native Codex subagents, on the `menial_scoped_investigation` responsibility from `../df/references/model-policy.md` (the guard-the-context-window principle). Each returns file pointers, conventions, test commands, and entry points. No inlined dumps.
 
 ## Slice into PRs
 

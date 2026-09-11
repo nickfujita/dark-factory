@@ -1,6 +1,6 @@
 # Task reviewer prompt
 
-The controller builds each task-review dispatch from this template. One reviewer per task, two verdicts: spec compliance and code quality. Spawn as a background native Codex subagent, resolved through the `recheck_leaf_reviewers` role in `../../df/references/model-policy.md`; when the role names an agent definition, dispatch that named agent. Reserve the dispatch through `scripts/df-state.sh` before spawning. Create the disposable review snapshot first (`git worktree add --detach <scratch path> HEAD`), and delete it after the verdict lands.
+The controller builds each task-review dispatch from this template. One reviewer per task, two verdicts: spec compliance and code quality. Spawn as a background native Codex subagent, preflighted through the `recheck_leaf_reviewers` role in `../../df/references/model-policy.md`; when the role names an agent definition, dispatch that named agent. The native harness reserves the dispatch before spawning. Create the disposable review snapshot first (`git worktree add --detach <scratch path> HEAD`), and delete it after the verdict lands.
 
 ```
 You are reviewing one task's implementation: first whether it matches its

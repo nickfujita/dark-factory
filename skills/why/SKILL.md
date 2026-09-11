@@ -5,6 +5,13 @@ description: "Use for 'why does X work this way', 'why we picked Y', design rati
 
 # Why
 
+Every background runner uses the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md`, then invoke required
+runtime wrappers under `<df-root>`, never from a copied global skill directory.
+Investigator calls use `menial_scoped_investigation`; the synthesizer uses
+`investigation_synthesizer`. This parent follows the inventory's native
+contract and owns every terminal completion.
+
 Investigate the motivation and intent behind code. Why was it built this way? What edge cases were considered? What product, business, or operational constraints shaped the design? What alternatives were rejected, and why?
 
 Companion to the `how` skill. `how` answers what the code does and how it works. `why` answers what forces led to its shape.
@@ -118,7 +125,7 @@ Spawn one investigator per category that has a matching source, and **run at mos
 Subagent config (each), via the Agent tool:
 
 - run in the background
-- the menial investigation role resolved through the df model policy (`../df/references/model-policy.md`), never a hardcoded model slug
+- the `menial_scoped_investigation` responsibility resolved through the df model policy (`../df/references/model-policy.md`), never a hardcoded model slug
 - read-only by instruction, not by sandbox. Investigators need their MCP tools, so don't strip tool access. The prompt tells them plainly: search and report, never write, never modify external state. That's a posture the prompt enforces.
 
 Each investigator gets:
@@ -163,7 +170,7 @@ If your scope assessment suggests a single-commit trivial target where the PR de
 Spawn one synthesizer with the Agent tool:
 
 - run in the background
-- the investigation-synthesizer role from the df model policy
+- the `investigation_synthesizer` responsibility from the df model policy
 - read-only by instruction. The synthesizer's quality check spot-verifies citations, which can require MCP reads, so keep its tools and instruct it to verify without writing.
 
 The synthesizer gets:

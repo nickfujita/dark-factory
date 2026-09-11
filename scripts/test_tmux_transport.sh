@@ -56,7 +56,7 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/df-tmux-transport.XXXXXX")"
 # front. Registering them from inside make_sandbox would not work: it is called
 # in a command substitution, so an array it appends to dies with the subshell
 # and the trap would tear down nothing.
-CASES=(base-index-1 base-index-0 spawn-error conc-a conc-b code-review code-review-error)
+CASES=(base-index-1 base-index-0 spawn-error conc-a conc-b code-review code-review-error unsupported-target)
 label_for() { printf 'df-transport-%s-%s' "$$" "$1"; }
 
 sessions_on() { "$TMUX_BIN" -L "$1" list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' '; }
@@ -131,7 +131,33 @@ make_sandbox() {
   local name="$1" base_index="$2" break_paste="${3:-no}"
   local dir="$WORK/$name"
 
-  mkdir -p "$dir/home" "$dir/bin" "$dir/repo/docs"
+  mkdir -p "$dir/home" "$dir/bin" "$dir/repo/docs" "$dir/runs/transport-test"
+
+  printf 'run_id\tlane\tcreated\tfinish_predicate\tartifact_sha\tbudget_dispatches\tbudget_wall_minutes\tstate\ntransport-test\tstandard\t2026-01-01T00:00:00Z\tfinish\t-\t20\t120\trunning\n' >"$dir/runs/transport-test/run.tsv"
+  printf 'seq\tts\trole\tpurpose\tparent_seq\toutcome\n' >"$dir/runs/transport-test/dispatches.tsv"
+  cat >"$dir/fake-role.mjs" <<'ROLE'
+import { appendFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+const value = (name) => args[args.indexOf(name) + 1];
+appendFileSync(process.env.FAKE_TMUX_CALLS, `preflight ${value('--responsibility')}\n`);
+const target = JSON.parse(process.env.FAKE_TMUX_TARGET || '{"kind":"transport","name":"claude-tmux"}');
+process.stdout.write(`${JSON.stringify({ target, validatedNamedAgents: [] })}\n`);
+ROLE
+  cat >"$dir/fake-state.sh" <<'STATE'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  path) printf '%s/%s\n' "$FAKE_TMUX_RUNS" "$2" ;;
+  reserve)
+    printf 'reserve %s\n' "$2" >>"$FAKE_TMUX_CALLS"
+    awk 'END { print NR }' "$FAKE_TMUX_RUNS/$2/dispatches.tsv" >>"$FAKE_TMUX_RUNS/$2/dispatches.tsv"
+    awk 'END { print NR - 1 }' "$FAKE_TMUX_RUNS/$2/dispatches.tsv"
+    ;;
+  complete) printf 'complete %s %s\n' "$3" "$4" >>"$FAKE_TMUX_CALLS" ;;
+  *) exit 1 ;;
+esac
+STATE
+  chmod +x "$dir/fake-state.sh"
 
   cat >"$dir/home/.tmux.conf" <<CONF
 set -g base-index $base_index
@@ -234,10 +260,15 @@ run_prd_case() {
     PATH="$dir/bin:$PATH" \
     HOME="$dir/home" \
     XDG_CONFIG_HOME="$dir/home/.config" \
+    DF_ROLE_CALLER_ROLE_HELPER="$dir/fake-role.mjs" \
+    DF_ROLE_CALLER_STATE_HELPER="$dir/fake-state.sh" \
+    FAKE_TMUX_RUNS="$dir/runs" \
+    FAKE_TMUX_CALLS="$dir/role-calls.log" \
     CLAUDE_REVIEW_TMUX_LABEL="$(label_for "$name")" \
     CLAUDE_REVIEW_STARTUP_DELAY=2 \
     CLAUDE_REVIEW_TIMEOUT_SECONDS=90 \
-      bash "$PRD_RUNNER" "docs/prd-sample.md" "$out_rel"
+      bash "$PRD_RUNNER" "docs/prd-sample.md" "$out_rel" \
+        --df-run transport-test --df-lane standard --df-repo-root "$dir/repo"
   ) >"$dir/stdout" 2>"$dir/stderr"
   rc=$?
   printf '%s' "$rc"
@@ -265,6 +296,12 @@ else
 fi
 expect_clean_server "base-index 1" base-index-1
 expect_operator_server_untouched "base-index 1"
+if [[ "$(grep -c '^reserve ' "$dir/role-calls.log" 2>/dev/null || true)" == 1 \
+   && "$(grep -c '^complete .* ok$' "$dir/role-calls.log" 2>/dev/null || true)" == 1 ]]; then
+  pass "base-index 1: preflighted transport reservation closed after the report"
+else
+  fail "base-index 1: preflighted transport reservation closed after the report" "$(cat "$dir/role-calls.log" 2>/dev/null)"
+fi
 
 # ------------------------------------------------------- case 2: base-index 0
 #
@@ -349,10 +386,15 @@ run_cr_case() {
     PATH="$dir/bin:$PATH" \
     HOME="$dir/home" \
     XDG_CONFIG_HOME="$dir/home/.config" \
+    DF_ROLE_CALLER_ROLE_HELPER="$dir/fake-role.mjs" \
+    DF_ROLE_CALLER_STATE_HELPER="$dir/fake-state.sh" \
+    FAKE_TMUX_RUNS="$dir/runs" \
+    FAKE_TMUX_CALLS="$dir/role-calls.log" \
     CLAUDE_REVIEW_TMUX_LABEL="$(label_for "$name")" \
     CLAUDE_REVIEW_STARTUP_DELAY=2 \
     CLAUDE_REVIEW_TIMEOUT_SECONDS=90 \
-      bash "$CR_RUNNER" "docs/prd-sample.md" "docs/qa-sample.md" "HEAD~1" "out/cr"
+      bash "$CR_RUNNER" "docs/prd-sample.md" "docs/qa-sample.md" "HEAD~1" "out/cr" \
+        --df-run transport-test --df-lane standard --df-repo-root "$dir/repo"
   ) >"$dir/stdout" 2>"$dir/stderr"
   rc=$?
   printf '%s' "$rc"
@@ -374,6 +416,12 @@ for role in quality spec; do
 done
 expect_clean_server "code review" code-review
 expect_operator_server_untouched "code review"
+if [[ "$(grep -c '^reserve ' "$dir/role-calls.log" 2>/dev/null || true)" == 2 \
+   && "$(grep -c '^complete .* ok$' "$dir/role-calls.log" 2>/dev/null || true)" == 2 ]]; then
+  pass "code review: two preflighted reviewer reservations close after both reports"
+else
+  fail "code review: two preflighted reviewer reservations close after both reports" "$(cat "$dir/role-calls.log" 2>/dev/null)"
+fi
 
 # A transport error there strands two reviewers, not one.
 dir="$(make_sandbox code-review-error 1 yes)"
@@ -384,6 +432,34 @@ else
   fail "code review transport error: runner failed loudly" "exit 0, which reads as a clean round"
 fi
 expect_clean_server "code review transport error" code-review-error
+if [[ "$(grep -c '^reserve ' "$dir/role-calls.log" 2>/dev/null || true)" == 2 \
+   && "$(grep -c '^complete .* failed$' "$dir/role-calls.log" 2>/dev/null || true)" == 2 ]]; then
+  pass "code review transport error: both owned reservations close failed"
+else
+  fail "code review transport error: both owned reservations close failed" "$(cat "$dir/role-calls.log" 2>/dev/null)"
+fi
+
+# An unsupported frozen target must stop before the transport starts or spends a
+# reservation. The private tmux server remains empty because no new-session ran.
+dir="$(make_sandbox unsupported-target 1)"
+(
+  cd "$dir/repo" || exit 1
+  unset TMUX TMUX_PANE
+  PATH="$dir/bin:$PATH" HOME="$dir/home" XDG_CONFIG_HOME="$dir/home/.config" \
+  DF_ROLE_CALLER_ROLE_HELPER="$dir/fake-role.mjs" DF_ROLE_CALLER_STATE_HELPER="$dir/fake-state.sh" \
+  FAKE_TMUX_RUNS="$dir/runs" FAKE_TMUX_CALLS="$dir/role-calls.log" \
+  FAKE_TMUX_TARGET='{"kind":"cli","model":null,"effort":null}' \
+  CLAUDE_REVIEW_TMUX_LABEL="$(label_for unsupported-target)" \
+    bash "$PRD_RUNNER" "docs/prd-sample.md" "out/review.md" \
+      --df-run transport-test --df-lane standard --df-repo-root "$dir/repo"
+) >"$dir/stdout" 2>"$dir/stderr"
+rc=$?
+if [[ "$rc" != 0 && "$(grep -c '^reserve ' "$dir/role-calls.log" 2>/dev/null || true)" == 0 ]]; then
+  pass "unsupported target: no reservation or tmux launch"
+else
+  fail "unsupported target: no reservation or tmux launch" "exit $rc; $(cat "$dir/role-calls.log" 2>/dev/null)"
+fi
+expect_clean_server "unsupported target" unsupported-target
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

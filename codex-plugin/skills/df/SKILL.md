@@ -69,6 +69,25 @@ Invoke each stage skill explicitly and pass artifact paths forward. Never rely o
 
 ## Subagents
 
+At run entry, after initializing run state, prepare the role plan once:
+
+```bash
+df_root="<Dark Factory root reported by the session hook>"
+node "$df_root/scripts/df-role.mjs" prepare-run \
+  --run "<run-id>" --harness codex --repo-root "<consumer-root>"
+```
+
+Before each background dispatch, use the frozen plan in
+`<df-root>/references/role-callers-inventory.md`, where `<df-root>` is the Dark
+Factory root reported by the session hook. Invoke shell wrappers from `<df-root>`,
+not from a copied global skill directory. Preflight the declared responsibility,
+inspect and apply the returned target through the inventory's native contract,
+then reserve each actual worker. The downstream skill names the exact
+responsibility and owns terminal completion. A shell runner owns that
+reservation itself, so do not reserve it again in skill prose. The documented
+Luna limitation needs an explicit `terra_xhigh` override before preparation.
+Do not substitute it at a call site.
+
 Spawn native Codex subagents. Defaults for every spawn:
 
 - run in the background

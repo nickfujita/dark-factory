@@ -6,6 +6,13 @@ disable-model-invocation: true
 
 # Interrogate
 
+Every background runner uses the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md`, then invoke required
+runtime wrappers under `<df-root>`, never from a copied global skill directory.
+The native reviewer call uses `discovery_reviewers`; this parent owns terminal
+completion. Follow the inventory's native contract before the child call. The
+cross-family shell leg owns its own `cross_model_review` lifecycle.
+
 Spawn one reviewer per model family, Claude and Codex, to adversarially review code changes. Each reviewer gets the same prompt and rubric. The adversarial signal comes from model diversity, not assigned personas. The families differ in blind spots, priors, and reasoning patterns. Agreement across families is high-confidence signal; lone-family findings are worth reading but lower confidence.
 
 The deliverable is a synthesized verdict. Do NOT auto-apply changes.
@@ -39,7 +46,7 @@ The panel is two-family. Launch both reviewers together.
 
 | Reviewer | Transport | Model |
 |----------|-----------|-------|
-| Claude | Agent tool, background spawn | the discovery-reviewer role in `../df/references/model-policy.md` |
+| Claude | Agent tool, background spawn | the `discovery_reviewers` responsibility in `../df/references/model-policy.md` |
 | Codex | codex-exec wrapper | the codex section of `../df/references/model-policy.md` |
 
 Reviewers never touch the live tree. Create a disposable worktree snapshot for the review, point both reviewers at it, and delete it when the review ends. A degraded sandbox can then only touch a throwaway. For a document-sized artifact, put the content in the prompt instead of pointing at files.

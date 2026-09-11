@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: run_codex_subagent_reviews.sh <prd-path> <selection-ref> <repo-root> <base-ref> <output-dir>
+# Usage: run_codex_subagent_reviews.sh <prd-path> <selection-ref> <repo-root> \
+#   <base-ref> <output-dir> --df-run <run-id> --df-lane <lane> \
+#   --df-repo-root <consumer-root>
 # Runs the three Phase A code review roles as parallel codex exec processes.
 #
 # Output validation is FAIL-CLOSED (ported from df-prd-challenge): an empty or
@@ -17,8 +19,8 @@ set -euo pipefail
 # review target is committed state (git diff base..HEAD), so a snapshot at HEAD
 # is exact.
 
-if [[ $# -ne 5 ]]; then
-  echo "Usage: run_codex_subagent_reviews.sh <prd-path> <selection-ref> <repo-root> <base-ref> <output-dir>" >&2
+if [[ $# -ne 11 ]]; then
+  echo "Usage: run_codex_subagent_reviews.sh <prd-path> <selection-ref> <repo-root> <base-ref> <output-dir> --df-run <run-id> --df-lane <lane> --df-repo-root <consumer-root>" >&2
   exit 1
 fi
 
@@ -37,13 +39,39 @@ else
   echo "Error: cannot find df-code-review-selection.mjs. Invoke this wrapper from the Dark Factory installation or checkout named by the session hook." >&2
   exit 1
 fi
+df_root="$(cd "$df_root" && pwd -P)"
 selection_tool="$df_root/scripts/df-code-review-selection.mjs"
+role_caller="$df_root/scripts/df-role-caller.sh"
+state_helper="${DF_ROLE_CALLER_STATE_HELPER:-$df_root/scripts/df-state.sh}"
 
 prd_path="$1"
 selection_ref="$2"
 repo_root="$3"
 base_ref="$4"
 out_dir="$5"
+shift 5
+
+df_run=''
+df_lane=''
+df_repo_root=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --df-run) df_run=$2; shift 2 ;;
+    --df-lane) df_lane=$2; shift 2 ;;
+    --df-repo-root) df_repo_root=$2; shift 2 ;;
+    *) echo "Error: unknown role-dispatch option '$1'" >&2; exit 1 ;;
+  esac
+done
+[[ -n "$df_run" && -n "$df_lane" && -n "$df_repo_root" ]] || {
+  echo "Error: --df-run, --df-lane, and --df-repo-root are required." >&2
+  exit 1
+}
+repo_root="$(cd "$repo_root" && pwd -P)"
+df_repo_root="$(cd "$df_repo_root" && pwd -P)"
+if [[ "$repo_root" != "$df_repo_root" ]]; then
+  echo "Error: repo-root and --df-repo-root must name the same consumer checkout." >&2
+  exit 1
+fi
 
 MIN_BODY_BYTES="${CODEX_MIN_BODY_BYTES:-400}"
 
@@ -167,6 +195,17 @@ run_review() {
   local prompt_rel="${prompt_file#"$repo_root"/}"
   local prompt_text
   prompt_text="$(cat "$prompt_file")"
+  local dispatch_receipt dispatch_seq
+  dispatch_receipt="$(bash "$role_caller" reserve \
+    --run "$df_run" --lane "$df_lane" --repo-root "$repo_root" \
+    --responsibility persona_reviewers_cli --purpose "code review $label" \
+    --allow-kind cli)"
+  dispatch_seq="$(node -e 'const receipt = JSON.parse(process.argv[1]); process.stdout.write(receipt.seqs[0]);' "$dispatch_receipt")"
+
+  complete_review_dispatch() {
+    local outcome=$1
+    (cd "$repo_root" && bash "$state_helper" complete "$df_run" "$dispatch_seq" "$outcome") >/dev/null 2>&1 || true
+  }
 
   {
     echo "# $label"
@@ -188,7 +227,6 @@ run_review() {
   local codex_exit=0
   codex exec \
     --sandbox "$sandbox_mode" \
-    --config model_reasoning_effort=xhigh \
     -C "$review_tree" \
     "Follow this reviewer prompt:
 
@@ -226,6 +264,7 @@ non-interactively with no stdin." \
       echo "_Codex CLI exited with code $codex_exit. No findings produced._"
       echo "_This reviewer produced NO opinion this round. Do not treat it as a clean result._"
     } >>"$out_path"
+    complete_review_dispatch failed
     return 1
   fi
 
@@ -241,11 +280,17 @@ non-interactively with no stdin." \
       echo "_No usable review produced (reason: \`$reason\`)._"
       echo "_This reviewer produced NO opinion this round. Do not treat it as a clean result._"
     } >>"$out_path"
+    complete_review_dispatch failed
     return 1
   fi
 
   cat "$body_path" >>"$out_path"
+  complete_review_dispatch ok
 }
+
+bash "$role_caller" preflight \
+  --run "$df_run" --lane "$df_lane" --repo-root "$repo_root" \
+  --responsibility persona_reviewers_cli --allow-kind cli >/dev/null
 
 run_review "Codex Quality Subagent Review" "$ref_dir/codex-quality-subagent-prompt.md" "$out_dir/codex-quality-subagent-review.md" "## Findings — Codex Quality" &
 pid1=$!

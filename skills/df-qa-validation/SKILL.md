@@ -6,6 +6,12 @@ disable-model-invocation: true
 
 # Verification validation
 
+For every shell caller, use the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md` and invoke its runtime
+wrapper under `<df-root>`, never from a copied global skill directory.
+This skill has no native child call: the first review stays in the orchestrator
+session, and the listed shell wrapper owns the second review's role lifecycle.
+
 Validate a PRD against the feature's committed verification recipes using two
 independent reviewers (Claude and Codex) to catch coverage gaps, consistency
 issues, and testability problems.
@@ -91,32 +97,28 @@ to ground the analysis in what actually exists.
 (10 minutes):
 
 ```bash
-script_path="$HOME/.claude/skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
-fi
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
-fi
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(ls -d "$HOME"/.claude/plugins/cache/*/dark-factory/*/skills/df-qa-validation/scripts/run_codex_qa_validation.sh 2>/dev/null | sort -V | tail -1)"
-fi
+df_root="<Dark Factory root reported by the session hook>"
+script_path="$df_root/skills/df-qa-validation/scripts/run_codex_qa_validation.sh"
 
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_codex_qa_validation.sh" >&2
-  echo "Checked: \$HOME/.claude/skills/, <repo>/skills/, <repo>/.claude/skills/, and the dark-factory plugin cache" >&2
+  echo "Checked: $df_root/skills/df-qa-validation/scripts/" >&2
   exit 1
 fi
 
-run_dir="$(bash scripts/df-state.sh path "<run-id>")"
+run_dir="$(bash "$df_root/scripts/df-state.sh" path "<run-id>")"
 out_path="$run_dir/work/codex-qa-validation-review.md"
 mkdir -p "$run_dir/work"
 bash "$script_path" \
   "<prd-path>" \
   "$run_dir/work/qa-review-input.md" \
-  "$out_path"
+  "$out_path" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
 echo "OUTPUT_PATH=$out_path"
 ```
+
+The runner owns its frozen-role preflight, reservation, and terminal
+completion. Do not reserve this shell leg in advance.
 
 The output path is deterministic: `<run-dir>/work/codex-qa-validation-review.md`,
 where `<run-dir>` is `bash scripts/df-state.sh path "<run-id>"`. It is in the

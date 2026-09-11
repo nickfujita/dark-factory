@@ -6,6 +6,13 @@ disable-model-invocation: true
 
 # PRD Challenge Round
 
+For every shell caller, use the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md` and invoke its runtime
+wrapper under `<df-root>`, never from a copied global skill directory.
+Native discovery and full-persona calls use `discovery_reviewers`; downgraded
+rechecks and fresh delta verifiers use `recheck_leaf_reviewers`. This parent
+owns every native leaf's terminal completion under the inventory's contract.
+
 Stress-test a hardened PRD. This skill has two modes, and the lane picks which
 one runs. The PRD is remediated **autonomously** in both — the author is not
 asked to hand-fix findings.
@@ -50,7 +57,6 @@ name. Do not restate a value inline — if you need the number, read it here.
 | `RECHECK_TIER_FLOOR` | **never below Opus-class at effort `high`** | binding floor on `RECHECK_TIER` |
 | `REVIEW_ROOT` | `<run-dir>/work/prd-challenge` | all scratch output for one run |
 | `REPORT_DIR` | `<run-dir>/reviews/prd-challenge/` | the final report |
-| `CODEX_REASONING_EFFORT` | `xhigh` in High-consequence, the operator's default in Standard | Codex reviewer |
 | `CODEX_WINDOW_SECONDS` | `3600` | total detached window for one Codex leg |
 | `CODEX_WAIT_SLICE_SECONDS` | `480` | one foreground poll slice (keeps each Bash call under the harness cap) |
 | `CODEX_POLL_SECONDS` | `20` | poll interval inside a slice |
@@ -159,7 +165,10 @@ capped loop run indefinitely. A delta verification is a reviewer dispatch and
 it costs one.
 
 ```bash
-seq=$(bash scripts/df-state.sh reserve "<run-id>" discovery_reviewers "prd challenge discovery, codex leg")
+df_root="<Dark Factory root reported by the session hook>"
+node "$df_root/scripts/df-role.mjs" preflight --run "<run-id>" --lane "<lane>" \
+  --repo-root "<consumer-root>" --responsibility discovery_reviewers
+seq=$(bash "$df_root/scripts/df-state.sh" reserve "<run-id>" discovery_reviewers "prd challenge discovery, codex leg")
 ```
 
 A refused reservation (exit 3) means the dispatch does not happen. The store
@@ -215,8 +224,10 @@ the three terminal outcomes. Nothing in it loops.
 
 Mechanics for this tree:
 
-1. **Reserve two dispatches.** One for the in-session Claude reviewer, one for
-   the Codex leg.
+1. **Preflight two declared roles.** The in-session Claude reviewer uses
+   `discovery_reviewers` and reserves
+   its own native dispatch. The Codex shell leg reserves its own transport
+   dispatch after its frozen-role preflight.
 2. **Run both in parallel, in a single message.** The Claude reviewer is an
    Agent spawn at `DISCOVERY_TIER` carrying the shared rubric from
    `references/single-pass.md` plus the shared output contract from
@@ -426,8 +437,9 @@ information — it belongs in the report, not just in your head.
 Read `references/personas.md` for the 3 persona system prompts, the shared
 output contract, and the delta-verification and recheck-scope modes.
 
-**Each pass, reserve three dispatches, then dispatch all 3 Claude personas as
-parallel sub-agents** (all 3 Agent calls in one message). Each sub-agent
+**Each pass, preflight `discovery_reviewers` or `recheck_leaf_reviewers` as the
+tier table requires and reserve three dispatches, then dispatch all 3 Claude
+personas as parallel sub-agents** (all 3 Agent calls in one message). Each sub-agent
 receives:
 
 - Its persona system prompt from `references/personas.md`
@@ -505,33 +517,29 @@ In **Standard**, this runs once, as the cross-family half of the single pass,
 plus once more for the delta verification. In **High-consequence**, it runs as
 the second phase of the loop, once Phase A exits cleanly.
 
-Reserve the dispatch first. Codex runs **detached with a wide window and is
-polled** — a hard foreground timeout kills healthy legs mid-exploration on a
-large PRD. Start it, then poll in slices:
+The runner resolves and reserves its dispatch itself. Codex runs **detached
+with a wide window and is polled** — a hard foreground timeout kills healthy
+legs mid-exploration on a large PRD. Start it, then poll in slices:
 
 ```bash
-script_path="$HOME/.claude/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
-fi
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
-fi
-if [[ ! -f "$script_path" ]]; then
-  script_path="$(ls -d "$HOME"/.claude/plugins/cache/*/dark-factory/*/skills/df-prd-challenge/scripts/run_codex_prd_review.sh 2>/dev/null | sort -V | tail -1)"
-fi
+df_root="<Dark Factory root reported by the session hook>"
+script_path="$df_root/skills/df-prd-challenge/scripts/run_codex_prd_review.sh"
 
 if [[ ! -f "$script_path" ]]; then
   echo "ERROR: Cannot find run_codex_prd_review.sh" >&2
-  echo "Checked: \$HOME/.claude/skills/, <repo>/skills/, <repo>/.claude/skills/, and the dark-factory plugin cache" >&2
+  echo "Checked: $df_root/skills/df-prd-challenge/scripts/" >&2
   exit 1
 fi
 
 review_dir="<REVIEW_ROOT from Step 1>"
 out_path="$review_dir/codex-challenge-review-<N>.md"   # <N> = pass number
-bash "$script_path" start "<prd-path>" "$out_path"
+bash "$script_path" start "<prd-path>" "$out_path" \
+  --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
 echo "OUTPUT_PATH=$out_path"
 ```
+
+The detached runner owns the frozen-role preflight, reservation, and terminal
+completion. Do not reserve this shell leg in advance.
 
 Then poll. Each `wait` call blocks for at most `CODEX_WAIT_SLICE_SECONDS`, so a
 single Bash call stays under the harness timeout; repeat until the state is
@@ -586,7 +594,8 @@ delta_path="$review_dir/codex-delta-<N>.md"     # you write this file
 out_path="$review_dir/codex-verification-<N>.md"
 CODEX_REVIEW_MODE=verification \
 CODEX_REVIEW_DELTA_FILE="$delta_path" \
-  bash "$script_path" start "<prd-path>" "$out_path"
+  bash "$script_path" start "<prd-path>" "$out_path" \
+    --df-run "<run-id>" --df-lane "<lane>" --df-repo-root "<consumer-root>"
 bash "$script_path" wait "$out_path"             # poll in slices as above
 ```
 

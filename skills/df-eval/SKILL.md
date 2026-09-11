@@ -6,6 +6,12 @@ disable-model-invocation: true
 
 # df-eval
 
+Every background runner uses the Dark Factory root reported by the session hook.
+Read `<df-root>/references/role-callers-inventory.md`, then invoke required
+runtime wrappers under `<df-root>`, never from a copied global skill directory.
+Every grader call uses `eval_graders`; this parent owns terminal completion for
+each leaf. Follow the inventory's native contract before every child call.
+
 One owner for skill quality. Two duties. The scenario suite gates every skill change. The recurring retro mines run trails for improvements and routes every proposed edit through operator approval. Both run capped from birth. A recurring session that reads transcripts and proposes improvements is the same shape that ran away in df-prd-challenge. Strong models never run out of findings, so this loop ships with its own limits.
 
 ## Entry and cadence
@@ -21,7 +27,7 @@ Two triggers, both explicit:
 
 Every cap is load-bearing. None is advisory.
 
-- The retro runs as a df-state run in the Standard lane. Initialize it with `scripts/df-state.sh init`, with a dispatch budget and a wall-clock budget recorded, before anything spawns. Every grader or reviewer spawn reserves a seq first. A refused reservation means the spawn does not happen. Budget exhaustion is a stop, not a flag.
+- The retro runs as a df-state run in the Standard lane. Initialize it with `scripts/df-state.sh init`, with a dispatch budget and a wall-clock budget recorded, before anything spawns. Every grader or reviewer spawn preflights its frozen role, then reserves a seq. A refused reservation means the spawn does not happen. Budget exhaustion is a stop, not a flag.
 - At most 5 proposals per cycle. The Accepted list is capped at five rows. When more findings survive the acceptance criteria, keep the five most decision-changing and move the rest to Backlog for the next cycle.
 - Graders resolve through the `eval_graders` role in `../df/references/model-policy.md`, never a hardcoded model slug.
 - "The retro stayed in budget" is one of the retro's own graded outcomes. Grade it from the run's store files via `scripts/df-state.sh status`, never from the retro's narrative. A retro that ends stopped-budget reports that as a failed outcome even when its findings are good.
