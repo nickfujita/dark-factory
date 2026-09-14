@@ -94,6 +94,7 @@ Count the tasks. A plan with more than 8 tasks pauses for explicit operator sign
 The plan's executor is df-implement, task by task. Never hand the plan to any superpowers skill; the checker fails a plan that names one.
 
 - In the Standard lane, present the technical design and the plan together for one combined sign-off. For a visual UI change, name the approved prototype and show how each user-visible task follows it. The visual direction is not reopened during planning. In High-consequence, the design was already checkpointed; present the plan.
+- Name the explorer agents used and summarize how their findings informed the plan. If required exploration did not complete, report planning as incomplete and explain why. Do not silently substitute inline exploration. The existing whole-plan skip rule still applies.
 - Post the plan path and the checker's output, then stop. Execution starts on the operator's explicit go, and a plan over the D5 gate does not start without it.
 - Inside the feature playbook, return control to the playbook; its next steps are the QA runbook and then df-implement. Invoked standalone, run df-implement on the operator's go.
 
